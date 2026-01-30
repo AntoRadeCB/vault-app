@@ -92,19 +92,19 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _buildStatCards() {
     final cards = [
-      _StatData('Capitale\nImmobilizzato', 130, '€', Icons.lock_outline, AppColors.accentBlue),
-      _StatData('Ordini\nin Arrivo', 120, '€', Icons.local_shipping_outlined, AppColors.accentTeal),
-      _StatData('Capitale\nSpedito', 45, '€', Icons.send_outlined, AppColors.accentOrange),
-      _StatData('Profitto\nConsolidato', 1470, '€', Icons.trending_up, AppColors.accentGreen),
+      _StatData('Capitale Immobilizzato', 130, '€', Icons.lock_outline, AppColors.accentBlue),
+      _StatData('Ordini in Arrivo', 120, '€', Icons.local_shipping_outlined, AppColors.accentTeal),
+      _StatData('Capitale Spedito', 45, '€', Icons.send_outlined, AppColors.accentOrange),
+      _StatData('Profitto Consolidato', 1470, '€', Icons.trending_up, AppColors.accentGreen),
     ];
 
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.5,
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 2.2,
       children: List.generate(cards.length, (i) {
         final c = cards[i];
         return StaggeredFadeSlide(
@@ -112,41 +112,37 @@ class DashboardScreen extends StatelessWidget {
           child: HoverLiftCard(
             child: GlassCard(
               glowColor: c.color,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      Icon(c.icon, color: c.color, size: 14),
+                      const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          c.title,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            height: 1.3,
+                          c.title.toUpperCase(),
+                          style: TextStyle(
+                            color: c.color,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: c.color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(c.icon, color: c.color, size: 18),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 6),
                   CountUpText(
                     prefix: c.prefix,
                     value: c.value,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 24,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

@@ -485,18 +485,21 @@ class _ShimmerButtonState extends State<ShimmerButton>
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: ShaderMask(
-                      shaderCallback: (rect) => LinearGradient(
-                        begin: Alignment(shimmerX, 0),
-                        end: Alignment(shimmerX + 1, 0),
-                        colors: [
-                          Colors.white.withValues(alpha: 0.0),
-                          Colors.white.withValues(alpha: 0.08),
-                          Colors.white.withValues(alpha: 0.0),
-                        ],
-                      ).createShader(rect),
-                      blendMode: BlendMode.srcATop,
-                      child: Container(color: Colors.white),
+                    child: Opacity(
+                      opacity: 0.08,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment(shimmerX, 0),
+                            end: Alignment(shimmerX + 0.6, 0),
+                            colors: const [
+                              Colors.transparent,
+                              Colors.white,
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   widget.child,
