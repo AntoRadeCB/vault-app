@@ -1,0 +1,1244 @@
+openapi: 3.0.3
+info:
+  title: Vault — Reselling Tracker API
+  description: |
+    API specification per Vault, l'app di tracking per attività di reselling.
+    
+    Questa specifica documenta l'interfaccia REST equivalente alle operazioni
+    Firestore dell'app Flutter. Utile per:
+    - Documentazione tecnica del progetto
+    - Futura migrazione a REST API custom
+    - Integrazione con servizi esterni
+    - Testing con tool come Swagger UI / Postman
+  version: 1.0.0
+  contact:
+    name: Vault Team
+    url: https://github.com/AntoRadeCB/vault-app
+
+servers:
+  - url: https://api.vault-app.com/v1
+    description: Production server
+  - url: http://localhost:8080/v1
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Autenticazione e gestione sessione
+  - name: Products
+    description: CRUD prodotti inventario
+  - name: Purchases
+    description: Gestione acquisti
+  - name: Sales
+    description: Gestione vendite
+  - name: Stats
+    description: Statistiche e dashboard
+  - name: Exports
+    description: Esportazione dati
+  - name: Users
+    description: Profilo utente
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ──────────────────────────────────────────
+  # AUTH
+  # ──────────────────────────────────────────
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login utente
+      description: Autentica un utente con email e password. Restituisce un token JWT.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: vault@reselling.pro
+              password: SecureP@ss123
+      responses:
+        '200':
+          description: Login riuscito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+                user:
+                  uid: abc123def456
+                  email: vault@reselling.pro
+                  name: Vault User
+                  plan: pro
+        '401':
+          description: Credenziali non valide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: AUTH_INVALID_CREDENTIALS
+                message: Email o password non validi
+        '429':
+          description: Troppi tentativi di login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: AUTH_TOO_MANY_REQUESTS
+                message: Troppi tentativi. Riprova tra 5 minuti.
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Registrazione nuovo utente
+      description: Crea un nuovo account utente con email e password.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: nuovoutente@email.com
+              password: SecureP@ss123
+              name: Marco Rossi
+      responses:
+        '201':
+          description: Registrazione riuscita
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+              example:
+                user:
+                  uid: xyz789ghi012
+                  email: nuovoutente@email.com
+                  name: Marco Rossi
+                  plan: free
+                token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+        '400':
+          description: Dati non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: VALIDATION_ERROR
+                message: "La password deve contenere almeno 8 caratteri"
+        '409':
+          description: Email già registrata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: AUTH_EMAIL_EXISTS
+                message: Un account con questa email esiste già
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout utente
+      description: Invalida il token di sessione corrente.
+      responses:
+        '200':
+          description: Logout riuscito
+          content:
+            application/json:
+              example:
+                message: Logout effettuato con successo
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────
+  # PRODUCTS
+  # ──────────────────────────────────────────
+  /products:
+    get:
+      tags: [Products]
+      summary: Lista prodotti
+      description: |
+        Restituisce la lista dei prodotti dell'utente autenticato.
+        Supporta filtri per workspace, status e ricerca testuale.
+      parameters:
+        - name: workspace
+          in: query
+          description: Filtra per workspace
+          schema:
+            type: string
+          example: Reselling Vinted 2025
+        - name: status
+          in: query
+          description: Filtra per status prodotto
+          schema:
+            type: string
+            enum: [shipped, inInventory, listed]
+          example: inInventory
+        - name: search
+          in: query
+          description: Ricerca per nome o brand
+          schema:
+            type: string
+          example: Nike
+        - name: limit
+          in: query
+          description: Numero massimo di risultati
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          description: Offset per paginazione
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Lista prodotti
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+              example:
+                data:
+                  - id: prod_001
+                    name: Nike Air Max 90
+                    brand: NIKE
+                    quantity: 1
+                    price: 45.00
+                    status: shipped
+                    workspace: Reselling Vinted 2025
+                    createdAt: "2025-01-15T10:30:00Z"
+                  - id: prod_002
+                    name: Adidas Forum Low
+                    brand: ADIDAS
+                    quantity: 2
+                    price: 65.00
+                    status: inInventory
+                    workspace: Reselling Vinted 2025
+                    createdAt: "2025-01-14T14:20:00Z"
+                  - id: prod_003
+                    name: Stone Island Hoodie
+                    brand: STONE ISLAND
+                    quantity: 1
+                    price: 120.00
+                    status: listed
+                    workspace: Reselling Vinted 2025
+                    createdAt: "2025-01-13T09:00:00Z"
+                  - id: prod_004
+                    name: Bitcoin (BTC)
+                    brand: BITCOIN
+                    quantity: 0.25
+                    price: 45000.00
+                    status: inInventory
+                    workspace: Reselling Vinted 2025
+                    createdAt: "2025-01-12T16:45:00Z"
+                total: 4
+                limit: 50
+                offset: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Products]
+      summary: Crea prodotto
+      description: Aggiunge un nuovo prodotto all'inventario.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreate'
+            example:
+              name: Nike Air Max 90
+              brand: NIKE
+              quantity: 1
+              price: 45.00
+              status: shipped
+              workspace: Reselling Vinted 2025
+      responses:
+        '201':
+          description: Prodotto creato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+              example:
+                id: prod_005
+                name: Nike Air Max 90
+                brand: NIKE
+                quantity: 1
+                price: 45.00
+                status: shipped
+                workspace: Reselling Vinted 2025
+                createdAt: "2025-01-16T08:00:00Z"
+        '400':
+          description: Dati non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: VALIDATION_ERROR
+                message: "Il campo 'name' è obbligatorio"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: Dettaglio prodotto
+      description: Restituisce i dettagli di un singolo prodotto.
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Dettaglio prodotto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+              example:
+                id: prod_001
+                name: Nike Air Max 90
+                brand: NIKE
+                quantity: 1
+                price: 45.00
+                status: shipped
+                workspace: Reselling Vinted 2025
+                createdAt: "2025-01-15T10:30:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Prodotto non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: NOT_FOUND
+                message: Prodotto non trovato
+
+    put:
+      tags: [Products]
+      summary: Aggiorna prodotto
+      description: Aggiorna i dati di un prodotto esistente.
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdate'
+            example:
+              name: Nike Air Max 90 OG
+              price: 55.00
+              status: inInventory
+      responses:
+        '200':
+          description: Prodotto aggiornato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+              example:
+                id: prod_001
+                name: Nike Air Max 90 OG
+                brand: NIKE
+                quantity: 1
+                price: 55.00
+                status: inInventory
+                workspace: Reselling Vinted 2025
+                createdAt: "2025-01-15T10:30:00Z"
+        '400':
+          description: Dati non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: VALIDATION_ERROR
+                message: "Status non valido. Valori ammessi: shipped, inInventory, listed"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Prodotto non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: NOT_FOUND
+                message: Prodotto non trovato
+
+    delete:
+      tags: [Products]
+      summary: Elimina prodotto
+      description: Rimuove un prodotto dall'inventario.
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '204':
+          description: Prodotto eliminato
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Prodotto non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: NOT_FOUND
+                message: Prodotto non trovato
+
+  # ──────────────────────────────────────────
+  # PURCHASES
+  # ──────────────────────────────────────────
+  /purchases:
+    get:
+      tags: [Purchases]
+      summary: Lista acquisti
+      description: Restituisce la lista degli acquisti con filtri opzionali per data.
+      parameters:
+        - name: dateFrom
+          in: query
+          description: Data inizio (ISO 8601)
+          schema:
+            type: string
+            format: date
+          example: "2025-01-01"
+        - name: dateTo
+          in: query
+          description: Data fine (ISO 8601)
+          schema:
+            type: string
+            format: date
+          example: "2025-01-31"
+        - name: workspace
+          in: query
+          description: Filtra per workspace
+          schema:
+            type: string
+          example: Reselling Vinted 2025
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Lista acquisti
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Purchase'
+                  total:
+                    type: integer
+              example:
+                data:
+                  - id: pur_001
+                    productName: Nike Air Max 90
+                    price: 45.00
+                    quantity: 1
+                    date: "2025-01-10T09:15:00Z"
+                    workspace: Reselling Vinted 2025
+                  - id: pur_002
+                    productName: Adidas Forum Low
+                    price: 65.00
+                    quantity: 2
+                    date: "2025-01-08T14:30:00Z"
+                    workspace: Reselling Vinted 2025
+                  - id: pur_003
+                    productName: Stone Island Hoodie
+                    price: 120.00
+                    quantity: 1
+                    date: "2025-01-05T11:00:00Z"
+                    workspace: Reselling Vinted 2025
+                total: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Purchases]
+      summary: Registra acquisto
+      description: |
+        Registra un nuovo acquisto. Crea automaticamente il prodotto 
+        corrispondente nell'inventario con status "shipped".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseCreate'
+            example:
+              productName: Nike Dunk Low Panda
+              price: 110.00
+              quantity: 1
+              workspace: Reselling Vinted 2025
+      responses:
+        '201':
+          description: Acquisto registrato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Purchase'
+              example:
+                id: pur_004
+                productName: Nike Dunk Low Panda
+                price: 110.00
+                quantity: 1
+                date: "2025-01-16T08:30:00Z"
+                workspace: Reselling Vinted 2025
+        '400':
+          description: Dati non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: VALIDATION_ERROR
+                message: "Il campo 'productName' è obbligatorio"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────
+  # SALES
+  # ──────────────────────────────────────────
+  /sales:
+    get:
+      tags: [Sales]
+      summary: Lista vendite
+      description: Restituisce la lista delle vendite registrate.
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2025-01-01"
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2025-01-31"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Lista vendite
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Sale'
+                  total:
+                    type: integer
+              example:
+                data:
+                  - id: sale_001
+                    productName: Nike Air Max 90
+                    salePrice: 89.00
+                    purchasePrice: 45.00
+                    fees: 8.90
+                    date: "2025-01-14T16:00:00Z"
+                  - id: sale_002
+                    productName: Adidas Forum Low
+                    salePrice: 95.00
+                    purchasePrice: 65.00
+                    fees: 9.50
+                    date: "2025-01-15T10:20:00Z"
+                total: 2
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Sales]
+      summary: Registra vendita
+      description: |
+        Registra una nuova vendita. Aggiorna automaticamente lo status 
+        del prodotto corrispondente a "shipped".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleCreate'
+            example:
+              productName: Stone Island Hoodie
+              salePrice: 180.00
+              purchasePrice: 120.00
+              fees: 18.00
+      responses:
+        '201':
+          description: Vendita registrata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+              example:
+                id: sale_003
+                productName: Stone Island Hoodie
+                salePrice: 180.00
+                purchasePrice: 120.00
+                fees: 18.00
+                date: "2025-01-16T09:00:00Z"
+        '400':
+          description: Dati non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: VALIDATION_ERROR
+                message: "Il prezzo di vendita deve essere maggiore di 0"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────
+  # STATS
+  # ──────────────────────────────────────────
+  /stats/dashboard:
+    get:
+      tags: [Stats]
+      summary: Statistiche dashboard
+      description: |
+        Restituisce le 4 metriche principali mostrate nella dashboard:
+        - **Capitale Immobilizzato**: valore totale dei prodotti in inventario
+        - **Ordini in Arrivo**: valore dei prodotti con status "shipped"
+        - **Capitale Spedito**: valore dei prodotti venduti e spediti
+        - **Profitto Consolidato**: profitto netto totale (vendite - acquisti - fees)
+      responses:
+        '200':
+          description: Statistiche dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+              example:
+                capitaleImmobilizzato: 130.00
+                ordiniInArrivo: 120.00
+                capitaleSpedito: 45.00
+                profittoConsolidato: 1470.00
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /stats/reports:
+    get:
+      tags: [Stats]
+      summary: Statistiche reports
+      description: |
+        Restituisce le metriche della sezione Reports:
+        - **Sales Count**: numero totale di vendite completate
+        - **Total Fees Paid**: totale commissioni pagate sulle piattaforme
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2025-01-01"
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2025-01-31"
+      responses:
+        '200':
+          description: Statistiche reports
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportStats'
+              example:
+                salesCount: 2
+                totalFeesPaid: 51.15
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────
+  # EXPORTS
+  # ──────────────────────────────────────────
+  /exports/csv:
+    get:
+      tags: [Exports]
+      summary: Esporta CSV
+      description: |
+        Esporta tutti i record (prodotti, acquisti, vendite) in formato CSV.
+        Il file include colonne: name, brand, quantity, price, status, workspace, date.
+      parameters:
+        - name: type
+          in: query
+          description: Tipo di dati da esportare
+          schema:
+            type: string
+            enum: [products, purchases, sales, all]
+            default: all
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: File CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+              example: |
+                name,brand,quantity,price,status,workspace,date
+                Nike Air Max 90,NIKE,1,45.00,shipped,Reselling Vinted 2025,2025-01-15
+                Adidas Forum Low,ADIDAS,2,65.00,inInventory,Reselling Vinted 2025,2025-01-14
+                Stone Island Hoodie,STONE ISLAND,1,120.00,listed,Reselling Vinted 2025,2025-01-13
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename="vault_export_2025-01-16.csv"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /exports/pdf:
+    get:
+      tags: [Exports]
+      summary: Esporta PDF report
+      description: |
+        Genera un report PDF formattato con:
+        - Riepilogo statistiche (dashboard + report stats)
+        - Lista prodotti in inventario
+        - Storico acquisti e vendite
+        - Grafici profitto
+      parameters:
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: File PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename="vault_report_2025-01-16.pdf"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ──────────────────────────────────────────
+  # USERS
+  # ──────────────────────────────────────────
+  /users/profile:
+    get:
+      tags: [Users]
+      summary: Profilo utente
+      description: Restituisce il profilo dell'utente autenticato.
+      responses:
+        '200':
+          description: Profilo utente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                uid: abc123def456
+                email: vault@reselling.pro
+                name: Vault User
+                plan: pro
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      tags: [Users]
+      summary: Aggiorna profilo
+      description: Aggiorna i dati del profilo utente (nome, email).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+            example:
+              name: Marco Rossi
+              email: marco@reselling.pro
+      responses:
+        '200':
+          description: Profilo aggiornato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                uid: abc123def456
+                email: marco@reselling.pro
+                name: Marco Rossi
+                plan: pro
+        '400':
+          description: Dati non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: VALIDATION_ERROR
+                message: "Formato email non valido"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+# ──────────────────────────────────────────────────
+# COMPONENTS
+# ──────────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT ottenuto dal login Firebase Auth
+
+  parameters:
+    ProductId:
+      name: id
+      in: path
+      required: true
+      description: ID univoco del prodotto
+      schema:
+        type: string
+      example: prod_001
+
+  responses:
+    Unauthorized:
+      description: Token mancante o non valido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: AUTH_UNAUTHORIZED
+            message: Token di autenticazione mancante o scaduto
+
+  schemas:
+    # ── Auth ──
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email dell'utente
+          example: vault@reselling.pro
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: Password dell'utente
+          example: SecureP@ss123
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT token per autenticazione
+          example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/User'
+
+    RegisterRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+          example: nuovoutente@email.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: SecureP@ss123
+        name:
+          type: string
+          minLength: 2
+          example: Marco Rossi
+
+    RegisterResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+          example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    # ── Product ──
+    Product:
+      type: object
+      required: [id, name, brand, quantity, price, status, workspace, createdAt]
+      properties:
+        id:
+          type: string
+          description: ID univoco del prodotto
+          example: prod_001
+        name:
+          type: string
+          description: Nome del prodotto
+          example: Nike Air Max 90
+        brand:
+          type: string
+          description: Brand/marca del prodotto
+          example: NIKE
+        quantity:
+          type: number
+          format: double
+          description: Quantità (supporta decimali per crypto)
+          example: 1
+        price:
+          type: number
+          format: double
+          description: Prezzo di acquisto in EUR
+          example: 45.00
+        status:
+          type: string
+          enum: [shipped, inInventory, listed]
+          description: |
+            Stato del prodotto:
+            - `shipped`: spedito/in transito
+            - `inInventory`: in magazzino
+            - `listed`: in vendita su piattaforma
+          example: shipped
+        workspace:
+          type: string
+          description: Workspace di appartenenza
+          example: Reselling Vinted 2025
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL immagine prodotto (opzionale)
+          example: https://storage.vault-app.com/images/prod_001.jpg
+        createdAt:
+          type: string
+          format: date-time
+          description: Data creazione
+          example: "2025-01-15T10:30:00Z"
+
+    ProductCreate:
+      type: object
+      required: [name, brand, quantity, price, status, workspace]
+      properties:
+        name:
+          type: string
+          example: Nike Air Max 90
+        brand:
+          type: string
+          example: NIKE
+        quantity:
+          type: number
+          format: double
+          minimum: 0
+          example: 1
+        price:
+          type: number
+          format: double
+          minimum: 0
+          example: 45.00
+        status:
+          type: string
+          enum: [shipped, inInventory, listed]
+          example: shipped
+        workspace:
+          type: string
+          example: Reselling Vinted 2025
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    ProductUpdate:
+      type: object
+      description: Tutti i campi sono opzionali. Solo i campi inclusi vengono aggiornati.
+      properties:
+        name:
+          type: string
+          example: Nike Air Max 90 OG
+        brand:
+          type: string
+          example: NIKE
+        quantity:
+          type: number
+          format: double
+          example: 1
+        price:
+          type: number
+          format: double
+          example: 55.00
+        status:
+          type: string
+          enum: [shipped, inInventory, listed]
+          example: inInventory
+        workspace:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    # ── Purchase ──
+    Purchase:
+      type: object
+      required: [id, productName, price, quantity, date, workspace]
+      properties:
+        id:
+          type: string
+          description: ID univoco dell'acquisto
+          example: pur_001
+        productName:
+          type: string
+          description: Nome del prodotto acquistato
+          example: Nike Air Max 90
+        price:
+          type: number
+          format: double
+          description: Prezzo di acquisto in EUR
+          example: 45.00
+        quantity:
+          type: integer
+          description: Quantità acquistata
+          example: 1
+        date:
+          type: string
+          format: date-time
+          description: Data dell'acquisto
+          example: "2025-01-10T09:15:00Z"
+        workspace:
+          type: string
+          description: Workspace di appartenenza
+          example: Reselling Vinted 2025
+
+    PurchaseCreate:
+      type: object
+      required: [productName, price, quantity, workspace]
+      properties:
+        productName:
+          type: string
+          example: Nike Dunk Low Panda
+        price:
+          type: number
+          format: double
+          minimum: 0
+          example: 110.00
+        quantity:
+          type: integer
+          minimum: 1
+          example: 1
+        workspace:
+          type: string
+          example: Reselling Vinted 2025
+
+    # ── Sale ──
+    Sale:
+      type: object
+      required: [id, productName, salePrice, purchasePrice, fees, date]
+      properties:
+        id:
+          type: string
+          description: ID univoco della vendita
+          example: sale_001
+        productName:
+          type: string
+          description: Nome del prodotto venduto
+          example: Nike Air Max 90
+        salePrice:
+          type: number
+          format: double
+          description: Prezzo di vendita in EUR
+          example: 89.00
+        purchasePrice:
+          type: number
+          format: double
+          description: Prezzo di acquisto originale in EUR
+          example: 45.00
+        fees:
+          type: number
+          format: double
+          description: Commissioni piattaforma in EUR
+          example: 8.90
+        date:
+          type: string
+          format: date-time
+          description: Data della vendita
+          example: "2025-01-14T16:00:00Z"
+
+    SaleCreate:
+      type: object
+      required: [productName, salePrice, purchasePrice, fees]
+      properties:
+        productName:
+          type: string
+          example: Stone Island Hoodie
+        salePrice:
+          type: number
+          format: double
+          minimum: 0
+          example: 180.00
+        purchasePrice:
+          type: number
+          format: double
+          minimum: 0
+          example: 120.00
+        fees:
+          type: number
+          format: double
+          minimum: 0
+          example: 18.00
+
+    # ── User ──
+    User:
+      type: object
+      required: [uid, email, name, plan]
+      properties:
+        uid:
+          type: string
+          description: ID univoco utente (Firebase UID)
+          example: abc123def456
+        email:
+          type: string
+          format: email
+          description: Email dell'utente
+          example: vault@reselling.pro
+        name:
+          type: string
+          description: Nome visualizzato
+          example: Vault User
+        plan:
+          type: string
+          enum: [free, pro]
+          description: Piano sottoscritto
+          example: pro
+
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 2
+          example: Marco Rossi
+        email:
+          type: string
+          format: email
+          example: marco@reselling.pro
+
+    # ── Stats ──
+    DashboardStats:
+      type: object
+      required: [capitaleImmobilizzato, ordiniInArrivo, capitaleSpedito, profittoConsolidato]
+      properties:
+        capitaleImmobilizzato:
+          type: number
+          format: double
+          description: Valore totale prodotti in inventario (status = inInventory)
+          example: 130.00
+        ordiniInArrivo:
+          type: number
+          format: double
+          description: Valore prodotti in transito (status = shipped)
+          example: 120.00
+        capitaleSpedito:
+          type: number
+          format: double
+          description: Valore totale prodotti venduti e spediti
+          example: 45.00
+        profittoConsolidato:
+          type: number
+          format: double
+          description: Profitto netto (somma vendite - acquisti - fees)
+          example: 1470.00
+
+    ReportStats:
+      type: object
+      required: [salesCount, totalFeesPaid]
+      properties:
+        salesCount:
+          type: integer
+          description: Numero totale vendite completate
+          example: 2
+        totalFeesPaid:
+          type: number
+          format: double
+          description: Totale commissioni pagate alle piattaforme
+          example: 51.15
+
+    # ── Error ──
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Codice errore machine-readable
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          description: Messaggio errore human-readable
+          example: Il campo 'name' è obbligatorio
