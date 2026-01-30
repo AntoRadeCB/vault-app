@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
+import '../services/firestore_service.dart';
+import '../models/sale.dart';
 
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final firestoreService = FirestoreService();
+
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(24),
@@ -39,29 +43,36 @@ class ReportsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          _buildStatRow(),
+          _buildStatRow(firestoreService),
           const SizedBox(height: 28),
           StaggeredFadeSlide(index: 3, child: _buildExportSection(context)),
           const SizedBox(height: 28),
-          StaggeredFadeSlide(index: 4, child: _buildRecentTransactions()),
+          StaggeredFadeSlide(
+              index: 4,
+              child: _buildRecentTransactions(firestoreService)),
         ],
       ),
     );
   }
 
-  Widget _buildStatRow() {
+  Widget _buildStatRow(FirestoreService firestoreService) {
     return Row(
       children: [
         Expanded(
           child: StaggeredFadeSlide(
             index: 1,
             child: HoverLiftCard(
-              child: _AnimatedStatCard(
-                title: 'Sales Count',
-                value: 2,
-                prefix: '',
-                icon: Icons.receipt_long,
-                color: AppColors.accentBlue,
+              child: StreamBuilder<int>(
+                stream: firestoreService.getSalesCount(),
+                builder: (context, snapshot) {
+                  return _AnimatedStatCard(
+                    title: 'Sales Count',
+                    value: (snapshot.data ?? 0).toDouble(),
+                    prefix: '',
+                    icon: Icons.receipt_long,
+                    color: AppColors.accentBlue,
+                  );
+                },
               ),
             ),
           ),
@@ -71,13 +82,18 @@ class ReportsScreen extends StatelessWidget {
           child: StaggeredFadeSlide(
             index: 2,
             child: HoverLiftCard(
-              child: _AnimatedStatCard(
-                title: 'Total Fees Paid',
-                value: 51.15,
-                prefix: '€',
-                decimals: 2,
-                icon: Icons.money_off,
-                color: AppColors.accentRed,
+              child: StreamBuilder<double>(
+                stream: firestoreService.getTotalFeesPaid(),
+                builder: (context, snapshot) {
+                  return _AnimatedStatCard(
+                    title: 'Total Fees Paid',
+                    value: snapshot.data ?? 0,
+                    prefix: '€',
+                    decimals: 2,
+                    icon: Icons.money_off,
+                    color: AppColors.accentRed,
+                  );
+                },
               ),
             ),
           ),
@@ -120,7 +136,7 @@ class ReportsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRecentTransactions() {
+  Widget _buildRecentTransactions(FirestoreService firestoreService) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -133,11 +149,44 @@ class ReportsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        _TransactionCard(name: 'Nike Air Max 90', income: 89, expense: 45),
-        const SizedBox(height: 10),
-        _TransactionCard(name: 'Adidas Forum Low', income: 0, expense: null),
-        const SizedBox(height: 10),
-        _TransactionCard(name: 'Stone Island Hoodie', income: 0, expense: null),
+        StreamBuilder<List<Sale>>(
+          stream: firestoreService.getSales(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child:
+                      CircularProgressIndicator(color: AppColors.accentBlue),
+                ),
+              );
+            }
+            final sales = snapshot.data ?? [];
+            if (sales.isEmpty) {
+              return GlassCard(
+                padding: const EdgeInsets.all(24),
+                child: const Center(
+                  child: Text(
+                    'Nessuna vendita registrata',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                  ),
+                ),
+              );
+            }
+            return Column(
+              children: sales.take(10).map((sale) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _TransactionCard(
+                    name: sale.productName,
+                    income: sale.salePrice,
+                    expense: sale.purchasePrice,
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
       ],
     );
   }
@@ -286,7 +335,8 @@ class _ExportCardState extends State<_ExportCard>
                 ),
                 child: Icon(
                   _tapped ? Icons.check : Icons.download,
-                  color: _tapped ? AppColors.accentGreen : AppColors.textMuted,
+                  color:
+                      _tapped ? AppColors.accentGreen : AppColors.textMuted,
                   size: 18,
                 ),
               ),
@@ -346,7 +396,8 @@ class _TransactionCard extends StatelessWidget {
               ),
               child: Icon(
                 hasIncome ? Icons.trending_up : Icons.swap_horiz,
-                color: hasIncome ? AppColors.accentGreen : AppColors.textMuted,
+                color:
+                    hasIncome ? AppColors.accentGreen : AppColors.textMuted,
                 size: 20,
               ),
             ),
@@ -367,7 +418,9 @@ class _TransactionCard extends StatelessWidget {
                 Text(
                   '+€${income.toInt()}',
                   style: TextStyle(
-                    color: hasIncome ? AppColors.accentGreen : AppColors.textMuted,
+                    color: hasIncome
+                        ? AppColors.accentGreen
+                        : AppColors.textMuted,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),

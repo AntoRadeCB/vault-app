@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
+import '../services/firestore_service.dart';
+import '../models/product.dart';
 
 class DashboardScreen extends StatelessWidget {
   final VoidCallback? onNewPurchase;
+  final FirestoreService _firestoreService = FirestoreService();
 
-  const DashboardScreen({super.key, this.onNewPurchase});
+  DashboardScreen({super.key, this.onNewPurchase});
 
   @override
   Widget build(BuildContext context) {
@@ -91,67 +94,96 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _buildStatCards() {
-    final cards = [
-      _StatData('Capitale Immobilizzato', 130, '€', Icons.lock_outline, AppColors.accentBlue),
-      _StatData('Ordini in Arrivo', 120, '€', Icons.local_shipping_outlined, AppColors.accentTeal),
-      _StatData('Capitale Spedito', 45, '€', Icons.send_outlined, AppColors.accentOrange),
-      _StatData('Profitto Consolidato', 1470, '€', Icons.trending_up, AppColors.accentGreen),
-    ];
+    return StreamBuilder<List<Product>>(
+      stream: _firestoreService.getProducts(),
+      builder: (context, productSnap) {
+        // Calculate stats from products
+        final products = productSnap.data ?? [];
+        final capitaleImmobilizzato = products
+            .where((p) => p.status == ProductStatus.inInventory)
+            .fold<double>(0, (sum, p) => sum + (p.price * p.quantity));
+        final ordiniInArrivo = products
+            .where((p) => p.status == ProductStatus.shipped)
+            .fold<double>(0, (sum, p) => sum + (p.price * p.quantity));
+        final capitaleSpedito = products
+            .where((p) => p.status == ProductStatus.listed)
+            .fold<double>(0, (sum, p) => sum + (p.price * p.quantity));
 
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
-      childAspectRatio: 2.2,
-      children: List.generate(cards.length, (i) {
-        final c = cards[i];
-        return StaggeredFadeSlide(
-          index: i + 1,
-          child: HoverLiftCard(
-            child: GlassCard(
-              glowColor: c.color,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
-                    children: [
-                      Icon(c.icon, color: c.color, size: 14),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          c.title.toUpperCase(),
-                          style: TextStyle(
-                            color: c.color,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
+        return StreamBuilder<double>(
+          stream: _firestoreService.getProfittoConsolidato(),
+          builder: (context, profitSnap) {
+            final profitto = profitSnap.data ?? 0;
+
+            final cards = [
+              _StatData('Capitale Immobilizzato', capitaleImmobilizzato, '€',
+                  Icons.lock_outline, AppColors.accentBlue),
+              _StatData('Ordini in Arrivo', ordiniInArrivo, '€',
+                  Icons.local_shipping_outlined, AppColors.accentTeal),
+              _StatData('Capitale Spedito', capitaleSpedito, '€',
+                  Icons.send_outlined, AppColors.accentOrange),
+              _StatData('Profitto Consolidato', profitto, '€',
+                  Icons.trending_up, AppColors.accentGreen),
+            ];
+
+            return GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 2.2,
+              children: List.generate(cards.length, (i) {
+                final c = cards[i];
+                return StaggeredFadeSlide(
+                  index: i + 1,
+                  child: HoverLiftCard(
+                    child: GlassCard(
+                      glowColor: c.color,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(c.icon, color: c.color, size: 14),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  c.title.toUpperCase(),
+                                  style: TextStyle(
+                                    color: c.color,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.5,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          const SizedBox(height: 6),
+                          CountUpText(
+                            prefix: c.prefix,
+                            value: c.value,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  CountUpText(
-                    prefix: c.prefix,
-                    value: c.value,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
+                );
+              }),
+            );
+          },
         );
-      }),
+      },
     );
   }
 
@@ -214,26 +246,43 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _buildOperationalStatus() {
-    return GlassCard(
-      padding: const EdgeInsets.all(20),
-      glowColor: AppColors.accentBlue,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Stato Operativo',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-            ),
+    return StreamBuilder<List<Product>>(
+      stream: _firestoreService.getProducts(),
+      builder: (context, snapshot) {
+        final products = snapshot.data ?? [];
+        final shippedCount =
+            products.where((p) => p.status == ProductStatus.shipped).length;
+        final lowStock = products.where((p) => p.quantity <= 1).toList();
+
+        return GlassCard(
+          padding: const EdgeInsets.all(20),
+          glowColor: AppColors.accentBlue,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Stato Operativo',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (shippedCount > 0)
+                _buildStatusItem(
+                    '$shippedCount Spedizioni in transito', AppColors.accentBlue),
+              if (shippedCount > 0) const SizedBox(height: 12),
+              if (lowStock.isNotEmpty)
+                _buildStatusItem(
+                    'Stock basso: ${lowStock.first.name}', AppColors.accentOrange),
+              if (shippedCount == 0 && lowStock.isEmpty)
+                _buildStatusItem(
+                    'Nessun avviso attivo', AppColors.accentGreen),
+            ],
           ),
-          const SizedBox(height: 16),
-          _buildStatusItem('2 Spedizioni in transito', AppColors.accentBlue),
-          const SizedBox(height: 12),
-          _buildStatusItem('Stock basso: Nike Air Max', AppColors.accentOrange),
-        ],
-      ),
+        );
+      },
     );
   }
 

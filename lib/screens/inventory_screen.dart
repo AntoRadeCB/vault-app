@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/product.dart';
 import '../widgets/animated_widgets.dart';
+import '../services/firestore_service.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -15,6 +16,7 @@ class _InventoryScreenState extends State<InventoryScreen>
   late TabController _tabController;
   String _searchQuery = '';
   bool _searchFocused = false;
+  final FirestoreService _firestoreService = FirestoreService();
 
   @override
   void initState() {
@@ -31,161 +33,249 @@ class _InventoryScreenState extends State<InventoryScreen>
     super.dispose();
   }
 
+  void _confirmDelete(Product product) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Elimina Prodotto',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+          'Sei sicuro di voler eliminare "${product.name}"?',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annulla',
+                style: TextStyle(color: AppColors.textMuted)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              if (product.id != null) {
+                _firestoreService.deleteProduct(product.id!);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${product.name} eliminato'),
+                    backgroundColor: AppColors.accentRed,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    margin: const EdgeInsets.all(16),
+                  ),
+                );
+              }
+            },
+            child: const Text('Elimina',
+                style: TextStyle(
+                    color: AppColors.accentRed, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final products = Product.sampleProducts.where((p) {
-      if (_searchQuery.isEmpty) return true;
-      return p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          p.brand.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
+    return StreamBuilder<List<Product>>(
+      stream: _firestoreService.getProducts(),
+      builder: (context, snapshot) {
+        final allProducts = snapshot.data ?? [];
+        final products = allProducts.where((p) {
+          if (_searchQuery.isEmpty) return true;
+          return p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              p.brand.toLowerCase().contains(_searchQuery.toLowerCase());
+        }).toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-          child: StaggeredFadeSlide(
-            index: 0,
-            child: Row(
-              children: [
-                const Text(
-                  'Inventario',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.accentBlue.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppColors.accentBlue.withValues(alpha: 0.2),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              child: StaggeredFadeSlide(
+                index: 0,
+                child: Row(
+                  children: [
+                    const Text(
+                      'Inventario',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    '${products.length} RECORDS',
-                    style: const TextStyle(
-                      color: AppColors.accentBlue,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: StaggeredFadeSlide(
-            index: 1,
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.06),
-                ),
-              ),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  gradient: AppColors.blueButtonGradient,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.accentBlue.withValues(alpha: 0.3),
-                      blurRadius: 8,
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentBlue.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.accentBlue.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Text(
+                        '${products.length} RECORDS',
+                        style: const TextStyle(
+                          color: AppColors.accentBlue,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                indicatorSize: TabBarIndicatorSize.tab,
-                labelColor: Colors.white,
-                unselectedLabelColor: AppColors.textMuted,
-                labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                dividerColor: Colors.transparent,
-                tabs: const [
-                  Tab(text: 'Storico Record'),
-                  Tab(text: 'Riepilogo Prodotti'),
-                ],
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: StaggeredFadeSlide(
-            index: 2,
-            child: Focus(
-              onFocusChange: (f) => setState(() => _searchFocused = f),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _searchFocused
-                        ? AppColors.accentBlue.withValues(alpha: 0.5)
-                        : Colors.white.withValues(alpha: 0.06),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: StaggeredFadeSlide(
+                index: 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
                   ),
-                  boxShadow: _searchFocused
-                      ? [
-                          BoxShadow(
-                            color: AppColors.accentBlue.withValues(alpha: 0.12),
-                            blurRadius: 16,
-                          ),
-                        ]
-                      : [],
-                ),
-                child: TextField(
-                  onChanged: (value) => setState(() => _searchQuery = value),
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Cerca prodotto...',
-                    prefixIcon: Icon(
-                      Icons.search,
-                      color: _searchFocused ? AppColors.accentBlue : AppColors.textMuted,
+                  child: TabBar(
+                    controller: _tabController,
+                    indicator: BoxDecoration(
+                      gradient: AppColors.blueButtonGradient,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.accentBlue.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
-                    filled: true,
-                    fillColor: Colors.transparent,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: AppColors.textMuted,
+                    labelStyle: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13),
+                    dividerColor: Colors.transparent,
+                    tabs: const [
+                      Tab(text: 'Storico Record'),
+                      Tab(text: 'Riepilogo Prodotti'),
+                    ],
                   ),
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: StaggeredFadeSlide(
+                index: 2,
+                child: Focus(
+                  onFocusChange: (f) => setState(() => _searchFocused = f),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _searchFocused
+                            ? AppColors.accentBlue.withValues(alpha: 0.5)
+                            : Colors.white.withValues(alpha: 0.06),
+                      ),
+                      boxShadow: _searchFocused
+                          ? [
+                              BoxShadow(
+                                color: AppColors.accentBlue
+                                    .withValues(alpha: 0.12),
+                                blurRadius: 16,
+                              ),
+                            ]
+                          : [],
+                    ),
+                    child: TextField(
+                      onChanged: (value) =>
+                          setState(() => _searchQuery = value),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Cerca prodotto...',
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: _searchFocused
+                              ? AppColors.accentBlue
+                              : AppColors.textMuted,
+                        ),
+                        filled: true,
+                        fillColor: Colors.transparent,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: snapshot.connectionState == ConnectionState.waiting
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                          color: AppColors.accentBlue))
+                  : TabBarView(
+                      controller: _tabController,
+                      physics: const BouncingScrollPhysics(),
+                      children: [
+                        products.isEmpty
+                            ? _buildEmptyState()
+                            : _buildProductList(products),
+                        _buildProductSummary(products),
+                      ],
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined,
+              color: AppColors.textMuted.withValues(alpha: 0.5), size: 64),
+          const SizedBox(height: 16),
+          const Text(
+            'Nessun prodotto',
+            style: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            physics: const BouncingScrollPhysics(),
-            children: [
-              _buildProductList(products),
-              _buildProductSummary(products),
-            ],
+          const SizedBox(height: 8),
+          const Text(
+            'Aggiungi il tuo primo prodotto!',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 14),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -200,7 +290,7 @@ class _InventoryScreenState extends State<InventoryScreen>
           child: Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Dismissible(
-              key: ValueKey(products[index].name),
+              key: ValueKey(products[index].id ?? products[index].name),
               direction: DismissDirection.endToStart,
               background: Container(
                 alignment: Alignment.centerRight,
@@ -209,9 +299,13 @@ class _InventoryScreenState extends State<InventoryScreen>
                   color: AppColors.accentRed.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.delete_outline, color: AppColors.accentRed, size: 24),
+                child: const Icon(Icons.delete_outline,
+                    color: AppColors.accentRed, size: 24),
               ),
-              confirmDismiss: (_) async => false, // Demo only
+              confirmDismiss: (_) async {
+                _confirmDelete(products[index]);
+                return false;
+              },
               child: HoverLiftCard(
                 liftAmount: 3,
                 child: _buildProductCard(products[index]),
@@ -224,10 +318,14 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   Widget _buildProductSummary(List<Product> products) {
-    final totalValue = products.fold<double>(0, (sum, p) => sum + (p.price * p.quantity));
-    final shipped = products.where((p) => p.status == ProductStatus.shipped).length;
-    final inStock = products.where((p) => p.status == ProductStatus.inInventory).length;
-    final listed = products.where((p) => p.status == ProductStatus.listed).length;
+    final totalValue =
+        products.fold<double>(0, (sum, p) => sum + (p.price * p.quantity));
+    final shipped =
+        products.where((p) => p.status == ProductStatus.shipped).length;
+    final inStock =
+        products.where((p) => p.status == ProductStatus.inInventory).length;
+    final listed =
+        products.where((p) => p.status == ProductStatus.listed).length;
 
     return ListView(
       physics: const BouncingScrollPhysics(),
@@ -235,28 +333,33 @@ class _InventoryScreenState extends State<InventoryScreen>
       children: [
         StaggeredFadeSlide(
           index: 0,
-          child: _buildSummaryCard('Valore Totale Inventario', '€${totalValue.toStringAsFixed(2)}', Icons.euro, AppColors.accentBlue),
+          child: _buildSummaryCard('Valore Totale Inventario',
+              '€${totalValue.toStringAsFixed(2)}', Icons.euro, AppColors.accentBlue),
         ),
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 1,
-          child: _buildSummaryCard('Prodotti Spediti', '$shipped', Icons.local_shipping, AppColors.accentOrange),
+          child: _buildSummaryCard('Prodotti Spediti', '$shipped',
+              Icons.local_shipping, AppColors.accentOrange),
         ),
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 2,
-          child: _buildSummaryCard('In Inventario', '$inStock', Icons.inventory_2, AppColors.accentTeal),
+          child: _buildSummaryCard('In Inventario', '$inStock',
+              Icons.inventory_2, AppColors.accentTeal),
         ),
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 3,
-          child: _buildSummaryCard('In Vendita', '$listed', Icons.storefront, AppColors.accentGreen),
+          child: _buildSummaryCard('In Vendita', '$listed', Icons.storefront,
+              AppColors.accentGreen),
         ),
       ],
     );
   }
 
-  Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
+  Widget _buildSummaryCard(
+      String title, String value, IconData icon, Color color) {
     return GlassCard(
       padding: const EdgeInsets.all(16),
       glowColor: color,
@@ -274,9 +377,15 @@ class _InventoryScreenState extends State<InventoryScreen>
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+              Text(title,
+                  style: const TextStyle(
+                      color: AppColors.textMuted, fontSize: 13)),
               const SizedBox(height: 2),
-              Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(value,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
             ],
           ),
         ],
@@ -330,9 +439,11 @@ class _InventoryScreenState extends State<InventoryScreen>
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: _getProductColor(product.brand).withValues(alpha: 0.12),
+                        color: _getProductColor(product.brand)
+                            .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

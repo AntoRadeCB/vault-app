@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_options.dart';
 import 'theme/app_theme.dart';
+import 'screens/auth_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/add_item_screen.dart';
@@ -7,7 +11,11 @@ import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'widgets/animated_widgets.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const VaultApp());
 }
 
@@ -20,7 +28,33 @@ class VaultApp extends StatelessWidget {
       title: 'Vault - Reselling Tracker',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      home: const MainShell(),
+      home: const AuthGate(),
+    );
+  }
+}
+
+/// AuthGate: shows AuthScreen if not logged in, MainShell if logged in
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: AppColors.background,
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.accentBlue),
+            ),
+          );
+        }
+        if (snapshot.hasData) {
+          return const MainShell();
+        }
+        return const AuthScreen();
+      },
     );
   }
 }
@@ -236,11 +270,11 @@ class _MainShellState extends State<MainShell> {
                   color: AppColors.accentGreen.withValues(alpha: 0.15),
                 ),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const PulsingDot(color: AppColors.accentGreen, size: 8),
-                  const SizedBox(width: 10),
-                  const Text(
+                  PulsingDot(color: AppColors.accentGreen, size: 8),
+                  SizedBox(width: 10),
+                  Text(
                     'System Online',
                     style: TextStyle(
                       color: AppColors.accentGreen,

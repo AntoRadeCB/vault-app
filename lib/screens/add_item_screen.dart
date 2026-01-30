@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
+import '../models/product.dart';
+import '../models/purchase.dart';
+import '../services/firestore_service.dart';
 
 class AddItemScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -14,20 +17,56 @@ class AddItemScreen extends StatefulWidget {
 class _AddItemScreenState extends State<AddItemScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _brandController = TextEditingController();
   final _priceController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
   String _selectedWorkspace = 'Reselling Vinted 2025';
+  String _selectedStatus = 'inInventory';
+  bool _saving = false;
+  final FirestoreService _firestoreService = FirestoreService();
 
   @override
   void dispose() {
     _nameController.dispose();
+    _brandController.dispose();
     _priceController.dispose();
     _quantityController.dispose();
     super.dispose();
   }
 
-  void _submit() {
-    if (_formKey.currentState?.validate() ?? false) {
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() => _saving = true);
+
+    try {
+      final product = Product(
+        name: _nameController.text.trim(),
+        brand: _brandController.text.trim().toUpperCase(),
+        price: double.parse(_priceController.text.trim()),
+        quantity: double.parse(_quantityController.text.trim()),
+        status: _selectedStatus == 'shipped'
+            ? ProductStatus.shipped
+            : _selectedStatus == 'listed'
+                ? ProductStatus.listed
+                : ProductStatus.inInventory,
+        createdAt: DateTime.now(),
+      );
+
+      await _firestoreService.addProduct(product);
+
+      // Also log as a purchase
+      final purchase = Purchase(
+        productName: product.name,
+        price: product.price,
+        quantity: product.quantity,
+        date: DateTime.now(),
+        workspace: _selectedWorkspace,
+      );
+      await _firestoreService.addPurchase(purchase);
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -38,7 +77,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   color: Colors.white.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check, color: Colors.white, size: 16),
+                child:
+                    const Icon(Icons.check, color: Colors.white, size: 16),
               ),
               const SizedBox(width: 12),
               const Text(
@@ -49,12 +89,27 @@ class _AddItemScreenState extends State<AddItemScreen> {
           ),
           backgroundColor: AppColors.accentGreen,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           margin: const EdgeInsets.all(16),
           duration: const Duration(seconds: 2),
         ),
       );
       widget.onBack?.call();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Errore: ${e.toString()}'),
+          backgroundColor: AppColors.accentRed,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -111,15 +166,18 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 child: _GlowTextField(
                   controller: _nameController,
                   hintText: 'Es. Nike Air Max 90',
-                  validator: (v) => (v == null || v.isEmpty) ? 'Campo obbligatorio' : null,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Campo obbligatorio' : null,
                   suffixIcon: ScaleOnPress(
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: const Text('📷 Scanner QR non disponibile nella demo'),
+                          content: const Text(
+                              '📷 Scanner QR non disponibile nella demo'),
                           backgroundColor: AppColors.surface,
                           behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                           margin: const EdgeInsets.all(16),
                         ),
                       );
@@ -132,7 +190,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         borderRadius: BorderRadius.circular(8),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.accentBlue.withValues(alpha: 0.3),
+                            color:
+                                AppColors.accentBlue.withValues(alpha: 0.3),
                             blurRadius: 8,
                           ),
                         ],
@@ -151,6 +210,19 @@ class _AddItemScreenState extends State<AddItemScreen> {
             StaggeredFadeSlide(
               index: 2,
               child: _buildField(
+                label: 'Brand',
+                child: _GlowTextField(
+                  controller: _brandController,
+                  hintText: 'Es. Nike, Adidas, Stone Island',
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Campo obbligatorio' : null,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            StaggeredFadeSlide(
+              index: 3,
+              child: _buildField(
                 label: 'Prezzo Acquisto (€)',
                 child: _GlowTextField(
                   controller: _priceController,
@@ -167,7 +239,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
             ),
             const SizedBox(height: 24),
             StaggeredFadeSlide(
-              index: 3,
+              index: 4,
               child: _buildField(
                 label: 'Quantità',
                 child: _GlowTextField(
@@ -175,8 +247,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   hintText: '1',
                   keyboardType: TextInputType.number,
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Inserisci una quantità';
-                    if (int.tryParse(v) == null) return 'Quantità non valida';
+                    if (v == null || v.isEmpty) {
+                      return 'Inserisci una quantità';
+                    }
+                    if (double.tryParse(v) == null) {
+                      return 'Quantità non valida';
+                    }
                     return null;
                   },
                 ),
@@ -184,7 +260,51 @@ class _AddItemScreenState extends State<AddItemScreen> {
             ),
             const SizedBox(height: 24),
             StaggeredFadeSlide(
-              index: 4,
+              index: 5,
+              child: _buildField(
+                label: 'Stato',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedStatus,
+                      isExpanded: true,
+                      dropdownColor: AppColors.surface,
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 16),
+                      icon: const Icon(Icons.keyboard_arrow_down,
+                          color: AppColors.textMuted),
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'inInventory',
+                            child: Text('In Inventario')),
+                        DropdownMenuItem(
+                            value: 'shipped',
+                            child: Text('Spedito')),
+                        DropdownMenuItem(
+                            value: 'listed',
+                            child: Text('In Vendita')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _selectedStatus = value);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            StaggeredFadeSlide(
+              index: 6,
               child: _buildField(
                 label: 'Workspace',
                 child: Container(
@@ -201,8 +321,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
                       value: _selectedWorkspace,
                       isExpanded: true,
                       dropdownColor: AppColors.surface,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                      icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 16),
+                      icon: const Icon(Icons.keyboard_arrow_down,
+                          color: AppColors.textMuted),
                       items: const [
                         DropdownMenuItem(
                           value: 'Reselling Vinted 2025',
@@ -221,26 +343,38 @@ class _AddItemScreenState extends State<AddItemScreen> {
             ),
             const SizedBox(height: 40),
             StaggeredFadeSlide(
-              index: 5,
+              index: 7,
               child: ShimmerButton(
                 baseGradient: AppColors.blueButtonGradient,
-                onTap: _submit,
+                onTap: _saving ? null : _submit,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 18),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.check_circle_outline, color: Colors.white, size: 22),
-                      SizedBox(width: 10),
-                      Text(
-                        'Registra Acquisto',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                      if (_saving)
+                        const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      else ...[
+                        const Icon(Icons.check_circle_outline,
+                            color: Colors.white, size: 22),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Registra Acquisto',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),

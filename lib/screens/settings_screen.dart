@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
+import '../services/auth_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -10,17 +12,21 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final AuthService _authService = AuthService();
+
   bool _darkMode = true;
   bool _notifications = true;
   bool _pushNotifications = false;
   bool _emailDigest = true;
   bool _autoBackup = false;
 
-  String _userName = 'Vault User';
-  String _userEmail = 'vault@reselling.pro';
   String _workspace = 'Reselling Vinted 2025';
   String _fontSize = 'Medium';
   int _accentIndex = 0;
+
+  User? get _user => _authService.currentUser;
+  String get _userName => _user?.displayName ?? 'Vault User';
+  String get _userEmail => _user?.email ?? 'vault@reselling.pro';
 
   void _showEditDialog({
     required String title,
@@ -29,13 +35,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bool isPassword = false,
     String hint = '',
   }) {
-    final controller = TextEditingController(text: isPassword ? '' : currentValue);
+    final controller =
+        TextEditingController(text: isPassword ? '' : currentValue);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
           decoration: const BoxDecoration(
             color: AppColors.surface,
@@ -70,23 +78,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 controller: controller,
                 obscureText: isPassword,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
+                style:
+                    const TextStyle(color: Colors.white, fontSize: 16),
                 decoration: InputDecoration(
-                  hintText: hint.isNotEmpty ? hint : 'Inserisci $title',
-                  hintStyle: const TextStyle(color: AppColors.textMuted),
+                  hintText:
+                      hint.isNotEmpty ? hint : 'Inserisci $title',
+                  hintStyle:
+                      const TextStyle(color: AppColors.textMuted),
                   filled: true,
                   fillColor: AppColors.cardDark,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                    borderSide: BorderSide(
+                        color:
+                            Colors.white.withValues(alpha: 0.06)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                    borderSide: BorderSide(
+                        color:
+                            Colors.white.withValues(alpha: 0.06)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.accentBlue, width: 1.5),
+                    borderSide: const BorderSide(
+                        color: AppColors.accentBlue, width: 1.5),
                   ),
                 ),
               ),
@@ -94,23 +110,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   obscureText: true,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 16),
                   decoration: InputDecoration(
                     hintText: 'Conferma nuova password',
-                    hintStyle: const TextStyle(color: AppColors.textMuted),
+                    hintStyle:
+                        const TextStyle(color: AppColors.textMuted),
                     filled: true,
                     fillColor: AppColors.cardDark,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                      borderSide: BorderSide(
+                          color: Colors.white
+                              .withValues(alpha: 0.06)),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                      borderSide: BorderSide(
+                          color: Colors.white
+                              .withValues(alpha: 0.06)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppColors.accentBlue, width: 1.5),
+                      borderSide: const BorderSide(
+                          color: AppColors.accentBlue, width: 1.5),
                     ),
                   ),
                 ),
@@ -122,9 +145,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: ScaleOnPress(
                       onTap: () => Navigator.pop(ctx),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.06),
+                          color:
+                              Colors.white.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Center(
@@ -151,13 +176,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _showSuccessSnackbar('$title aggiornato!');
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
                           gradient: AppColors.blueButtonGradient,
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.accentBlue.withValues(alpha: 0.3),
+                              color: AppColors.accentBlue
+                                  .withValues(alpha: 0.3),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -198,7 +225,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -237,16 +265,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
                       color: selected
-                          ? AppColors.accentBlue.withValues(alpha: 0.15)
+                          ? AppColors.accentBlue
+                              .withValues(alpha: 0.15)
                           : AppColors.cardDark,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: selected
-                            ? AppColors.accentBlue.withValues(alpha: 0.4)
-                            : Colors.white.withValues(alpha: 0.06),
+                            ? AppColors.accentBlue
+                                .withValues(alpha: 0.4)
+                            : Colors.white
+                                .withValues(alpha: 0.06),
                       ),
                     ),
                     child: Row(
@@ -255,14 +287,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Text(
                             opt,
                             style: TextStyle(
-                              color: selected ? Colors.white : AppColors.textSecondary,
+                              color: selected
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
                               fontSize: 15,
-                              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                              fontWeight: selected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                             ),
                           ),
                         ),
                         if (selected)
-                          const Icon(Icons.check_circle, color: AppColors.accentBlue, size: 20),
+                          const Icon(Icons.check_circle,
+                              color: AppColors.accentBlue, size: 20),
                       ],
                     ),
                   ),
@@ -283,7 +320,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -358,15 +396,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 color: Colors.white.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.check, color: Colors.white, size: 14),
+              child: const Icon(Icons.check,
+                  color: Colors.white, size: 14),
             ),
             const SizedBox(width: 10),
-            Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(text,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),
         backgroundColor: AppColors.accentGreen,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 2),
       ),
@@ -380,7 +422,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -409,14 +452,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 8),
             const Text(
               'Scegli il formato di esportazione',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+              style: TextStyle(
+                  color: AppColors.textMuted, fontSize: 14),
             ),
             const SizedBox(height: 20),
-            _exportOption(ctx, Icons.table_chart, 'CSV', 'Tutti i record in formato CSV', Colors.green),
+            _exportOption(ctx, Icons.table_chart, 'CSV',
+                'Tutti i record in formato CSV', Colors.green),
             const SizedBox(height: 10),
-            _exportOption(ctx, Icons.picture_as_pdf, 'PDF', 'Report formattato per stampa', Colors.red),
+            _exportOption(ctx, Icons.picture_as_pdf, 'PDF',
+                'Report formattato per stampa', Colors.red),
             const SizedBox(height: 10),
-            _exportOption(ctx, Icons.code, 'JSON', 'Dati grezzi in formato JSON', Colors.orange),
+            _exportOption(ctx, Icons.code, 'JSON',
+                'Dati grezzi in formato JSON', Colors.orange),
             const SizedBox(height: 16),
           ],
         ),
@@ -424,7 +471,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _exportOption(BuildContext ctx, IconData icon, String title, String subtitle, Color color) {
+  Widget _exportOption(BuildContext ctx, IconData icon, String title,
+      String subtitle, Color color) {
     return ScaleOnPress(
       onTap: () {
         Navigator.pop(ctx);
@@ -435,7 +483,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         decoration: BoxDecoration(
           color: AppColors.cardDark,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          border: Border.all(
+              color: Colors.white.withValues(alpha: 0.06)),
         ),
         child: Row(
           children: [
@@ -452,13 +501,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                  Text(title,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12)),
                 ],
               ),
             ),
-            const Icon(Icons.download, color: AppColors.textMuted, size: 20),
+            const Icon(Icons.download,
+                color: AppColors.textMuted, size: 20),
           ],
         ),
       ),
@@ -470,8 +527,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Logout', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: const Text('Logout',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
         content: const Text(
           'Sei sicuro di voler uscire dal tuo account?',
           style: TextStyle(color: AppColors.textSecondary),
@@ -479,14 +539,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annulla', style: TextStyle(color: AppColors.textMuted)),
+            child: const Text('Annulla',
+                style: TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              _showSuccessSnackbar('Logout effettuato');
+              await _authService.signOut();
             },
-            child: const Text('Esci', style: TextStyle(color: AppColors.accentRed, fontWeight: FontWeight.bold)),
+            child: const Text('Esci',
+                style: TextStyle(
+                    color: AppColors.accentRed,
+                    fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -531,14 +595,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.accentBlue.withValues(alpha: 0.3),
+                          color: AppColors.accentBlue
+                              .withValues(alpha: 0.3),
                           blurRadius: 16,
                         ),
                       ],
                     ),
                     child: Center(
                       child: Text(
-                        _userName.isNotEmpty ? _userName[0].toUpperCase() : 'V',
+                        _userName.isNotEmpty
+                            ? _userName[0].toUpperCase()
+                            : 'V',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 26,
@@ -550,7 +617,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
                         Text(
                           _userName,
@@ -570,12 +638,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         const SizedBox(height: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: AppColors.accentBlue.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20),
+                            color: AppColors.accentBlue
+                                .withValues(alpha: 0.12),
+                            borderRadius:
+                                BorderRadius.circular(20),
                             border: Border.all(
-                              color: AppColors.accentBlue.withValues(alpha: 0.25),
+                              color: AppColors.accentBlue
+                                  .withValues(alpha: 0.25),
                             ),
                           ),
                           child: const Text(
@@ -595,7 +667,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () => _showEditDialog(
                       title: 'Nome Utente',
                       currentValue: _userName,
-                      onSave: (v) => setState(() => _userName = v),
+                      onSave: (v) async {
+                        await _authService.updateDisplayName(v);
+                        setState(() {});
+                      },
                     ),
                     child: Container(
                       padding: const EdgeInsets.all(8),
@@ -603,10 +678,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         color: AppColors.surface,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.06),
+                          color: Colors.white
+                              .withValues(alpha: 0.06),
                         ),
                       ),
-                      child: const Icon(Icons.edit_outlined, color: AppColors.textMuted, size: 20),
+                      child: const Icon(
+                          Icons.edit_outlined,
+                          color: AppColors.textMuted,
+                          size: 20),
                     ),
                   ),
                 ],
@@ -629,41 +708,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => _showEditDialog(
                     title: 'Email',
                     currentValue: _userEmail,
-                    onSave: (v) => setState(() => _userEmail = v),
+                    onSave: (v) async {
+                      try {
+                        await _authService.updateEmail(v);
+                        _showSuccessSnackbar(
+                            'Verifica inviata alla nuova email');
+                      } catch (e) {
+                        _showSuccessSnackbar('Errore: $e');
+                      }
+                    },
                   ),
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
                   icon: Icons.lock_outline,
                   title: 'Password',
-                  subtitle: 'Ultima modifica 30 giorni fa',
-                  onTap: () => _showEditDialog(
-                    title: 'Nuova Password',
-                    currentValue: '',
-                    isPassword: true,
-                    hint: 'Inserisci nuova password',
-                    onSave: (_) {},
-                  ),
+                  subtitle: 'Reset via email',
+                  onTap: () async {
+                    try {
+                      await _authService
+                          .resetPassword(_userEmail);
+                      _showSuccessSnackbar(
+                          'Email di reset inviata a $_userEmail');
+                    } catch (e) {
+                      _showSuccessSnackbar('Errore: $e');
+                    }
+                  },
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
                   icon: Icons.security,
                   title: '2FA Authentication',
-                  subtitle: 'Abilitato',
+                  subtitle: 'Non disponibile',
                   onTap: () => _showInfoSheet(
                     'Autenticazione a 2 Fattori',
-                    'La 2FA è attualmente abilitata sul tuo account.\n\nMetodo: App Authenticator\nUltimo accesso verificato: oggi\n\nPer disabilitare la 2FA, contatta il supporto.',
+                    'La 2FA sarà disponibile in un prossimo aggiornamento.\n\nPer ora, assicurati di usare una password sicura.',
                   ),
                   trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppColors.accentGreen.withValues(alpha: 0.12),
+                      color: AppColors.textMuted
+                          .withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: const Text(
-                      'ON',
+                      'N/A',
                       style: TextStyle(
-                        color: AppColors.accentGreen,
+                        color: AppColors.textMuted,
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                       ),
@@ -688,9 +780,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: _workspace,
                   onTap: () => _showSelectDialog(
                     title: 'Seleziona Workspace',
-                    options: ['Reselling Vinted 2025', 'Reselling eBay', 'Reselling Depop', 'Crypto Portfolio'],
+                    options: [
+                      'Reselling Vinted 2025',
+                      'Reselling eBay',
+                      'Reselling Depop',
+                      'Crypto Portfolio'
+                    ],
                     currentValue: _workspace,
-                    onSelect: (v) => setState(() => _workspace = v),
+                    onSelect: (v) =>
+                        setState(() => _workspace = v),
                   ),
                   trailing: _buildChevron(),
                 ),
@@ -698,7 +796,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.cloud_upload_outlined,
                   title: 'Auto Backup',
                   subtitle: 'Sincronizza dati su cloud',
-                  trailing: _buildSwitch(_autoBackup, (v) => setState(() => _autoBackup = v)),
+                  trailing: _buildSwitch(_autoBackup,
+                      (v) => setState(() => _autoBackup = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.download_outlined,
@@ -723,19 +822,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.notifications_active_outlined,
                   title: 'Notifiche In-App',
                   subtitle: 'Avvisi vendite e spedizioni',
-                  trailing: _buildSwitch(_notifications, (v) => setState(() => _notifications = v)),
+                  trailing: _buildSwitch(_notifications,
+                      (v) => setState(() => _notifications = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.phone_android,
                   title: 'Push Notifications',
                   subtitle: 'Ricevi su mobile',
-                  trailing: _buildSwitch(_pushNotifications, (v) => setState(() => _pushNotifications = v)),
+                  trailing: _buildSwitch(
+                      _pushNotifications,
+                      (v) => setState(
+                          () => _pushNotifications = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.mail_outline,
                   title: 'Email Digest',
                   subtitle: 'Report settimanale',
-                  trailing: _buildSwitch(_emailDigest, (v) => setState(() => _emailDigest = v)),
+                  trailing: _buildSwitch(_emailDigest,
+                      (v) => setState(() => _emailDigest = v)),
                 ),
               ],
             ),
@@ -753,7 +857,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.dark_mode_outlined,
                   title: 'Dark Mode',
                   subtitle: 'Usa tema scuro',
-                  trailing: _buildSwitch(_darkMode, (v) => setState(() => _darkMode = v)),
+                  trailing: _buildSwitch(_darkMode,
+                      (v) => setState(() => _darkMode = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.text_fields,
@@ -761,23 +866,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: _fontSize,
                   onTap: () => _showSelectDialog(
                     title: 'Dimensione Font',
-                    options: ['Small', 'Medium', 'Large', 'Extra Large'],
+                    options: [
+                      'Small',
+                      'Medium',
+                      'Large',
+                      'Extra Large'
+                    ],
                     currentValue: _fontSize,
-                    onSelect: (v) => setState(() => _fontSize = v),
+                    onSelect: (v) =>
+                        setState(() => _fontSize = v),
                   ),
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
                   icon: Icons.color_lens_outlined,
                   title: 'Colore Accento',
-                  subtitle: ['Blu-Viola', 'Verde', 'Arancione'][_accentIndex],
+                  subtitle: [
+                    'Blu-Viola',
+                    'Verde',
+                    'Arancione'
+                  ][_accentIndex],
                   onTap: () {
-                    final colors = ['Blu-Viola', 'Verde', 'Arancione'];
+                    final colors = [
+                      'Blu-Viola',
+                      'Verde',
+                      'Arancione'
+                    ];
                     _showSelectDialog(
                       title: 'Colore Accento',
                       options: colors,
                       currentValue: colors[_accentIndex],
-                      onSelect: (v) => setState(() => _accentIndex = colors.indexOf(v)),
+                      onSelect: (v) => setState(
+                          () => _accentIndex = colors.indexOf(v)),
                     );
                   },
                   trailing: Row(
@@ -813,7 +933,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Termini di Servizio',
                   onTap: () => _showInfoSheet(
                     'Termini di Servizio',
-                    'Vault Reselling Tracker — Termini di Servizio\n\nUtilizzando questa app accetti i seguenti termini:\n\n1. L\'app è fornita "così com\'è" senza garanzie.\n2. I dati inseriti sono di tua responsabilità.\n3. Non siamo responsabili per perdite derivanti dall\'uso dell\'app.\n4. I dati sono archiviati localmente sul dispositivo.\n5. Puoi esportare e cancellare i tuoi dati in qualsiasi momento.\n\nUltimo aggiornamento: Gennaio 2025',
+                    'Vault Reselling Tracker — Termini di Servizio\n\nUtilizzando questa app accetti i seguenti termini:\n\n1. L\'app è fornita "così com\'è" senza garanzie.\n2. I dati inseriti sono di tua responsabilità.\n3. Non siamo responsabili per perdite derivanti dall\'uso dell\'app.\n4. I dati sono archiviati su Firebase Cloud.\n5. Puoi esportare e cancellare i tuoi dati in qualsiasi momento.\n\nUltimo aggiornamento: Gennaio 2025',
                   ),
                   trailing: _buildChevron(),
                 ),
@@ -822,7 +942,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Privacy Policy',
                   onTap: () => _showInfoSheet(
                     'Privacy Policy',
-                    'La tua privacy è importante per noi.\n\n• Non raccogliamo dati personali senza consenso\n• I dati restano sul tuo dispositivo\n• Nessun tracciamento o analytics di terze parti\n• Puoi richiedere la cancellazione dei dati in qualsiasi momento\n• Non condividiamo informazioni con terzi\n\nPer domande: privacy@vault-app.com',
+                    'La tua privacy è importante per noi.\n\n• I dati sono salvati in modo sicuro su Firebase\n• L\'autenticazione è gestita da Firebase Auth\n• Non condividiamo informazioni con terzi\n• Puoi richiedere la cancellazione dei dati in qualsiasi momento\n\nPer domande: privacy@vault-app.com',
                   ),
                   trailing: _buildChevron(),
                 ),
@@ -851,16 +971,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
-                  color: AppColors.accentRed.withValues(alpha: 0.1),
+                  color:
+                      AppColors.accentRed.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: AppColors.accentRed.withValues(alpha: 0.25),
+                    color: AppColors.accentRed
+                        .withValues(alpha: 0.25),
                   ),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.logout, color: AppColors.accentRed, size: 20),
+                    Icon(Icons.logout,
+                        color: AppColors.accentRed, size: 20),
                     SizedBox(width: 8),
                     Text(
                       'Logout',
@@ -914,7 +1037,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   if (i > 0)
                     Divider(
                       height: 1,
-                      color: Colors.white.withValues(alpha: 0.04),
+                      color:
+                          Colors.white.withValues(alpha: 0.04),
                       indent: 52,
                     ),
                   children[i],
@@ -937,21 +1061,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ScaleOnPress(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 16, vertical: 14),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.accentBlue.withValues(alpha: 0.08),
+                color: AppColors.accentBlue
+                    .withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(icon, color: AppColors.accentBlue, size: 18),
+              child: Icon(icon,
+                  color: AppColors.accentBlue, size: 18),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
@@ -986,7 +1114,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       value: value,
       onChanged: onChanged,
       activeColor: AppColors.accentBlue,
-      activeTrackColor: AppColors.accentBlue.withValues(alpha: 0.3),
+      activeTrackColor:
+          AppColors.accentBlue.withValues(alpha: 0.3),
       inactiveThumbColor: AppColors.textMuted,
       inactiveTrackColor: AppColors.surface,
     );
@@ -1008,7 +1137,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        border: selected ? Border.all(color: Colors.white, width: 2) : null,
+        border: selected
+            ? Border.all(color: Colors.white, width: 2)
+            : null,
         boxShadow: [
           BoxShadow(
             color: color.withValues(alpha: 0.4),
