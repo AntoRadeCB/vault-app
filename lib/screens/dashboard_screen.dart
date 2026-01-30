@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../widgets/animated_widgets.dart';
 
 class DashboardScreen extends StatelessWidget {
   final VoidCallback? onNewPurchase;
@@ -8,30 +9,30 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader(),
-          const SizedBox(height: 24),
-          _buildStatCards(),
-          const SizedBox(height: 24),
-          _buildActionButtons(context),
-          const SizedBox(height: 24),
-          _buildOperationalStatus(),
-        ],
+    return AuroraBackground(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            StaggeredFadeSlide(index: 0, child: _buildHeader()),
+            const SizedBox(height: 24),
+            _buildStatCards(),
+            const SizedBox(height: 24),
+            StaggeredFadeSlide(index: 5, child: _buildActionButtons(context)),
+            const SizedBox(height: 24),
+            StaggeredFadeSlide(index: 6, child: _buildOperationalStatus()),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      glowColor: AppColors.accentPurple,
       child: Row(
         children: [
           Expanded(
@@ -44,26 +45,20 @@ class DashboardScreen extends StatelessWidget {
                     color: Colors.white,
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
+                    letterSpacing: -0.3,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.accentGreen,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
+                    const PulsingDot(color: AppColors.accentGreen, size: 8),
+                    const SizedBox(width: 8),
                     const Text(
                       'ONLINE',
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: AppColors.accentGreen,
                         fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 1.2,
                       ),
                     ),
@@ -72,16 +67,22 @@ class DashboardScreen extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.notifications_outlined,
-              color: Colors.white,
-              size: 24,
+          PulsingBadge(
+            count: 3,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.1),
+                ),
+              ),
+              child: const Icon(
+                Icons.notifications_outlined,
+                color: Colors.white,
+                size: 24,
+              ),
             ),
           ),
         ],
@@ -90,6 +91,13 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _buildStatCards() {
+    final cards = [
+      _StatData('Capitale\nImmobilizzato', 130, '€', Icons.lock_outline, AppColors.accentBlue),
+      _StatData('Ordini\nin Arrivo', 120, '€', Icons.local_shipping_outlined, AppColors.accentTeal),
+      _StatData('Capitale\nSpedito', 45, '€', Icons.send_outlined, AppColors.accentOrange),
+      _StatData('Profitto\nConsolidato', 1470, '€', Icons.trending_up, AppColors.accentGreen),
+    ];
+
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -97,56 +105,57 @@ class DashboardScreen extends StatelessWidget {
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
       childAspectRatio: 1.5,
-      children: [
-        _buildStatCard('Capitale\nImmobilizzato', '€130', Icons.lock_outline, AppColors.statCardGradient1),
-        _buildStatCard('Ordini\nin Arrivo', '€120', Icons.local_shipping_outlined, AppColors.statCardGradient2),
-        _buildStatCard('Capitale\nSpedito', '€45', Icons.send_outlined, AppColors.statCardGradient1),
-        _buildStatCard('Profitto\nConsolidato', '€1470', Icons.trending_up, AppColors.statCardGradient2),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(String title, String value, IconData icon, LinearGradient gradient) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Flexible(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    height: 1.3,
+      children: List.generate(cards.length, (i) {
+        final c = cards[i];
+        return StaggeredFadeSlide(
+          index: i + 1,
+          child: HoverLiftCard(
+            child: GlassCard(
+              glowColor: c.color,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          c.title,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: c.color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(c.icon, color: c.color, size: 18),
+                      ),
+                    ],
                   ),
-                ),
+                  CountUpText(
+                    prefix: c.prefix,
+                    value: c.value,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
-              Icon(icon, color: AppColors.accentBlue, size: 20),
-            ],
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
             ),
           ),
-        ],
-      ),
+        );
+      }),
     );
   }
 
@@ -154,78 +163,64 @@ class DashboardScreen extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: _buildActionButton(
-            'Nuovo Acquisto',
-            Icons.add_shopping_cart,
-            AppColors.blueButtonGradient,
-            () => onNewPurchase?.call(),
+          child: ShimmerButton(
+            baseGradient: AppColors.blueButtonGradient,
+            onTap: () => onNewPurchase?.call(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.add_shopping_cart, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Nuovo Acquisto',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _buildActionButton(
-            'Registra Vendita',
-            Icons.sell_outlined,
-            const LinearGradient(
+          child: ShimmerButton(
+            baseGradient: const LinearGradient(
               colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
             ),
-            () {},
+            onTap: () {},
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.sell_outlined, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Registra Vendita',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildActionButton(
-    String label,
-    IconData icon,
-    LinearGradient gradient,
-    VoidCallback onTap,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: gradient.colors.first.withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildOperationalStatus() {
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.cardDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
-        ),
-      ),
+      glowColor: AppColors.accentBlue,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -238,15 +233,9 @@ class DashboardScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          _buildStatusItem(
-            '2 Spedizioni in transito',
-            AppColors.accentBlue,
-          ),
+          _buildStatusItem('2 Spedizioni in transito', AppColors.accentBlue),
           const SizedBox(height: 12),
-          _buildStatusItem(
-            'Stock basso: Nike Air Max',
-            AppColors.accentOrange,
-          ),
+          _buildStatusItem('Stock basso: Nike Air Max', AppColors.accentOrange),
         ],
       ),
     );
@@ -263,8 +252,8 @@ class DashboardScreen extends StatelessWidget {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: dotColor.withValues(alpha: 0.4),
-                blurRadius: 6,
+                color: dotColor.withValues(alpha: 0.5),
+                blurRadius: 8,
                 spreadRadius: 1,
               ),
             ],
@@ -283,4 +272,14 @@ class DashboardScreen extends StatelessWidget {
       ],
     );
   }
+}
+
+class _StatData {
+  final String title;
+  final double value;
+  final String prefix;
+  final IconData icon;
+  final Color color;
+
+  _StatData(this.title, this.value, this.prefix, this.icon, this.color);
 }

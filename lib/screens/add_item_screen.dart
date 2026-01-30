@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../widgets/animated_widgets.dart';
 
 class AddItemScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -11,6 +12,7 @@ class AddItemScreen extends StatefulWidget {
 }
 
 class _AddItemScreenState extends State<AddItemScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
@@ -24,192 +26,351 @@ class _AddItemScreenState extends State<AddItemScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  void _submit() {
+    if (_formKey.currentState?.validate() ?? false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
             children: [
-              GestureDetector(
-                onTap: widget.onBack,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back,
-                    color: Colors.white,
-                    size: 22,
-                  ),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
                 ),
+                child: const Icon(Icons.check, color: Colors.white, size: 16),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               const Text(
-                'Nuovo Acquisto',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+                'Acquisto registrato con successo!',
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ],
           ),
-          const SizedBox(height: 32),
-          _buildLabel('Nome Oggetto'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _nameController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Es. Nike Air Max 90',
-              filled: true,
-              fillColor: AppColors.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              suffixIcon: Container(
-                margin: const EdgeInsets.all(8),
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppColors.accentBlue.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.qr_code_scanner,
-                  color: AppColors.accentBlue,
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          _buildLabel('Prezzo Acquisto (€)'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _priceController,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: '0.00',
-              prefixText: '€ ',
-              prefixStyle: const TextStyle(color: AppColors.accentBlue, fontWeight: FontWeight.bold),
-              filled: true,
-              fillColor: AppColors.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          _buildLabel('Quantità'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _quantityController,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: '1',
-              filled: true,
-              fillColor: AppColors.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          _buildLabel('Workspace'),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedWorkspace,
-                isExpanded: true,
-                dropdownColor: AppColors.surface,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-                icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'Reselling Vinted 2025',
-                    child: Text('Reselling Vinted 2025'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedWorkspace = value);
-                  }
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 40),
-          GestureDetector(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Acquisto registrato!'),
-                  backgroundColor: AppColors.accentGreen,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              );
-              widget.onBack?.call();
-            },
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              decoration: BoxDecoration(
-                gradient: AppColors.blueButtonGradient,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.accentBlue.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+          backgroundColor: AppColors.accentGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      widget.onBack?.call();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(24),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            StaggeredFadeSlide(
+              index: 0,
+              child: Row(
                 children: [
-                  Icon(Icons.check_circle_outline, color: Colors.white, size: 22),
-                  SizedBox(width: 10),
-                  Text(
-                    'Registra Acquisto',
+                  ScaleOnPress(
+                    onTap: widget.onBack,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Text(
+                    'Nuovo Acquisto',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 17,
+                      fontSize: 24,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: -0.3,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 32),
+            StaggeredFadeSlide(
+              index: 1,
+              child: _buildField(
+                label: 'Nome Oggetto',
+                child: _GlowTextField(
+                  controller: _nameController,
+                  hintText: 'Es. Nike Air Max 90',
+                  validator: (v) => (v == null || v.isEmpty) ? 'Campo obbligatorio' : null,
+                  suffixIcon: ScaleOnPress(
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('📷 Scanner QR non disponibile nella demo'),
+                          backgroundColor: AppColors.surface,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          margin: const EdgeInsets.all(16),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.blueButtonGradient,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.accentBlue.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.qr_code_scanner,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            StaggeredFadeSlide(
+              index: 2,
+              child: _buildField(
+                label: 'Prezzo Acquisto (€)',
+                child: _GlowTextField(
+                  controller: _priceController,
+                  hintText: '0.00',
+                  keyboardType: TextInputType.number,
+                  prefixText: '€ ',
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Inserisci un prezzo';
+                    if (double.tryParse(v) == null) return 'Prezzo non valido';
+                    return null;
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            StaggeredFadeSlide(
+              index: 3,
+              child: _buildField(
+                label: 'Quantità',
+                child: _GlowTextField(
+                  controller: _quantityController,
+                  hintText: '1',
+                  keyboardType: TextInputType.number,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Inserisci una quantità';
+                    if (int.tryParse(v) == null) return 'Quantità non valida';
+                    return null;
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            StaggeredFadeSlide(
+              index: 4,
+              child: _buildField(
+                label: 'Workspace',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedWorkspace,
+                      isExpanded: true,
+                      dropdownColor: AppColors.surface,
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'Reselling Vinted 2025',
+                          child: Text('Reselling Vinted 2025'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _selectedWorkspace = value);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 40),
+            StaggeredFadeSlide(
+              index: 5,
+              child: ShimmerButton(
+                baseGradient: AppColors.blueButtonGradient,
+                onTap: _submit,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.check_circle_outline, color: Colors.white, size: 22),
+                      SizedBox(width: 10),
+                      Text(
+                        'Registra Acquisto',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildLabel(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: AppColors.textSecondary,
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
+  Widget _buildField({required String label, required Widget child}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────
+// Text field with blue glow on focus
+// ──────────────────────────────────────────────────
+class _GlowTextField extends StatefulWidget {
+  final TextEditingController controller;
+  final String hintText;
+  final TextInputType? keyboardType;
+  final String? prefixText;
+  final Widget? suffixIcon;
+  final String? Function(String?)? validator;
+
+  const _GlowTextField({
+    required this.controller,
+    required this.hintText,
+    this.keyboardType,
+    this.prefixText,
+    this.suffixIcon,
+    this.validator,
+  });
+
+  @override
+  State<_GlowTextField> createState() => _GlowTextFieldState();
+}
+
+class _GlowTextFieldState extends State<_GlowTextField> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (f) => setState(() => _focused = f),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: _focused
+              ? [
+                  BoxShadow(
+                    color: AppColors.accentBlue.withValues(alpha: 0.15),
+                    blurRadius: 16,
+                  ),
+                ]
+              : [],
+        ),
+        child: TextFormField(
+          controller: widget.controller,
+          keyboardType: widget.keyboardType,
+          validator: widget.validator,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+          decoration: InputDecoration(
+            hintText: widget.hintText,
+            prefixText: widget.prefixText,
+            prefixStyle: const TextStyle(
+              color: AppColors.accentBlue,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+            filled: true,
+            fillColor: AppColors.surface,
+            suffixIcon: widget.suffixIcon,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Colors.white.withValues(alpha: 0.06),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Colors.white.withValues(alpha: 0.06),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: AppColors.accentBlue,
+                width: 1.5,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: AppColors.accentRed,
+                width: 1.5,
+              ),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: AppColors.accentRed,
+                width: 1.5,
+              ),
+            ),
+            errorStyle: const TextStyle(
+              color: AppColors.accentRed,
+              fontSize: 12,
+            ),
+          ),
+        ),
       ),
     );
   }
