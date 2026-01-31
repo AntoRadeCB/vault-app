@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../widgets/barcode_scanner_dialog.dart';
+import '../widgets/tracking_input.dart';
 import '../models/product.dart';
 import '../models/purchase.dart';
+import '../models/shipment.dart';
 import '../services/firestore_service.dart';
 
 class AddItemScreen extends StatefulWidget {
@@ -22,6 +24,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _priceController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
   final _barcodeController = TextEditingController();
+  final _trackingController = TextEditingController();
+  CarrierInfo? _detectedCarrier;
   String _selectedWorkspace = 'Reselling Vinted 2025';
   String _selectedStatus = 'inInventory';
   bool _saving = false;
@@ -35,6 +39,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     _priceController.dispose();
     _quantityController.dispose();
     _barcodeController.dispose();
+    _trackingController.dispose();
     super.dispose();
   }
 
@@ -127,7 +132,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         createdAt: DateTime.now(),
       );
 
-      await _firestoreService.addProduct(product);
+      final productRef = await _firestoreService.addProduct(product);
 
       // Also log as a purchase
       final purchase = Purchase(
@@ -138,6 +143,23 @@ class _AddItemScreenState extends State<AddItemScreen> {
         workspace: _selectedWorkspace,
       );
       await _firestoreService.addPurchase(purchase);
+
+      // Create shipment if tracking code provided
+      final trackingCode = _trackingController.text.trim();
+      if (trackingCode.isNotEmpty) {
+        final carrier = _detectedCarrier ?? Shipment.detectCarrier(trackingCode);
+        final shipment = Shipment(
+          trackingCode: trackingCode,
+          carrier: carrier.id,
+          carrierName: carrier.name,
+          type: ShipmentType.purchase,
+          productName: product.name,
+          productId: productRef.id,
+          status: ShipmentStatus.pending,
+          createdAt: DateTime.now(),
+        );
+        await _firestoreService.addShipment(shipment);
+      }
 
       if (!mounted) return;
 
@@ -468,9 +490,20 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 24),
+            // Tracking code (optional)
             StaggeredFadeSlide(
               index: 7,
+              child: TrackingInput(
+                controller: _trackingController,
+                onCarrierDetected: (carrier) {
+                  _detectedCarrier = carrier;
+                },
+              ),
+            ),
+            const SizedBox(height: 32),
+            StaggeredFadeSlide(
+              index: 8,
               child: ShimmerButton(
                 baseGradient: AppColors.blueButtonGradient,
                 onTap: _saving ? null : _submit,

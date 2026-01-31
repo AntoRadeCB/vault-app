@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../widgets/barcode_scanner_dialog.dart';
+import '../widgets/tracking_input.dart';
 import '../models/product.dart';
 import '../models/sale.dart';
+import '../models/shipment.dart';
 import '../services/firestore_service.dart';
 
 class AddSaleScreen extends StatefulWidget {
@@ -21,6 +23,8 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
   final _feesController = TextEditingController(text: '0');
   final FirestoreService _firestoreService = FirestoreService();
 
+  final _trackingController = TextEditingController();
+  CarrierInfo? _detectedCarrier;
   Product? _selectedProduct;
   bool _saving = false;
   bool _markAsSold = true;
@@ -30,6 +34,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
   void dispose() {
     _salePriceController.dispose();
     _feesController.dispose();
+    _trackingController.dispose();
     super.dispose();
   }
 
@@ -57,6 +62,23 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
       );
 
       await _firestoreService.addSale(sale);
+
+      // Create shipment if tracking code provided
+      final trackingCode = _trackingController.text.trim();
+      if (trackingCode.isNotEmpty) {
+        final carrier = _detectedCarrier ?? Shipment.detectCarrier(trackingCode);
+        final shipment = Shipment(
+          trackingCode: trackingCode,
+          carrier: carrier.id,
+          carrierName: carrier.name,
+          type: ShipmentType.sale,
+          productName: _selectedProduct!.name,
+          productId: _selectedProduct!.id,
+          status: ShipmentStatus.pending,
+          createdAt: DateTime.now(),
+        );
+        await _firestoreService.addShipment(shipment);
+      }
 
       // Optionally remove from inventory or update status
       if (_markAsSold && _selectedProduct!.id != null) {
@@ -574,8 +596,20 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
               const SizedBox(height: 8),
 
             // Submit button
+            // Tracking code (optional)
             StaggeredFadeSlide(
               index: 7,
+              child: TrackingInput(
+                controller: _trackingController,
+                onCarrierDetected: (carrier) {
+                  _detectedCarrier = carrier;
+                },
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            StaggeredFadeSlide(
+              index: 8,
               child: ShimmerButton(
                 baseGradient: const LinearGradient(
                   colors: [Color(0xFF43A047), Color(0xFF2E7D32)],

@@ -9,6 +9,7 @@ import 'screens/inventory_screen.dart';
 import 'screens/add_item_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/shipments_screen.dart';
 import 'screens/add_sale_screen.dart';
 import 'screens/edit_product_screen.dart';
 import 'widgets/animated_widgets.dart';
@@ -147,8 +148,10 @@ class _MainShellState extends State<MainShell> {
           onEditProduct: _showEditProductScreen,
         );
       case 2:
-        return const ReportsScreen();
+        return const ShipmentsScreen();
       case 3:
+        return const ReportsScreen();
+      case 4:
         return const SettingsScreen();
       default:
         return DashboardScreen(
@@ -304,18 +307,25 @@ class _MainShellState extends State<MainShell> {
             onTap: () => _navigateTo(1),
           ),
           _SidebarItem(
+            icon: Icons.local_shipping_outlined,
+            selectedIcon: Icons.local_shipping,
+            label: 'Spedizioni',
+            isSelected: _currentIndex == 2 && !_showAddItem,
+            onTap: () => _navigateTo(2),
+          ),
+          _SidebarItem(
             icon: Icons.bar_chart_outlined,
             selectedIcon: Icons.bar_chart,
             label: 'Reports',
-            isSelected: _currentIndex == 2 && !_showAddItem,
-            onTap: () => _navigateTo(2),
+            isSelected: _currentIndex == 3 && !_showAddItem,
+            onTap: () => _navigateTo(3),
           ),
           _SidebarItem(
             icon: Icons.settings_outlined,
             selectedIcon: Icons.settings,
             label: 'Settings',
-            isSelected: _currentIndex == 3 && !_showAddItem,
-            onTap: () => _navigateTo(3),
+            isSelected: _currentIndex == 4 && !_showAddItem,
+            onTap: () => _navigateTo(4),
           ),
           const Spacer(),
           // System Online
@@ -511,11 +521,11 @@ class _MainShellState extends State<MainShell> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard', 0),
-              _buildNavItem(Icons.inventory_2_outlined, Icons.inventory_2, 'Inventory', 1),
+              _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, 'Home', 0),
+              _buildNavItem(Icons.inventory_2_outlined, Icons.inventory_2, 'Inventario', 1),
               const SizedBox(width: 48), // Space for FAB
-              _buildNavItem(Icons.bar_chart_outlined, Icons.bar_chart, 'Reports', 2),
-              _buildNavItem(Icons.settings_outlined, Icons.settings, 'Settings', 3),
+              _buildNavItem(Icons.local_shipping_outlined, Icons.local_shipping, 'Spedizioni', 2),
+              _buildNavItem(Icons.bar_chart_outlined, Icons.bar_chart, 'Reports', 3),
             ],
           ),
         ),

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product.dart';
 import '../models/purchase.dart';
 import '../models/sale.dart';
+import '../models/shipment.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -210,6 +211,39 @@ class FirestoreService {
         return {'sales': sales, 'purchases': purchases};
       });
     });
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  SHIPMENTS
+  // ═══════════════════════════════════════════════════
+
+  Future<DocumentReference> addShipment(Shipment shipment) {
+    return _userCollection('shipments').add(shipment.toFirestore());
+  }
+
+  Future<void> updateShipment(String id, Map<String, dynamic> data) {
+    return _userCollection('shipments').doc(id).update(data);
+  }
+
+  Future<void> deleteShipment(String id) {
+    return _userCollection('shipments').doc(id).delete();
+  }
+
+  Stream<List<Shipment>> getShipments() {
+    return _userCollection('shipments')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => Shipment.fromFirestore(doc)).toList());
+  }
+
+  Stream<List<Shipment>> getActiveShipments() {
+    return getShipments().map((shipments) =>
+        shipments.where((s) => s.status != ShipmentStatus.delivered).toList());
+  }
+
+  Stream<int> getActiveShipmentsCount() {
+    return getActiveShipments().map((s) => s.length);
   }
 
   // ═══════════════════════════════════════════════════
