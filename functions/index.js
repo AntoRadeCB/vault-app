@@ -6,8 +6,9 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 initializeApp();
 const db = getFirestore();
 
-// ── Ship24 Secret ──────────────────────────────────
+// ── Ship24 Secrets ─────────────────────────────────
 const SHIP24_API_KEY = defineSecret("SHIP24_API_KEY");
+const SHIP24_WEBHOOK_SECRET = defineSecret("SHIP24_WEBHOOK_SECRET");
 
 const SHIP24_API_BASE = "https://api.ship24.com/public/v1";
 
@@ -21,12 +22,28 @@ function setCors(res) {
 // ═══════════════════════════════════════════════════════
 //  Ship24 Webhook Receiver
 // ═══════════════════════════════════════════════════════
-exports.trackingWebhook = onRequest({ region: "europe-west1" }, async (req, res) => {
+exports.trackingWebhook = onRequest(
+  { region: "europe-west1", secrets: [SHIP24_WEBHOOK_SECRET] },
+  async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
+    // Verifica webhook secret
+    const webhookSecret = SHIP24_WEBHOOK_SECRET.value();
+    const authHeader = req.headers["authorization"] || "";
+    const headerSecret = req.headers["x-webhook-secret"] || "";
+    
+    if (webhookSecret && authHeader !== `Bearer ${webhookSecret}` && headerSecret !== webhookSecret) {
+      // Controlla anche nel body (Ship24 potrebbe inviarlo diversamente)
+      const bodySecret = req.body?.webhookSecret || req.body?.secret;
+      if (bodySecret !== webhookSecret) {
+        console.warn("Invalid webhook secret");
+        // Non bloccare per ora, solo log — Ship24 potrebbe non inviare il secret nell'header
+      }
+    }
+
     const payload = req.body;
     console.log("Ship24 webhook received:", JSON.stringify(payload));
 
