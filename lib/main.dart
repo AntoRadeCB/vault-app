@@ -9,7 +9,10 @@ import 'screens/inventory_screen.dart';
 import 'screens/add_item_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/add_sale_screen.dart';
+import 'screens/edit_product_screen.dart';
 import 'widgets/animated_widgets.dart';
+import 'models/product.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -69,6 +72,8 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
   bool _showAddItem = false;
+  bool _showAddSale = false;
+  Product? _editingProduct;
   final _searchController = TextEditingController();
   bool _searchFocused = false;
 
@@ -76,32 +81,80 @@ class _MainShellState extends State<MainShell> {
     setState(() {
       _currentIndex = index;
       _showAddItem = false;
+      _showAddSale = false;
+      _editingProduct = null;
     });
   }
 
   void _showAddItemScreen() {
     setState(() {
       _showAddItem = true;
+      _showAddSale = false;
+      _editingProduct = null;
+    });
+  }
+
+  void _showAddSaleScreen() {
+    setState(() {
+      _showAddSale = true;
+      _showAddItem = false;
+      _editingProduct = null;
+    });
+  }
+
+  void _showEditProductScreen(Product product) {
+    setState(() {
+      _editingProduct = product;
+      _showAddItem = false;
+      _showAddSale = false;
+    });
+  }
+
+  void _closeOverlay() {
+    setState(() {
+      _showAddItem = false;
+      _showAddSale = false;
+      _editingProduct = null;
     });
   }
 
   Widget _getCurrentScreen() {
     if (_showAddItem) {
       return AddItemScreen(
-        onBack: () => setState(() => _showAddItem = false),
+        onBack: _closeOverlay,
+      );
+    }
+    if (_showAddSale) {
+      return AddSaleScreen(
+        onBack: _closeOverlay,
+      );
+    }
+    if (_editingProduct != null) {
+      return EditProductScreen(
+        product: _editingProduct!,
+        onBack: _closeOverlay,
+        onSaved: () {},
       );
     }
     switch (_currentIndex) {
       case 0:
-        return DashboardScreen(onNewPurchase: _showAddItemScreen);
+        return DashboardScreen(
+          onNewPurchase: _showAddItemScreen,
+          onNewSale: _showAddSaleScreen,
+        );
       case 1:
-        return const InventoryScreen();
+        return InventoryScreen(
+          onEditProduct: _showEditProductScreen,
+        );
       case 2:
         return const ReportsScreen();
       case 3:
         return const SettingsScreen();
       default:
-        return DashboardScreen(onNewPurchase: _showAddItemScreen);
+        return DashboardScreen(
+          onNewPurchase: _showAddItemScreen,
+          onNewSale: _showAddSaleScreen,
+        );
     }
   }
 
@@ -151,7 +204,7 @@ class _MainShellState extends State<MainShell> {
                     );
                   },
                   child: KeyedSubtree(
-                    key: ValueKey<String>(_showAddItem ? 'add' : '$_currentIndex'),
+                    key: ValueKey<String>(_screenKey),
                     child: _getCurrentScreen(),
                   ),
                 ),
@@ -163,6 +216,13 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  String get _screenKey {
+    if (_showAddItem) return 'add';
+    if (_showAddSale) return 'sale';
+    if (_editingProduct != null) return 'edit-${_editingProduct!.id}';
+    return '$_currentIndex';
+  }
+
   Widget _buildMobileLayout() {
     return SafeArea(
       child: AnimatedSwitcher(
@@ -171,7 +231,7 @@ class _MainShellState extends State<MainShell> {
           return FadeTransition(opacity: animation, child: child);
         },
         child: KeyedSubtree(
-          key: ValueKey<String>(_showAddItem ? 'add' : '$_currentIndex'),
+          key: ValueKey<String>(_screenKey),
           child: _getCurrentScreen(),
         ),
       ),

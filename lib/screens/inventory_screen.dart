@@ -5,7 +5,9 @@ import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
 
 class InventoryScreen extends StatefulWidget {
-  const InventoryScreen({super.key});
+  final void Function(Product product)? onEditProduct;
+
+  const InventoryScreen({super.key, this.onEditProduct});
 
   @override
   State<InventoryScreen> createState() => _InventoryScreenState();
@@ -306,9 +308,12 @@ class _InventoryScreenState extends State<InventoryScreen>
                 _confirmDelete(products[index]);
                 return false;
               },
-              child: HoverLiftCard(
-                liftAmount: 3,
-                child: _buildProductCard(products[index]),
+              child: GestureDetector(
+                onTap: () => widget.onEditProduct?.call(products[index]),
+                child: HoverLiftCard(
+                  liftAmount: 3,
+                  child: _buildProductCard(products[index]),
+                ),
               ),
             ),
           ),

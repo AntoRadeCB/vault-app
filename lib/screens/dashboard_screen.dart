@@ -6,9 +6,10 @@ import '../models/product.dart';
 
 class DashboardScreen extends StatelessWidget {
   final VoidCallback? onNewPurchase;
+  final VoidCallback? onNewSale;
   final FirestoreService _firestoreService = FirestoreService();
 
-  DashboardScreen({super.key, this.onNewPurchase});
+  DashboardScreen({super.key, this.onNewPurchase, this.onNewSale});
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +221,7 @@ class DashboardScreen extends StatelessWidget {
             baseGradient: const LinearGradient(
               colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
             ),
-            onTap: () {},
+            onTap: () => onNewSale?.call(),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Row(
