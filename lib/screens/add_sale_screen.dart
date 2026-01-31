@@ -7,6 +7,7 @@ import '../models/product.dart';
 import '../models/sale.dart';
 import '../models/shipment.dart';
 import '../services/firestore_service.dart';
+import '../services/sendcloud_service.dart';
 
 class AddSaleScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -29,6 +30,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
   bool _saving = false;
   bool _markAsSold = true;
   bool _scanLoading = false;
+  final SendcloudService _sendcloudService = SendcloudService();
 
   @override
   void dispose() {
@@ -67,6 +69,23 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
       final trackingCode = _trackingController.text.trim();
       if (trackingCode.isNotEmpty) {
         final carrier = _detectedCarrier ?? Shipment.detectCarrier(trackingCode);
+
+        // Auto-register on Sendcloud
+        int? sendcloudId;
+        String? sendcloudTrackingUrl;
+        String? sendcloudStatus;
+        try {
+          final scResult = await _sendcloudService.registerTracking(
+            trackingCode,
+            carrier: carrier.id != 'generic' ? carrier.id : null,
+          );
+          sendcloudId = scResult['sendcloudId'];
+          sendcloudTrackingUrl = scResult['trackingUrl'];
+          sendcloudStatus = scResult['status'];
+        } catch (_) {
+          // Sendcloud registration failed — continue without it
+        }
+
         final shipment = Shipment(
           trackingCode: trackingCode,
           carrier: carrier.id,
@@ -76,6 +95,9 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
           productId: _selectedProduct!.id,
           status: ShipmentStatus.pending,
           createdAt: DateTime.now(),
+          sendcloudId: sendcloudId,
+          sendcloudTrackingUrl: sendcloudTrackingUrl,
+          sendcloudStatus: sendcloudStatus,
         );
         await _firestoreService.addShipment(shipment);
       }

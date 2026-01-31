@@ -5,6 +5,8 @@ import '../models/purchase.dart';
 import '../models/sale.dart';
 import '../models/shipment.dart';
 
+// FieldValue is already available from cloud_firestore
+
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
@@ -244,6 +246,38 @@ class FirestoreService {
 
   Stream<int> getActiveShipmentsCount() {
     return getActiveShipments().map((s) => s.length);
+  }
+
+  /// Find a shipment by tracking code
+  Future<Shipment?> getShipmentByTrackingCode(String code) async {
+    final snap = await _userCollection('shipments')
+        .where('trackingCode', isEqualTo: code)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    return Shipment.fromFirestore(snap.docs.first);
+  }
+
+  /// Update shipment with Sendcloud data
+  Future<void> updateShipmentSendcloud(
+    String id, {
+    int? sendcloudId,
+    String? sendcloudStatus,
+    String? sendcloudTrackingUrl,
+    String? appStatus,
+    List<TrackingEvent>? trackingHistory,
+  }) {
+    final Map<String, dynamic> data = {
+      'lastUpdate': FieldValue.serverTimestamp(),
+    };
+    if (sendcloudId != null) data['sendcloudId'] = sendcloudId;
+    if (sendcloudStatus != null) data['sendcloudStatus'] = sendcloudStatus;
+    if (sendcloudTrackingUrl != null) data['sendcloudTrackingUrl'] = sendcloudTrackingUrl;
+    if (appStatus != null) data['status'] = appStatus;
+    if (trackingHistory != null) {
+      data['trackingHistory'] = trackingHistory.map((e) => e.toMap()).toList();
+    }
+    return _userCollection('shipments').doc(id).update(data);
   }
 
   // ═══════════════════════════════════════════════════

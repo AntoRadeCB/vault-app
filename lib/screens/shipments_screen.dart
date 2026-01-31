@@ -3,6 +3,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../models/shipment.dart';
 import '../services/firestore_service.dart';
+import '../services/sendcloud_service.dart';
 import 'package:flutter/services.dart';
 
 class ShipmentsScreen extends StatefulWidget {
@@ -18,6 +19,8 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final FirestoreService _fs = FirestoreService();
+  final SendcloudService _sendcloud = SendcloudService();
+  final Set<String> _refreshingIds = {};
 
   @override
   void initState() {
@@ -53,6 +56,110 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
     });
   }
 
+  Future<void> _refreshFromSendcloud(Shipment shipment) async {
+    if (shipment.id == null) return;
+    setState(() => _refreshingIds.add(shipment.id!));
+
+    try {
+      final result = await _sendcloud.getTrackingStatus(
+        trackingNumber: shipment.trackingCode,
+        sendcloudId: shipment.sendcloudId,
+      );
+
+      if (!mounted) return;
+
+      // Map Sendcloud status to app status
+      String appStatus;
+      switch (result.appStatus) {
+        case ShipmentStatus.pending:
+          appStatus = 'pending';
+          break;
+        case ShipmentStatus.inTransit:
+          appStatus = 'inTransit';
+          break;
+        case ShipmentStatus.delivered:
+          appStatus = 'delivered';
+          break;
+        case ShipmentStatus.exception:
+          appStatus = 'exception';
+          break;
+        default:
+          appStatus = 'unknown';
+      }
+
+      await _fs.updateShipmentSendcloud(
+        shipment.id!,
+        sendcloudId: result.sendcloudId,
+        sendcloudStatus: result.status,
+        sendcloudTrackingUrl: result.trackingUrl,
+        appStatus: appStatus,
+        trackingHistory:
+            result.trackingHistory.isNotEmpty ? result.trackingHistory : null,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Aggiornato: ${result.status}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.accentGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } on SendcloudException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.warning, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  e.message,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.accentOrange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Errore: $e'),
+          backgroundColor: AppColors.accentRed,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _refreshingIds.remove(shipment.id));
+      }
+    }
+  }
+
   void _confirmDelete(Shipment shipment) {
     showDialog(
       context: context,
@@ -68,7 +175,8 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annulla', style: TextStyle(color: AppColors.textMuted)),
+            child: const Text('Annulla',
+                style: TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
             onPressed: () {
@@ -76,7 +184,8 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
               if (shipment.id != null) _fs.deleteShipment(shipment.id!);
             },
             child: const Text('Elimina',
-                style: TextStyle(color: AppColors.accentRed, fontWeight: FontWeight.bold)),
+                style: TextStyle(
+                    color: AppColors.accentRed, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -110,7 +219,8 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
                     final count = snap.data ?? 0;
                     if (count == 0) return const SizedBox.shrink();
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppColors.accentOrange.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
@@ -143,7 +253,8 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                border:
+                    Border.all(color: Colors.white.withValues(alpha: 0.06)),
               ),
               child: TabBar(
                 controller: _tabController,
@@ -160,7 +271,8 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
                 indicatorSize: TabBarIndicatorSize.tab,
                 labelColor: Colors.white,
                 unselectedLabelColor: AppColors.textMuted,
-                labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                labelStyle:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 dividerColor: Colors.transparent,
                 tabs: const [
                   Tab(text: 'Tutte'),
@@ -188,8 +300,12 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
                 physics: const BouncingScrollPhysics(),
                 children: [
                   _buildList(all),
-                  _buildList(all.where((s) => s.status != ShipmentStatus.delivered).toList()),
-                  _buildList(all.where((s) => s.status == ShipmentStatus.delivered).toList()),
+                  _buildList(all
+                      .where((s) => s.status != ShipmentStatus.delivered)
+                      .toList()),
+                  _buildList(all
+                      .where((s) => s.status == ShipmentStatus.delivered)
+                      .toList()),
                 ],
               );
             },
@@ -210,7 +326,10 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
             const SizedBox(height: 16),
             const Text(
               'Nessuna spedizione',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 18, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -234,8 +353,11 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
             padding: const EdgeInsets.only(bottom: 12),
             child: _ShipmentCard(
               shipment: shipments[index],
+              isRefreshing: _refreshingIds.contains(shipments[index].id),
               onTrack: () => _openTrackingDetail(shipments[index]),
-              onUpdateStatus: (status) => _updateStatus(shipments[index], status),
+              onRefresh: () => _refreshFromSendcloud(shipments[index]),
+              onUpdateStatus: (status) =>
+                  _updateStatus(shipments[index], status),
               onDelete: () => _confirmDelete(shipments[index]),
             ),
           ),
@@ -247,13 +369,17 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
 
 class _ShipmentCard extends StatelessWidget {
   final Shipment shipment;
+  final bool isRefreshing;
   final VoidCallback onTrack;
+  final VoidCallback onRefresh;
   final void Function(ShipmentStatus) onUpdateStatus;
   final VoidCallback onDelete;
 
   const _ShipmentCard({
     required this.shipment,
+    required this.isRefreshing,
     required this.onTrack,
+    required this.onRefresh,
     required this.onUpdateStatus,
     required this.onDelete,
   });
@@ -326,7 +452,8 @@ class _ShipmentCard extends StatelessWidget {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: (shipment.type == ShipmentType.purchase
                                     ? AppColors.accentBlue
@@ -349,28 +476,33 @@ class _ShipmentCard extends StatelessWidget {
                         const SizedBox(width: 8),
                         Text(
                           shipment.carrierName,
-                          style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                          style: const TextStyle(
+                              color: AppColors.textMuted, fontSize: 12),
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
-              // Status badge
+              // Status badge — show sendcloudStatus when available
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: _statusColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _statusColor.withValues(alpha: 0.25)),
+                  border: Border.all(
+                      color: _statusColor.withValues(alpha: 0.25)),
                 ),
                 child: Text(
-                  shipment.statusLabel,
+                  shipment.displayStatus,
                   style: TextStyle(
                     color: _statusColor,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -380,15 +512,18 @@ class _ShipmentCard extends StatelessWidget {
           // Tracking code
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.03),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              border:
+                  Border.all(color: Colors.white.withValues(alpha: 0.06)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.qr_code, color: AppColors.textMuted, size: 16),
+                const Icon(Icons.qr_code,
+                    color: AppColors.textMuted, size: 16),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -404,23 +539,64 @@ class _ShipmentCard extends StatelessWidget {
                 ),
                 GestureDetector(
                   onTap: () {
-                    Clipboard.setData(ClipboardData(text: shipment.trackingCode));
+                    Clipboard.setData(
+                        ClipboardData(text: shipment.trackingCode));
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: const Text('Codice copiato!'),
                         backgroundColor: AppColors.accentTeal,
                         behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                         margin: const EdgeInsets.all(16),
                         duration: const Duration(seconds: 1),
                       ),
                     );
                   },
-                  child: const Icon(Icons.copy, color: AppColors.textMuted, size: 16),
+                  child: const Icon(Icons.copy,
+                      color: AppColors.textMuted, size: 16),
                 ),
               ],
             ),
           ),
+
+          // Last update indicator
+          if (shipment.lastUpdate != null || shipment.sendcloudStatus != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  if (shipment.sendcloudId != null)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentTeal.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'SENDCLOUD',
+                        style: TextStyle(
+                          color: AppColors.accentTeal,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  if (shipment.lastUpdate != null)
+                    Text(
+                      'Ultimo agg: ${_formatDate(shipment.lastUpdate!)}',
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
           const SizedBox(height: 12),
 
           // Action buttons
@@ -440,7 +616,8 @@ class _ShipmentCard extends StatelessWidget {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.open_in_new, color: Colors.white, size: 16),
+                        Icon(Icons.open_in_new,
+                            color: Colors.white, size: 16),
                         SizedBox(width: 6),
                         Text(
                           'Traccia',
@@ -456,38 +633,75 @@ class _ShipmentCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              // Refresh from Sendcloud button
+              ScaleOnPress(
+                onTap: isRefreshing ? null : onRefresh,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: AppColors.accentBlue.withValues(alpha: 0.2)),
+                  ),
+                  child: isRefreshing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.accentBlue,
+                          ),
+                        )
+                      : const Icon(Icons.refresh,
+                          color: AppColors.accentBlue, size: 18),
+                ),
+              ),
+              const SizedBox(width: 8),
               // Status update dropdown
               PopupMenuButton<ShipmentStatus>(
                 color: AppColors.surface,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
                 onSelected: onUpdateStatus,
                 itemBuilder: (_) => [
-                  _statusMenuItem(ShipmentStatus.pending, 'In attesa', Icons.schedule, AppColors.accentOrange),
-                  _statusMenuItem(ShipmentStatus.inTransit, 'In transito', Icons.local_shipping, AppColors.accentBlue),
-                  _statusMenuItem(ShipmentStatus.delivered, 'Consegnato', Icons.check_circle, AppColors.accentGreen),
-                  _statusMenuItem(ShipmentStatus.exception, 'Problema', Icons.warning, AppColors.accentRed),
+                  _statusMenuItem(ShipmentStatus.pending, 'In attesa',
+                      Icons.schedule, AppColors.accentOrange),
+                  _statusMenuItem(ShipmentStatus.inTransit, 'In transito',
+                      Icons.local_shipping, AppColors.accentBlue),
+                  _statusMenuItem(ShipmentStatus.delivered, 'Consegnato',
+                      Icons.check_circle, AppColors.accentGreen),
+                  _statusMenuItem(ShipmentStatus.exception, 'Problema',
+                      Icons.warning, AppColors.accentRed),
                 ],
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.06)),
                   ),
-                  child: const Icon(Icons.more_horiz, color: AppColors.textMuted, size: 18),
+                  child: const Icon(Icons.more_horiz,
+                      color: AppColors.textMuted, size: 18),
                 ),
               ),
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: onDelete,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: AppColors.accentRed.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.accentRed.withValues(alpha: 0.15)),
+                    border: Border.all(
+                        color: AppColors.accentRed.withValues(alpha: 0.15)),
                   ),
-                  child: const Icon(Icons.delete_outline, color: AppColors.accentRed, size: 18),
+                  child: const Icon(Icons.delete_outline,
+                      color: AppColors.accentRed, size: 18),
                 ),
               ),
             ],
@@ -495,6 +709,16 @@ class _ShipmentCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inMinutes < 1) return 'Adesso';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m fa';
+    if (diff.inHours < 24) return '${diff.inHours}h fa';
+    if (diff.inDays < 7) return '${diff.inDays}g fa';
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   PopupMenuItem<ShipmentStatus> _statusMenuItem(
@@ -505,7 +729,9 @@ class _ShipmentCard extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 18),
           const SizedBox(width: 10),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+          Text(label,
+              style:
+                  TextStyle(color: color, fontWeight: FontWeight.w600)),
         ],
       ),
     );

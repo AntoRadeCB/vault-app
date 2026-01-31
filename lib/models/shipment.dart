@@ -4,6 +4,51 @@ enum ShipmentType { purchase, sale }
 
 enum ShipmentStatus { pending, inTransit, delivered, exception, unknown }
 
+/// Represents a single tracking event from Sendcloud
+class TrackingEvent {
+  final String status;
+  final DateTime? timestamp;
+  final String? location;
+  final String? description;
+  final int? statusId;
+
+  const TrackingEvent({
+    required this.status,
+    this.timestamp,
+    this.location,
+    this.description,
+    this.statusId,
+  });
+
+  factory TrackingEvent.fromMap(Map<String, dynamic> data) {
+    DateTime? ts;
+    if (data['timestamp'] != null) {
+      if (data['timestamp'] is Timestamp) {
+        ts = (data['timestamp'] as Timestamp).toDate();
+      } else if (data['timestamp'] is String) {
+        ts = DateTime.tryParse(data['timestamp']);
+      }
+    }
+    return TrackingEvent(
+      status: data['status'] ?? 'Unknown',
+      timestamp: ts,
+      location: data['location'],
+      description: data['description'],
+      statusId: data['statusId'],
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'status': status,
+      'timestamp': timestamp?.toIso8601String(),
+      'location': location,
+      'description': description,
+      'statusId': statusId,
+    };
+  }
+}
+
 class Shipment {
   final String? id;
   final String trackingCode;
@@ -17,6 +62,12 @@ class Shipment {
   final DateTime? lastUpdate;
   final String? lastEvent;
 
+  // Sendcloud-specific fields
+  final int? sendcloudId;
+  final String? sendcloudStatus;
+  final List<TrackingEvent>? trackingHistory;
+  final String? sendcloudTrackingUrl;
+
   const Shipment({
     this.id,
     required this.trackingCode,
@@ -29,6 +80,10 @@ class Shipment {
     required this.createdAt,
     this.lastUpdate,
     this.lastEvent,
+    this.sendcloudId,
+    this.sendcloudStatus,
+    this.trackingHistory,
+    this.sendcloudTrackingUrl,
   });
 
   String get statusLabel {
@@ -45,6 +100,9 @@ class Shipment {
         return 'Sconosciuto';
     }
   }
+
+  /// Display status: prefer sendcloudStatus when available
+  String get displayStatus => sendcloudStatus ?? statusLabel;
 
   String get typeLabel => type == ShipmentType.purchase ? 'Acquisto' : 'Vendita';
 
@@ -106,8 +164,16 @@ class Shipment {
     return CarrierInfo('generic', 'Corriere');
   }
 
-  /// Get tracking URL for the carrier
+  /// Get tracking URL — prefer Sendcloud URL when available
   String get trackingUrl {
+    if (sendcloudTrackingUrl != null && sendcloudTrackingUrl!.isNotEmpty) {
+      return sendcloudTrackingUrl!;
+    }
+    return carrierTrackingUrl;
+  }
+
+  /// Get carrier-specific tracking URL
+  String get carrierTrackingUrl {
     switch (carrier) {
       case 'poste_italiane':
         return 'https://www.poste.it/cerca/index.html#/risultati-702702702702702-702/$trackingCode';
@@ -137,6 +203,15 @@ class Shipment {
 
   factory Shipment.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    // Parse tracking history
+    List<TrackingEvent>? history;
+    if (data['trackingHistory'] != null && data['trackingHistory'] is List) {
+      history = (data['trackingHistory'] as List)
+          .map((e) => TrackingEvent.fromMap(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+
     return Shipment(
       id: doc.id,
       trackingCode: data['trackingCode'] ?? '',
@@ -150,9 +225,19 @@ class Shipment {
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
       lastUpdate: data['lastUpdate'] != null
-          ? (data['lastUpdate'] as Timestamp).toDate()
+          ? (data['lastUpdate'] is Timestamp
+              ? (data['lastUpdate'] as Timestamp).toDate()
+              : DateTime.tryParse(data['lastUpdate'].toString()))
           : null,
-      lastEvent: data['lastEvent'],
+      lastEvent: data['lastEvent'] is String
+          ? data['lastEvent']
+          : data['lastEvent'] is Map
+              ? (data['lastEvent'] as Map)['status']?.toString()
+              : null,
+      sendcloudId: data['sendcloudId'],
+      sendcloudStatus: data['sendcloudStatus'],
+      trackingHistory: history,
+      sendcloudTrackingUrl: data['sendcloudTrackingUrl'] ?? data['trackingUrl'],
     );
   }
 
@@ -168,18 +253,27 @@ class Shipment {
       'createdAt': Timestamp.fromDate(createdAt),
       'lastUpdate': lastUpdate != null ? Timestamp.fromDate(lastUpdate!) : null,
       'lastEvent': lastEvent,
+      if (sendcloudId != null) 'sendcloudId': sendcloudId,
+      if (sendcloudStatus != null) 'sendcloudStatus': sendcloudStatus,
+      if (trackingHistory != null)
+        'trackingHistory': trackingHistory!.map((e) => e.toMap()).toList(),
+      if (sendcloudTrackingUrl != null) 'sendcloudTrackingUrl': sendcloudTrackingUrl,
     };
   }
 
   static ShipmentStatus _statusFromString(String? s) {
     switch (s) {
       case 'inTransit':
+      case 'in_transit':
         return ShipmentStatus.inTransit;
       case 'delivered':
         return ShipmentStatus.delivered;
       case 'exception':
         return ShipmentStatus.exception;
       case 'pending':
+      case 'announced':
+      case 'ready_to_send':
+      case 'label_printed':
         return ShipmentStatus.pending;
       default:
         return ShipmentStatus.unknown;
@@ -213,6 +307,10 @@ class Shipment {
     DateTime? createdAt,
     DateTime? lastUpdate,
     String? lastEvent,
+    int? sendcloudId,
+    String? sendcloudStatus,
+    List<TrackingEvent>? trackingHistory,
+    String? sendcloudTrackingUrl,
   }) {
     return Shipment(
       id: id ?? this.id,
@@ -226,6 +324,10 @@ class Shipment {
       createdAt: createdAt ?? this.createdAt,
       lastUpdate: lastUpdate ?? this.lastUpdate,
       lastEvent: lastEvent ?? this.lastEvent,
+      sendcloudId: sendcloudId ?? this.sendcloudId,
+      sendcloudStatus: sendcloudStatus ?? this.sendcloudStatus,
+      trackingHistory: trackingHistory ?? this.trackingHistory,
+      sendcloudTrackingUrl: sendcloudTrackingUrl ?? this.sendcloudTrackingUrl,
     );
   }
 }
