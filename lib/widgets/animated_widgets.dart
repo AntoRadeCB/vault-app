@@ -541,27 +541,28 @@ class _CountUpTextState extends State<CountUpText>
   late AnimationController _controller;
   late Animation<double> _animation;
 
-  double _oldValue = 0;
+  late Tween<double> _tween;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: widget.duration);
-    _animation = Tween<double>(begin: 0, end: widget.value)
-        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _tween = Tween<double>(begin: 0, end: widget.value);
+    _animation = _tween.animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
-    _oldValue = widget.value;
   }
 
   @override
   void didUpdateWidget(CountUpText oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value) {
-      _oldValue = oldWidget.value;
-      _controller.reset();
-      _animation = Tween<double>(begin: _oldValue, end: widget.value)
-          .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
-      _controller.forward();
+      _tween = Tween<double>(begin: oldWidget.value, end: widget.value);
+      _animation = _tween.animate(
+          CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+      _controller
+        ..reset()
+        ..forward();
     }
   }
 
@@ -574,7 +575,7 @@ class _CountUpTextState extends State<CountUpText>
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _animation,
+      animation: _controller,
       builder: (_, __) {
         String text;
         if (widget.decimals > 0) {
