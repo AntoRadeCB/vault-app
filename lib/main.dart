@@ -10,10 +10,12 @@ import 'screens/add_item_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/shipments_screen.dart';
+import 'screens/tracking_detail_screen.dart';
 import 'screens/add_sale_screen.dart';
 import 'screens/edit_product_screen.dart';
 import 'widgets/animated_widgets.dart';
 import 'models/product.dart';
+import 'models/shipment.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -75,6 +77,7 @@ class _MainShellState extends State<MainShell> {
   bool _showAddItem = false;
   bool _showAddSale = false;
   Product? _editingProduct;
+  Shipment? _trackingShipment;
   final _searchController = TextEditingController();
   bool _searchFocused = false;
 
@@ -84,6 +87,7 @@ class _MainShellState extends State<MainShell> {
       _showAddItem = false;
       _showAddSale = false;
       _editingProduct = null;
+      _trackingShipment = null;
     });
   }
 
@@ -92,6 +96,7 @@ class _MainShellState extends State<MainShell> {
       _showAddItem = true;
       _showAddSale = false;
       _editingProduct = null;
+      _trackingShipment = null;
     });
   }
 
@@ -100,6 +105,7 @@ class _MainShellState extends State<MainShell> {
       _showAddSale = true;
       _showAddItem = false;
       _editingProduct = null;
+      _trackingShipment = null;
     });
   }
 
@@ -108,6 +114,16 @@ class _MainShellState extends State<MainShell> {
       _editingProduct = product;
       _showAddItem = false;
       _showAddSale = false;
+      _trackingShipment = null;
+    });
+  }
+
+  void _showTrackingDetail(Shipment shipment) {
+    setState(() {
+      _trackingShipment = shipment;
+      _showAddItem = false;
+      _showAddSale = false;
+      _editingProduct = null;
     });
   }
 
@@ -116,6 +132,7 @@ class _MainShellState extends State<MainShell> {
       _showAddItem = false;
       _showAddSale = false;
       _editingProduct = null;
+      _trackingShipment = null;
     });
   }
 
@@ -137,6 +154,12 @@ class _MainShellState extends State<MainShell> {
         onSaved: () {},
       );
     }
+    if (_trackingShipment != null) {
+      return TrackingDetailScreen(
+        shipment: _trackingShipment!,
+        onBack: _closeOverlay,
+      );
+    }
     switch (_currentIndex) {
       case 0:
         return DashboardScreen(
@@ -148,7 +171,9 @@ class _MainShellState extends State<MainShell> {
           onEditProduct: _showEditProductScreen,
         );
       case 2:
-        return const ShipmentsScreen();
+        return ShipmentsScreen(
+          onTrackShipment: _showTrackingDetail,
+        );
       case 3:
         return const ReportsScreen();
       case 4:
@@ -223,6 +248,7 @@ class _MainShellState extends State<MainShell> {
     if (_showAddItem) return 'add';
     if (_showAddSale) return 'sale';
     if (_editingProduct != null) return 'edit-${_editingProduct!.id}';
+    if (_trackingShipment != null) return 'track-${_trackingShipment!.trackingCode}';
     return '$_currentIndex';
   }
 
@@ -526,6 +552,7 @@ class _MainShellState extends State<MainShell> {
               const SizedBox(width: 48), // Space for FAB
               _buildNavItem(Icons.local_shipping_outlined, Icons.local_shipping, 'Spedizioni', 2),
               _buildNavItem(Icons.bar_chart_outlined, Icons.bar_chart, 'Reports', 3),
+              _buildNavItem(Icons.settings_outlined, Icons.settings, 'Settings', 4),
             ],
           ),
         ),

@@ -6,7 +6,9 @@ import '../services/firestore_service.dart';
 import 'package:flutter/services.dart';
 
 class ShipmentsScreen extends StatefulWidget {
-  const ShipmentsScreen({super.key});
+  final void Function(Shipment shipment)? onTrackShipment;
+
+  const ShipmentsScreen({super.key, this.onTrackShipment});
 
   @override
   State<ShipmentsScreen> createState() => _ShipmentsScreenState();
@@ -32,46 +34,8 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
     super.dispose();
   }
 
-  void _openTrackingUrl(Shipment shipment) {
-    // On web, open in new tab
-    _launchUrl(shipment.trackingUrl);
-  }
-
-  void _launchUrl(String url) {
-    // Use dart:html on web
-    try {
-      // ignore: avoid_dynamic_calls
-      (Uri.parse(url));
-      // Use a simple approach: copy URL and show snackbar
-      Clipboard.setData(ClipboardData(text: url));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.open_in_new, color: Colors.white, size: 18),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Link tracciamento copiato! Apri nel browser.',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: AppColors.accentTeal,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-          action: SnackBarAction(
-            label: 'APRI',
-            textColor: Colors.white,
-            onPressed: () {
-              // ignore: unnecessary_import
-            },
-          ),
-        ),
-      );
-    } catch (_) {}
+  void _openTrackingDetail(Shipment shipment) {
+    widget.onTrackShipment?.call(shipment);
   }
 
   void _updateStatus(Shipment shipment, ShipmentStatus newStatus) {
@@ -270,7 +234,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
             padding: const EdgeInsets.only(bottom: 12),
             child: _ShipmentCard(
               shipment: shipments[index],
-              onTrack: () => _openTrackingUrl(shipments[index]),
+              onTrack: () => _openTrackingDetail(shipments[index]),
               onUpdateStatus: (status) => _updateStatus(shipments[index], status),
               onDelete: () => _confirmDelete(shipments[index]),
             ),
