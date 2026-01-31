@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
+import '../widgets/barcode_scanner_dialog.dart';
 import '../models/product.dart';
 import '../models/purchase.dart';
 import '../services/firestore_service.dart';
@@ -20,9 +21,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _brandController = TextEditingController();
   final _priceController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
+  final _barcodeController = TextEditingController();
   String _selectedWorkspace = 'Reselling Vinted 2025';
   String _selectedStatus = 'inInventory';
   bool _saving = false;
+  bool _barcodeLoading = false;
   final FirestoreService _firestoreService = FirestoreService();
 
   @override
@@ -31,7 +34,75 @@ class _AddItemScreenState extends State<AddItemScreen> {
     _brandController.dispose();
     _priceController.dispose();
     _quantityController.dispose();
+    _barcodeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _scanBarcode() async {
+    final code = await BarcodeScannerDialog.scan(context);
+    if (code == null || !mounted) return;
+
+    setState(() {
+      _barcodeController.text = code;
+      _barcodeLoading = true;
+    });
+
+    // Check if product with this barcode already exists
+    try {
+      final existing = await _firestoreService.getProductByBarcode(code);
+      if (!mounted) return;
+
+      if (existing != null) {
+        // Auto-fill from existing product
+        _nameController.text = existing.name;
+        _brandController.text = existing.brand;
+        _priceController.text = existing.price.toString();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Prodotto trovato: ${existing.name}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.accentBlue,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.qr_code, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Barcode: $code — compila i dati del prodotto',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.accentOrange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (_) {}
+
+    if (mounted) setState(() => _barcodeLoading = false);
   }
 
   Future<void> _submit() async {
@@ -50,6 +121,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
             : _selectedStatus == 'listed'
                 ? ProductStatus.listed
                 : ProductStatus.inInventory,
+        barcode: _barcodeController.text.trim().isNotEmpty
+            ? _barcodeController.text.trim()
+            : null,
         createdAt: DateTime.now(),
       );
 
@@ -169,19 +243,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   validator: (v) =>
                       (v == null || v.isEmpty) ? 'Campo obbligatorio' : null,
                   suffixIcon: ScaleOnPress(
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text(
-                              '📷 Scanner QR non disponibile nella demo'),
-                          backgroundColor: AppColors.surface,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          margin: const EdgeInsets.all(16),
-                        ),
-                      );
-                    },
+                    onTap: _barcodeLoading ? null : _scanBarcode,
                     child: Container(
                       margin: const EdgeInsets.all(8),
                       padding: const EdgeInsets.all(8),
@@ -196,19 +258,84 @@ class _AddItemScreenState extends State<AddItemScreen> {
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.qr_code_scanner,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                      child: _barcodeLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.qr_code_scanner,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                     ),
                   ),
                 ),
               ),
             ),
+            // Barcode field (shown when scanned)
+            if (_barcodeController.text.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              StaggeredFadeSlide(
+                index: 2,
+                child: GlassCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  glowColor: AppColors.accentTeal,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentTeal.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.qr_code, color: AppColors.accentTeal, size: 18),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'BARCODE',
+                              style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _barcodeController.text,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ScaleOnPress(
+                        onTap: () {
+                          setState(() => _barcodeController.clear());
+                        },
+                        child: const Icon(Icons.close, color: AppColors.textMuted, size: 18),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             StaggeredFadeSlide(
-              index: 2,
+              index: 3,
               child: _buildField(
                 label: 'Brand',
                 child: _GlowTextField(

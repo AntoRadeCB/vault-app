@@ -10,6 +10,7 @@ class Product {
   final double price;
   final ProductStatus status;
   final String? imageUrl;
+  final String? barcode;
   final DateTime? createdAt;
 
   const Product({
@@ -20,6 +21,7 @@ class Product {
     required this.price,
     required this.status,
     this.imageUrl,
+    this.barcode,
     this.createdAt,
   });
 
@@ -81,6 +83,7 @@ class Product {
       price: (data['price'] ?? 0).toDouble(),
       status: _statusFromString(data['status']),
       imageUrl: data['imageUrl'],
+      barcode: data['barcode'],
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
@@ -95,6 +98,7 @@ class Product {
       'price': price,
       'status': _statusToString(status),
       'imageUrl': imageUrl,
+      'barcode': barcode,
       'createdAt': createdAt != null
           ? Timestamp.fromDate(createdAt!)
           : FieldValue.serverTimestamp(),
@@ -109,6 +113,7 @@ class Product {
     double? price,
     ProductStatus? status,
     String? imageUrl,
+    String? barcode,
     DateTime? createdAt,
   }) {
     return Product(
@@ -119,6 +124,7 @@ class Product {
       price: price ?? this.price,
       status: status ?? this.status,
       imageUrl: imageUrl ?? this.imageUrl,
+      barcode: barcode ?? this.barcode,
       createdAt: createdAt ?? this.createdAt,
     );
   }

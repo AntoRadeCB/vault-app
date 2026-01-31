@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
+import '../widgets/barcode_scanner_dialog.dart';
 import '../models/product.dart';
 import '../models/sale.dart';
 import '../services/firestore_service.dart';
@@ -23,6 +24,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
   Product? _selectedProduct;
   bool _saving = false;
   bool _markAsSold = true;
+  bool _scanLoading = false;
 
   @override
   void dispose() {
@@ -106,6 +108,48 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
     }
   }
 
+  Future<void> _scanBarcode() async {
+    final code = await BarcodeScannerDialog.scan(context);
+    if (code == null || !mounted) return;
+
+    setState(() => _scanLoading = true);
+
+    try {
+      final product = await _firestoreService.getProductByBarcode(code);
+      if (!mounted) return;
+
+      if (product != null) {
+        setState(() => _selectedProduct = product);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Trovato: ${product.name}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.accentGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      } else {
+        _showError('Nessun prodotto trovato con barcode: $code');
+      }
+    } catch (e) {
+      if (mounted) _showError('Errore scansione: $e');
+    }
+
+    if (mounted) setState(() => _scanLoading = false);
+  }
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -175,7 +219,52 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
               index: 1,
               child: _buildField(
                 label: 'Prodotto',
-                child: StreamBuilder<List<Product>>(
+                child: Column(
+                  children: [
+                    // Scan barcode button
+                    GestureDetector(
+                      onTap: _scanLoading ? null : _scanBarcode,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentTeal.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.accentTeal.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (_scanLoading)
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.accentTeal,
+                                ),
+                              )
+                            else
+                              const Icon(Icons.qr_code_scanner,
+                                  color: AppColors.accentTeal, size: 20),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Scansiona Barcode Prodotto',
+                              style: TextStyle(
+                                color: AppColors.accentTeal,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Dropdown
+                    StreamBuilder<List<Product>>(
                   stream: _firestoreService.getProducts(),
                   builder: (context, snapshot) {
                     final products = snapshot.data ?? [];
@@ -257,6 +346,8 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                       ),
                     );
                   },
+                ),
+                  ],
                 ),
               ),
             ),

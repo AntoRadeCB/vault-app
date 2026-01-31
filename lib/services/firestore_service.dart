@@ -44,6 +44,16 @@ class FirestoreService {
     return Product.fromFirestore(doc);
   }
 
+  /// Find product by barcode
+  Future<Product?> getProductByBarcode(String barcode) async {
+    final snap = await _userCollection('products')
+        .where('barcode', isEqualTo: barcode)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    return Product.fromFirestore(snap.docs.first);
+  }
+
   // ═══════════════════════════════════════════════════
   //  PURCHASES
   // ═══════════════════════════════════════════════════
