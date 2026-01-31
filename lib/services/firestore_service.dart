@@ -183,12 +183,21 @@ class FirestoreService {
 
   /// ROI % = (total profit / total spent) * 100
   Stream<double> getROI() {
+    return getCombinedSalesPurchases().map((data) {
+      final sales = data['sales'] as List<Sale>;
+      final purchases = data['purchases'] as List<Purchase>;
+      final totalProfit = sales.fold<double>(0, (acc, s) => acc + s.profit);
+      final totalSpent = purchases.fold<double>(0, (acc, p) => acc + p.totalCost);
+      if (totalSpent == 0) return 0.0;
+      return (totalProfit / totalSpent) * 100;
+    });
+  }
+
+  /// Combined stream of sales + purchases (emits when either changes)
+  Stream<Map<String, dynamic>> getCombinedSalesPurchases() {
     return getSales().asyncExpand((sales) {
       return getPurchases().map((purchases) {
-        final totalProfit = sales.fold<double>(0, (acc, s) => acc + s.profit);
-        final totalSpent = purchases.fold<double>(0, (acc, p) => acc + p.totalCost);
-        if (totalSpent == 0) return 0.0;
-        return (totalProfit / totalSpent) * 100;
+        return {'sales': sales, 'purchases': purchases};
       });
     });
   }

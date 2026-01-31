@@ -541,6 +541,8 @@ class _CountUpTextState extends State<CountUpText>
   late AnimationController _controller;
   late Animation<double> _animation;
 
+  double _oldValue = 0;
+
   @override
   void initState() {
     super.initState();
@@ -548,6 +550,19 @@ class _CountUpTextState extends State<CountUpText>
     _animation = Tween<double>(begin: 0, end: widget.value)
         .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
+    _oldValue = widget.value;
+  }
+
+  @override
+  void didUpdateWidget(CountUpText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _oldValue = oldWidget.value;
+      _controller.reset();
+      _animation = Tween<double>(begin: _oldValue, end: widget.value)
+          .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+      _controller.forward();
+    }
   }
 
   @override
