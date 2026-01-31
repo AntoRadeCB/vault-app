@@ -119,10 +119,77 @@ class FirestoreService {
     return getSales().map((sales) => sales.length);
   }
 
+  /// Purchases Count
+  Stream<int> getPurchasesCount() {
+    return getPurchases().map((purchases) => purchases.length);
+  }
+
   /// Total Fees Paid
   Stream<double> getTotalFeesPaid() {
     return getSales().map((sales) {
       return sales.fold<double>(0, (acc, s) => acc + s.fees);
+    });
+  }
+
+  /// Total Revenue = sum of all sale prices
+  Stream<double> getTotalRevenue() {
+    return getSales().map((sales) {
+      return sales.fold<double>(0, (acc, s) => acc + s.salePrice);
+    });
+  }
+
+  /// Total Spent = sum of all purchase costs
+  Stream<double> getTotalSpent() {
+    return getPurchases().map((purchases) {
+      return purchases.fold<double>(0, (acc, p) => acc + p.totalCost);
+    });
+  }
+
+  /// Items count in inventory
+  Stream<int> getInventoryItemCount() {
+    return getProducts().map((products) => products.length);
+  }
+
+  /// Total inventory quantity
+  Stream<double> getTotalInventoryQuantity() {
+    return getProducts().map((products) {
+      return products.fold<double>(0, (acc, p) => acc + p.quantity);
+    });
+  }
+
+  /// Average profit per sale
+  Stream<double> getAverageProfitPerSale() {
+    return getSales().map((sales) {
+      if (sales.isEmpty) return 0.0;
+      final totalProfit = sales.fold<double>(0, (acc, s) => acc + s.profit);
+      return totalProfit / sales.length;
+    });
+  }
+
+  /// Best sale (highest profit)
+  Stream<Sale?> getBestSale() {
+    return getSales().map((sales) {
+      if (sales.isEmpty) return null;
+      return sales.reduce((a, b) => a.profit > b.profit ? a : b);
+    });
+  }
+
+  /// Total inventory value (all products regardless of status)
+  Stream<double> getTotalInventoryValue() {
+    return getProducts().map((products) {
+      return products.fold<double>(0, (acc, p) => acc + (p.price * p.quantity));
+    });
+  }
+
+  /// ROI % = (total profit / total spent) * 100
+  Stream<double> getROI() {
+    return getSales().asyncExpand((sales) {
+      return getPurchases().map((purchases) {
+        final totalProfit = sales.fold<double>(0, (acc, s) => acc + s.profit);
+        final totalSpent = purchases.fold<double>(0, (acc, p) => acc + p.totalCost);
+        if (totalSpent == 0) return 0.0;
+        return (totalProfit / totalSpent) * 100;
+      });
     });
   }
 

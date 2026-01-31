@@ -3,6 +3,8 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
 import '../models/product.dart';
+import '../models/sale.dart';
+import '../models/purchase.dart';
 
 class DashboardScreen extends StatelessWidget {
   final VoidCallback? onNewPurchase;
@@ -22,11 +24,17 @@ class DashboardScreen extends StatelessWidget {
           children: [
             StaggeredFadeSlide(index: 0, child: _buildHeader()),
             const SizedBox(height: 24),
-            _buildStatCards(),
+            _buildMainStatCards(),
+            const SizedBox(height: 16),
+            _buildQuickStats(),
             const SizedBox(height: 24),
-            StaggeredFadeSlide(index: 5, child: _buildActionButtons(context)),
+            StaggeredFadeSlide(index: 7, child: _buildActionButtons(context)),
             const SizedBox(height: 24),
-            StaggeredFadeSlide(index: 6, child: _buildOperationalStatus()),
+            StaggeredFadeSlide(index: 8, child: _buildRecentSales()),
+            const SizedBox(height: 24),
+            StaggeredFadeSlide(index: 9, child: _buildRecentPurchases()),
+            const SizedBox(height: 24),
+            StaggeredFadeSlide(index: 10, child: _buildOperationalStatus()),
           ],
         ),
       ),
@@ -71,34 +79,51 @@ class DashboardScreen extends StatelessWidget {
               ],
             ),
           ),
-          PulsingBadge(
-            count: 3,
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.1),
+          // Live inventory count badge
+          StreamBuilder<int>(
+            stream: _firestoreService.getInventoryItemCount(),
+            builder: (context, snap) {
+              final count = snap.data ?? 0;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.accentBlue.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppColors.accentBlue.withValues(alpha: 0.25),
+                  ),
                 ),
-              ),
-              child: const Icon(
-                Icons.notifications_outlined,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.inventory_2, color: AppColors.accentBlue, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$count items',
+                      style: const TextStyle(
+                        color: AppColors.accentBlue,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatCards() {
+  // ════════════════════════════════════════════════════
+  //  MAIN 4 STAT CARDS — all from Firestore real-time
+  // ════════════════════════════════════════════════════
+
+  Widget _buildMainStatCards() {
     return StreamBuilder<List<Product>>(
       stream: _firestoreService.getProducts(),
       builder: (context, productSnap) {
-        // Calculate stats from products
         final products = productSnap.data ?? [];
         final capitaleImmobilizzato = products
             .where((p) => p.status == ProductStatus.inInventory)
@@ -188,6 +213,66 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
+  // ════════════════════════════════════════════════════
+  //  QUICK STATS ROW — acquisti, vendite, ROI
+  // ════════════════════════════════════════════════════
+
+  Widget _buildQuickStats() {
+    return StaggeredFadeSlide(
+      index: 5,
+      child: Row(
+        children: [
+          Expanded(
+            child: StreamBuilder<double>(
+              stream: _firestoreService.getTotalSpent(),
+              builder: (context, snap) {
+                return _QuickStatChip(
+                  label: 'Totale Speso',
+                  value: '€${(snap.data ?? 0).toStringAsFixed(0)}',
+                  icon: Icons.shopping_cart_outlined,
+                  color: AppColors.accentRed,
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: StreamBuilder<double>(
+              stream: _firestoreService.getTotalRevenue(),
+              builder: (context, snap) {
+                return _QuickStatChip(
+                  label: 'Totale Ricavi',
+                  value: '€${(snap.data ?? 0).toStringAsFixed(0)}',
+                  icon: Icons.payments_outlined,
+                  color: AppColors.accentGreen,
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: StreamBuilder<double>(
+              stream: _firestoreService.getAverageProfitPerSale(),
+              builder: (context, snap) {
+                final avg = snap.data ?? 0;
+                return _QuickStatChip(
+                  label: 'Media Profitto',
+                  value: '€${avg.toStringAsFixed(1)}',
+                  icon: Icons.analytics_outlined,
+                  color: AppColors.accentPurple,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════
+  //  ACTION BUTTONS
+  // ════════════════════════════════════════════════════
+
   Widget _buildActionButtons(BuildContext context) {
     return Row(
       children: [
@@ -246,6 +331,146 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
+  // ════════════════════════════════════════════════════
+  //  RECENT SALES — live from Firestore
+  // ════════════════════════════════════════════════════
+
+  Widget _buildRecentSales() {
+    return StreamBuilder<List<Sale>>(
+      stream: _firestoreService.getSales(),
+      builder: (context, snapshot) {
+        final sales = snapshot.data ?? [];
+        return GlassCard(
+          padding: const EdgeInsets.all(20),
+          glowColor: AppColors.accentGreen,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.sell, color: AppColors.accentGreen, size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Ultime Vendite',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentGreen.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${sales.length} totali',
+                      style: const TextStyle(
+                        color: AppColors.accentGreen,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (sales.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: Text(
+                      'Nessuna vendita registrata',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                    ),
+                  ),
+                )
+              else
+                ...sales.take(5).map((sale) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _SaleRow(sale: sale),
+                    )),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ════════════════════════════════════════════════════
+  //  RECENT PURCHASES — live from Firestore
+  // ════════════════════════════════════════════════════
+
+  Widget _buildRecentPurchases() {
+    return StreamBuilder<List<Purchase>>(
+      stream: _firestoreService.getPurchases(),
+      builder: (context, snapshot) {
+        final purchases = snapshot.data ?? [];
+        return GlassCard(
+          padding: const EdgeInsets.all(20),
+          glowColor: AppColors.accentBlue,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.shopping_cart, color: AppColors.accentBlue, size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Ultimi Acquisti',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentBlue.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${purchases.length} totali',
+                      style: const TextStyle(
+                        color: AppColors.accentBlue,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (purchases.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: Text(
+                      'Nessun acquisto registrato',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                    ),
+                  ),
+                )
+              else
+                ...purchases.take(5).map((purchase) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _PurchaseRow(purchase: purchase),
+                    )),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ════════════════════════════════════════════════════
+  //  OPERATIONAL STATUS
+  // ════════════════════════════════════════════════════
+
   Widget _buildOperationalStatus() {
     return StreamBuilder<List<Product>>(
       stream: _firestoreService.getProducts(),
@@ -253,6 +478,8 @@ class DashboardScreen extends StatelessWidget {
         final products = snapshot.data ?? [];
         final shippedCount =
             products.where((p) => p.status == ProductStatus.shipped).length;
+        final listedCount =
+            products.where((p) => p.status == ProductStatus.listed).length;
         final lowStock = products.where((p) => p.quantity <= 1).toList();
 
         return GlassCard(
@@ -272,14 +499,18 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(height: 16),
               if (shippedCount > 0)
                 _buildStatusItem(
-                    '$shippedCount Spedizioni in transito', AppColors.accentBlue),
+                    '$shippedCount spedizioni in transito', AppColors.accentBlue),
               if (shippedCount > 0) const SizedBox(height: 12),
+              if (listedCount > 0)
+                _buildStatusItem(
+                    '$listedCount prodotti in vendita', AppColors.accentOrange),
+              if (listedCount > 0) const SizedBox(height: 12),
               if (lowStock.isNotEmpty)
                 _buildStatusItem(
                     'Stock basso: ${lowStock.first.name}', AppColors.accentOrange),
-              if (shippedCount == 0 && lowStock.isEmpty)
-                _buildStatusItem(
-                    'Nessun avviso attivo', AppColors.accentGreen),
+              if (lowStock.isNotEmpty) const SizedBox(height: 12),
+              if (shippedCount == 0 && listedCount == 0 && lowStock.isEmpty)
+                _buildStatusItem('Nessun avviso attivo', AppColors.accentGreen),
             ],
           ),
         );
@@ -320,6 +551,10 @@ class DashboardScreen extends StatelessWidget {
   }
 }
 
+// ──────────────────────────────────────────────────
+// Helper models & widgets
+// ──────────────────────────────────────────────────
+
 class _StatData {
   final String title;
   final double value;
@@ -328,4 +563,186 @@ class _StatData {
   final Color color;
 
   _StatData(this.title, this.value, this.prefix, this.icon, this.color);
+}
+
+class _QuickStatChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _QuickStatChip({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SaleRow extends StatelessWidget {
+  final Sale sale;
+  const _SaleRow({required this.sale});
+
+  @override
+  Widget build(BuildContext context) {
+    final profit = sale.profit;
+    final isPositive = profit >= 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: (isPositive ? AppColors.accentGreen : AppColors.accentRed)
+                  .withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              isPositive ? Icons.trending_up : Icons.trending_down,
+              color: isPositive ? AppColors.accentGreen : AppColors.accentRed,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  sale.productName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Venduto a €${sale.salePrice.toStringAsFixed(0)} · Costo €${sale.purchasePrice.toStringAsFixed(0)}${sale.fees > 0 ? ' · Fee €${sale.fees.toStringAsFixed(0)}' : ''}',
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '${isPositive ? '+' : ''}€${profit.toStringAsFixed(2)}',
+            style: TextStyle(
+              color: isPositive ? AppColors.accentGreen : AppColors.accentRed,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PurchaseRow extends StatelessWidget {
+  final Purchase purchase;
+  const _PurchaseRow({required this.purchase});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.accentBlue.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.add_shopping_cart,
+              color: AppColors.accentBlue,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  purchase.productName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Qta: ${purchase.quantity.toInt()} · ${purchase.workspace}',
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '-€${purchase.totalCost.toStringAsFixed(2)}',
+            style: const TextStyle(
+              color: AppColors.accentRed,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
