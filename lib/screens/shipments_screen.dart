@@ -89,7 +89,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
 
       await _fs.updateShipmentSendcloud(
         shipment.id!,
-        sendcloudId: result.sendcloudId,
+        sendcloudId: null,
         sendcloudStatus: result.status,
         sendcloudTrackingUrl: result.trackingUrl,
         appStatus: appStatus,

@@ -2,14 +2,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/shipment.dart';
 
-/// Service that communicates with Sendcloud through Firebase Cloud Functions.
-/// NEVER calls Sendcloud API directly — always proxies through Cloud Functions.
+/// Service that communicates with Ship24 through Firebase Cloud Functions.
+/// NEVER calls Ship24 API directly — always proxies through Cloud Functions.
 class SendcloudService {
   static const String _baseUrl =
       'https://europe-west1-inventorymanager-dev-20262.cloudfunctions.net';
 
-  /// Register a tracking number on Sendcloud via Cloud Function.
-  /// Returns a map with { sendcloudId, status, trackingUrl, carrier } on success.
+  /// Register a tracking number on Ship24 via Cloud Function.
   Future<Map<String, dynamic>> registerTracking(
     String trackingNumber, {
     String? carrier,
@@ -20,7 +19,7 @@ class SendcloudService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'trackingNumber': trackingNumber,
-          if (carrier != null) 'carrier': carrier,
+          if (carrier != null) 'courierCode': carrier,
         }),
       );
 
@@ -40,11 +39,11 @@ class SendcloudService {
     }
   }
 
-  /// Get tracking status from Sendcloud via Cloud Function.
-  /// Provide either trackingNumber or sendcloudId (or both).
+  /// Get tracking status from Ship24 via Cloud Function.
   Future<SendcloudTrackingResult> getTrackingStatus({
     String? trackingNumber,
-    int? sendcloudId,
+    String? trackerId,
+    int? sendcloudId, // kept for backward compat, maps to trackerId
   }) async {
     try {
       final response = await http.post(
@@ -52,7 +51,7 @@ class SendcloudService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           if (trackingNumber != null) 'trackingNumber': trackingNumber,
-          if (sendcloudId != null) 'sendcloudId': sendcloudId,
+          if (trackerId != null) 'trackerId': trackerId,
         }),
       );
 
@@ -64,7 +63,7 @@ class SendcloudService {
 
       if (response.statusCode == 404) {
         throw SendcloudException(
-          'Pacco non trovato su Sendcloud',
+          'Tracking non trovato',
           statusCode: 404,
         );
       }
@@ -78,55 +77,34 @@ class SendcloudService {
       throw SendcloudException('Network error: $e');
     }
   }
-
-  /// List parcels from Sendcloud account via Cloud Function.
-  Future<List<Map<String, dynamic>>> listParcels({int limit = 25}) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/listSendcloudParcels'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'limit': limit}),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['success'] == true) {
-        return List<Map<String, dynamic>>.from(data['parcels'] ?? []);
-      }
-
-      throw SendcloudException(
-        data['error'] ?? 'Failed to list parcels',
-        statusCode: response.statusCode,
-      );
-    } catch (e) {
-      if (e is SendcloudException) rethrow;
-      throw SendcloudException('Network error: $e');
-    }
-  }
 }
 
-/// Result from Sendcloud tracking status query
+/// Result from Ship24 tracking status query
 class SendcloudTrackingResult {
-  final int sendcloudId;
+  final String? trackerId;
   final String? trackingNumber;
   final String status;
-  final int? statusId;
+  final String? statusCode;
   final String? trackingUrl;
   final String? carrier;
   final String? carrierName;
   final List<TrackingEvent> trackingHistory;
   final String? lastUpdate;
+  final String? estimatedDelivery;
+  final String? message;
 
   SendcloudTrackingResult({
-    required this.sendcloudId,
+    this.trackerId,
     this.trackingNumber,
     required this.status,
-    this.statusId,
+    this.statusCode,
     this.trackingUrl,
     this.carrier,
     this.carrierName,
     required this.trackingHistory,
     this.lastUpdate,
+    this.estimatedDelivery,
+    this.message,
   });
 
   factory SendcloudTrackingResult.fromJson(Map<String, dynamic> json) {
@@ -138,37 +116,44 @@ class SendcloudTrackingResult {
                       : null,
                   location: e['location'],
                   description: e['description'],
-                  statusId: e['statusId'],
+                  statusId: null,
                 ))
             .toList() ??
         [];
 
     return SendcloudTrackingResult(
-      sendcloudId: json['sendcloudId'] ?? 0,
+      trackerId: json['trackerId'],
       trackingNumber: json['trackingNumber'],
-      status: json['status'] ?? 'Unknown',
-      statusId: json['statusId'],
+      status: json['status'] ?? 'pending',
+      statusCode: json['statusCode'],
       trackingUrl: json['trackingUrl'],
       carrier: json['carrier'],
       carrierName: json['carrierName'],
       trackingHistory: historyList,
       lastUpdate: json['lastUpdate'],
+      estimatedDelivery: json['estimatedDelivery'],
+      message: json['message'],
     );
   }
 
-  /// Convert Sendcloud status to app ShipmentStatus
+  /// Convert Ship24 milestone to app ShipmentStatus
   ShipmentStatus get appStatus {
-    final id = statusId;
-    if (id == null) return ShipmentStatus.unknown;
-    if (id == 11) return ShipmentStatus.delivered;
-    if (id == 1 || id == 99 || id == 2000) return ShipmentStatus.pending;
-    if (id == 80 || id == 92 || id == 1000 || id == 1001) {
-      return ShipmentStatus.exception;
+    switch (status) {
+      case 'delivered':
+        return ShipmentStatus.delivered;
+      case 'in_transit':
+      case 'out_for_delivery':
+      case 'available_for_pickup':
+        return ShipmentStatus.inTransit;
+      case 'exception':
+      case 'attempt_fail':
+        return ShipmentStatus.exception;
+      case 'pending':
+      case 'info_received':
+        return ShipmentStatus.pending;
+      default:
+        return ShipmentStatus.unknown;
     }
-    if ([3, 4, 5, 6, 8, 12, 22, 31, 32, 62].contains(id)) {
-      return ShipmentStatus.inTransit;
-    }
-    return ShipmentStatus.unknown;
   }
 }
 

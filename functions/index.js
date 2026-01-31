@@ -6,107 +6,88 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 initializeApp();
 const db = getFirestore();
 
-// ── Sendcloud Secrets ──────────────────────────────
-const SENDCLOUD_PUBLIC_KEY = defineSecret("SENDCLOUD_PUBLIC_KEY");
-const SENDCLOUD_SECRET_KEY = defineSecret("SENDCLOUD_SECRET_KEY");
+// ── Ship24 Secret ──────────────────────────────────
+const SHIP24_API_KEY = defineSecret("SHIP24_API_KEY");
 
-const SENDCLOUD_API_BASE = "https://panel.sendcloud.sc/api/v2";
+const SHIP24_API_BASE = "https://api.ship24.com/public/v1";
 
-/**
- * Sendcloud Webhook Receiver
- * 
- * Riceve notifiche di tracking da Sendcloud e aggiorna Firestore.
- * URL: https://europe-west1-inventorymanager-dev-20262.cloudfunctions.net/sendcloudWebhook
- */
-exports.sendcloudWebhook = onRequest({ region: "europe-west1" }, async (req, res) => {
-  // Solo POST
+// ── CORS helper ────────────────────────────────────
+function setCors(res) {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+}
+
+// ═══════════════════════════════════════════════════════
+//  Ship24 Webhook Receiver
+// ═══════════════════════════════════════════════════════
+exports.trackingWebhook = onRequest({ region: "europe-west1" }, async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
     const payload = req.body;
-    
-    console.log("Sendcloud webhook received:", JSON.stringify(payload));
+    console.log("Ship24 webhook received:", JSON.stringify(payload));
 
-    // Sendcloud può mandare una verifica — rispondi 200
-    if (!payload || !payload.action) {
-      return res.status(200).json({ status: "ok" });
-    }
+    // Ship24 manda un array di trackings
+    const trackings = payload?.trackings || [];
 
-    const action = payload.action;
-    const parcel = payload.parcel || {};
-    const trackingNumber = parcel.tracking_number;
+    for (const tracking of trackings) {
+      const tracker = tracking.tracker || {};
+      const shipment = tracking.shipment || {};
+      const events = tracking.events || [];
+      const trackingNumber = tracker.trackingNumber;
 
-    if (!trackingNumber) {
-      console.warn("No tracking number in webhook payload");
-      return res.status(200).json({ status: "ok", message: "no tracking number" });
-    }
+      if (!trackingNumber) continue;
 
-    // Mappa stati Sendcloud → stati app
-    const statusMap = {
-      1: "announced",
-      3: "in_transit",
-      4: "in_transit",
-      5: "in_transit",
-      6: "in_transit",
-      8: "in_transit",
-      11: "delivered",
-      12: "delivery_attempt",
-      22: "in_transit",
-      31: "in_transit",
-      32: "in_transit",
-      62: "in_transit",
-      80: "cancelled",
-      92: "exception",
-      99: "ready_to_send",
-      999: "unknown",
-      1000: "error",
-      1001: "returned",
-      2000: "label_printed",
-    };
+      // Mappa status Ship24 → status app
+      const milestoneMap = {
+        "pending": "pending",
+        "info_received": "pending",
+        "in_transit": "inTransit",
+        "out_for_delivery": "inTransit",
+        "attempt_fail": "exception",
+        "available_for_pickup": "inTransit",
+        "delivered": "delivered",
+        "exception": "exception",
+      };
 
-    const appStatus = statusMap[parcel.status?.id] || "unknown";
+      const appStatus = milestoneMap[shipment.statusMilestone] || "unknown";
 
-    // Cerca la spedizione in Firestore per tracking number
-    const shipmentsRef = db.collection("shipments");
-    const snapshot = await shipmentsRef
-      .where("trackingNumber", "==", trackingNumber)
-      .limit(1)
-      .get();
+      // Converti eventi Ship24 → tracking history
+      const trackingHistory = events.map((e) => ({
+        status: e.status || "Unknown",
+        statusCode: e.statusCode || null,
+        timestamp: e.occurrenceDatetime || null,
+        location: e.location || null,
+        description: e.status || null,
+        courierCode: e.courierCode || null,
+      }));
 
-    const eventData = {
-      status: parcel.status?.message || "Unknown",
-      statusId: parcel.status?.id || null,
-      timestamp: payload.timestamp || new Date().toISOString(),
-      location: parcel.to_address?.city || null,
-    };
+      // Cerca spedizione in Firestore per tracking number (in tutti gli utenti)
+      const usersSnap = await db.collection("users").get();
+      for (const userDoc of usersSnap.docs) {
+        const shipmentsRef = userDoc.ref.collection("shipments");
+        const snapshot = await shipmentsRef
+          .where("trackingCode", "==", trackingNumber)
+          .limit(1)
+          .get();
 
-    const updateData = {
-      status: appStatus,
-      sendcloudStatus: parcel.status?.message || "Unknown",
-      sendcloudStatusId: parcel.status?.id || null,
-      carrier: parcel.carrier?.code || null,
-      trackingUrl: parcel.tracking_url || null,
-      lastUpdate: FieldValue.serverTimestamp(),
-      lastEvent: eventData,
-    };
-
-    if (!snapshot.empty) {
-      const doc = snapshot.docs[0];
-      const trackingHistory = doc.data().trackingHistory || [];
-      trackingHistory.push(eventData);
-      updateData.trackingHistory = trackingHistory;
-
-      await doc.ref.update(updateData);
-      console.log(`Updated shipment ${doc.id} for tracking ${trackingNumber}`);
-    } else {
-      updateData.trackingNumber = trackingNumber;
-      updateData.trackingHistory = [eventData];
-      updateData.createdAt = FieldValue.serverTimestamp();
-      
-      const newDoc = await shipmentsRef.add(updateData);
-      console.log(`Created new shipment ${newDoc.id} for tracking ${trackingNumber}`);
+        if (!snapshot.empty) {
+          const doc = snapshot.docs[0];
+          await doc.ref.update({
+            status: appStatus,
+            ship24Status: shipment.statusMilestone || "unknown",
+            ship24StatusCode: shipment.statusCode || null,
+            lastUpdate: FieldValue.serverTimestamp(),
+            lastEvent: events.length > 0 ? events[0].status : null,
+            trackingHistory: trackingHistory,
+            carrier: events.length > 0 ? events[0].courierCode : null,
+          });
+          console.log(`Updated shipment ${doc.id} for tracking ${trackingNumber}`);
+        }
+      }
     }
 
     return res.status(200).json({ status: "ok" });
@@ -117,75 +98,58 @@ exports.sendcloudWebhook = onRequest({ region: "europe-west1" }, async (req, res
 });
 
 // ═══════════════════════════════════════════════════════
-//  CORS helper
-// ═══════════════════════════════════════════════════════
-function setCors(res) {
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
-
-// ═══════════════════════════════════════════════════════
-//  registerTracking — register a parcel on Sendcloud
+//  registerTracking — register a tracker on Ship24
 // ═══════════════════════════════════════════════════════
 exports.registerTracking = onRequest(
-  { region: "europe-west1", secrets: [SENDCLOUD_PUBLIC_KEY, SENDCLOUD_SECRET_KEY] },
+  { region: "europe-west1", secrets: [SHIP24_API_KEY] },
   async (req, res) => {
     setCors(res);
     if (req.method === "OPTIONS") return res.status(204).send("");
-
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
+    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
     try {
-      const { trackingNumber, carrier } = req.body;
+      const { trackingNumber, courierCode } = req.body;
 
       if (!trackingNumber) {
         return res.status(400).json({ error: "trackingNumber is required" });
       }
 
-      const pubKey = SENDCLOUD_PUBLIC_KEY.value();
-      const secKey = SENDCLOUD_SECRET_KEY.value();
-      const auth = Buffer.from(`${pubKey}:${secKey}`).toString("base64");
+      const apiKey = SHIP24_API_KEY.value();
 
-      // Create parcel on Sendcloud
-      const parcelData = {
-        parcel: {
-          name: "Vault Shipment",
-          tracking_number: trackingNumber,
-          carrier: carrier || undefined,
-          request_label: false,
-        },
+      const body = {
+        trackingNumber: trackingNumber,
       };
+      if (courierCode) {
+        body.courierCode = [courierCode];
+      }
 
-      const response = await fetch(`${SENDCLOUD_API_BASE}/parcels`, {
+      const response = await fetch(`${SHIP24_API_BASE}/trackers`, {
         method: "POST",
         headers: {
-          "Authorization": `Basic ${auth}`,
+          "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(parcelData),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        console.error("Sendcloud API error:", JSON.stringify(data));
+        console.error("Ship24 API error:", JSON.stringify(data));
         return res.status(response.status).json({
-          error: "Sendcloud API error",
+          error: "Ship24 API error",
           details: data,
         });
       }
 
-      const parcel = data.parcel || {};
+      const tracker = data.data?.tracker || {};
 
       return res.status(200).json({
         success: true,
-        sendcloudId: parcel.id || null,
-        status: parcel.status?.message || null,
-        trackingUrl: parcel.tracking_url || null,
-        carrier: parcel.carrier?.code || null,
+        trackerId: tracker.trackerId || null,
+        trackingNumber: tracker.trackingNumber || trackingNumber,
+        isTracked: tracker.isTracked || false,
+        courierCode: tracker.courierCode || [],
       });
     } catch (error) {
       console.error("registerTracking error:", error);
@@ -195,139 +159,121 @@ exports.registerTracking = onRequest(
 );
 
 // ═══════════════════════════════════════════════════════
-//  getTrackingStatus — get parcel status from Sendcloud
+//  getTrackingStatus — get tracking results from Ship24
 // ═══════════════════════════════════════════════════════
 exports.getTrackingStatus = onRequest(
-  { region: "europe-west1", secrets: [SENDCLOUD_PUBLIC_KEY, SENDCLOUD_SECRET_KEY] },
+  { region: "europe-west1", secrets: [SHIP24_API_KEY] },
   async (req, res) => {
     setCors(res);
     if (req.method === "OPTIONS") return res.status(204).send("");
-
-    if (req.method !== "POST" && req.method !== "GET") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
+    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
     try {
-      const trackingNumber = req.body?.trackingNumber || req.query?.trackingNumber;
-      const sendcloudId = req.body?.sendcloudId || req.query?.sendcloudId;
+      const trackingNumber = req.body?.trackingNumber;
+      const trackerId = req.body?.trackerId;
 
-      if (!trackingNumber && !sendcloudId) {
-        return res.status(400).json({ error: "trackingNumber or sendcloudId is required" });
+      if (!trackingNumber && !trackerId) {
+        return res.status(400).json({ error: "trackingNumber or trackerId is required" });
       }
 
-      const pubKey = SENDCLOUD_PUBLIC_KEY.value();
-      const secKey = SENDCLOUD_SECRET_KEY.value();
-      const auth = Buffer.from(`${pubKey}:${secKey}`).toString("base64");
+      const apiKey = SHIP24_API_KEY.value();
+      let trackings = [];
 
-      let parcel = null;
+      if (trackerId) {
+        // Fetch by tracker ID
+        const response = await fetch(`${SHIP24_API_BASE}/trackers/${trackerId}/results`, {
+          headers: { "Authorization": `Bearer ${apiKey}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          trackings = data.data?.trackings || [];
+        }
+      }
 
-      // If we have a sendcloudId, fetch directly
-      if (sendcloudId) {
-        const response = await fetch(`${SENDCLOUD_API_BASE}/parcels/${sendcloudId}`, {
-          headers: { "Authorization": `Basic ${auth}` },
+      // If no results or no trackerId, search by tracking number
+      if (trackings.length === 0 && trackingNumber) {
+        const response = await fetch(`${SHIP24_API_BASE}/trackers/search`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ trackingNumber }),
         });
 
         if (response.ok) {
           const data = await response.json();
-          parcel = data.parcel || null;
+          trackings = data.data?.trackings || [];
+        } else {
+          // Se non trovato, registra automaticamente e riprova
+          const regResponse = await fetch(`${SHIP24_API_BASE}/trackers`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ trackingNumber }),
+          });
+
+          if (regResponse.ok) {
+            const regData = await regResponse.json();
+            const newTrackerId = regData.data?.tracker?.trackerId;
+            if (newTrackerId) {
+              // Aspetta un attimo e riprova
+              await new Promise((r) => setTimeout(r, 2000));
+              const retryResponse = await fetch(`${SHIP24_API_BASE}/trackers/${newTrackerId}/results`, {
+                headers: { "Authorization": `Bearer ${apiKey}` },
+              });
+              if (retryResponse.ok) {
+                const retryData = await retryResponse.json();
+                trackings = retryData.data?.trackings || [];
+              }
+            }
+          }
         }
       }
 
-      // If no parcel yet, search by tracking number
-      if (!parcel && trackingNumber) {
-        const response = await fetch(
-          `${SENDCLOUD_API_BASE}/parcels?tracking_number=${encodeURIComponent(trackingNumber)}`,
-          { headers: { "Authorization": `Basic ${auth}` } }
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          const parcels = data.parcels || [];
-          parcel = parcels.find((p) => p.tracking_number === trackingNumber) || parcels[0] || null;
-        }
+      if (trackings.length === 0) {
+        return res.status(200).json({
+          success: true,
+          status: "pending",
+          statusMilestone: "pending",
+          message: "Tracking registrato, in attesa di aggiornamenti dal corriere",
+          trackingHistory: [],
+        });
       }
 
-      if (!parcel) {
-        return res.status(404).json({ error: "Parcel not found on Sendcloud" });
-      }
+      const tracking = trackings[0];
+      const shipment = tracking.shipment || {};
+      const events = tracking.events || [];
+      const tracker = tracking.tracker || {};
 
-      // Build tracking history from status_history if available
-      const statusHistory = (parcel.status_history || []).map((h) => ({
-        status: h.status?.message || h.message || "Unknown",
-        statusId: h.status?.id || h.id || null,
-        timestamp: h.created || h.timestamp || null,
-        location: h.location || null,
-        description: h.description || h.status?.message || null,
+      const trackingHistory = events.map((e) => ({
+        status: e.status || "Unknown",
+        statusCode: e.statusCode || null,
+        timestamp: e.occurrenceDatetime || null,
+        location: e.location || null,
+        description: e.status || null,
+        courierCode: e.courierCode || null,
       }));
 
       return res.status(200).json({
         success: true,
-        sendcloudId: parcel.id,
-        trackingNumber: parcel.tracking_number,
-        status: parcel.status?.message || "Unknown",
-        statusId: parcel.status?.id || null,
-        trackingUrl: parcel.tracking_url || null,
-        carrier: parcel.carrier?.code || null,
-        carrierName: parcel.carrier?.name || null,
-        trackingHistory: statusHistory,
-        lastUpdate: parcel.updated_at || null,
+        trackerId: tracker.trackerId || null,
+        trackingNumber: tracker.trackingNumber || trackingNumber,
+        status: shipment.statusMilestone || "pending",
+        statusCode: shipment.statusCode || null,
+        statusCategory: shipment.statusCategory || null,
+        carrier: events.length > 0 ? events[0].courierCode : (tracker.courierCode?.[0] || null),
+        carrierName: events.length > 0 ? events[0].courierCode : null,
+        trackingUrl: `https://t.ship24.com/t/${trackingNumber}`,
+        trackingHistory: trackingHistory,
+        estimatedDelivery: shipment.delivery?.estimatedDeliveryDate || null,
+        originCountry: shipment.originCountryCode || null,
+        destinationCountry: shipment.destinationCountryCode || null,
       });
     } catch (error) {
       console.error("getTrackingStatus error:", error);
-      return res.status(500).json({ error: error.message });
-    }
-  }
-);
-
-// ═══════════════════════════════════════════════════════
-//  listSendcloudParcels — list parcels from Sendcloud
-// ═══════════════════════════════════════════════════════
-exports.listSendcloudParcels = onRequest(
-  { region: "europe-west1", secrets: [SENDCLOUD_PUBLIC_KEY, SENDCLOUD_SECRET_KEY] },
-  async (req, res) => {
-    setCors(res);
-    if (req.method === "OPTIONS") return res.status(204).send("");
-
-    try {
-      const limit = req.query?.limit || req.body?.limit || 25;
-      const cursor = req.query?.cursor || req.body?.cursor || "";
-
-      const pubKey = SENDCLOUD_PUBLIC_KEY.value();
-      const secKey = SENDCLOUD_SECRET_KEY.value();
-      const auth = Buffer.from(`${pubKey}:${secKey}`).toString("base64");
-
-      let url = `${SENDCLOUD_API_BASE}/parcels?limit=${limit}`;
-      if (cursor) url += `&cursor=${cursor}`;
-
-      const response = await fetch(url, {
-        headers: { "Authorization": `Basic ${auth}` },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        return res.status(response.status).json({ error: "Sendcloud API error", details: errorData });
-      }
-
-      const data = await response.json();
-      const parcels = (data.parcels || []).map((p) => ({
-        sendcloudId: p.id,
-        trackingNumber: p.tracking_number,
-        status: p.status?.message || "Unknown",
-        statusId: p.status?.id || null,
-        trackingUrl: p.tracking_url || null,
-        carrier: p.carrier?.code || null,
-        carrierName: p.carrier?.name || null,
-        createdAt: p.created_at || null,
-      }));
-
-      return res.status(200).json({
-        success: true,
-        parcels: parcels,
-        next: data.next || null,
-        previous: data.previous || null,
-      });
-    } catch (error) {
-      console.error("listSendcloudParcels error:", error);
       return res.status(500).json({ error: error.message });
     }
   }

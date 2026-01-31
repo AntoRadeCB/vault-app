@@ -151,20 +151,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
       if (trackingCode.isNotEmpty) {
         final carrier = _detectedCarrier ?? Shipment.detectCarrier(trackingCode);
 
-        // Auto-register on Sendcloud
-        int? sendcloudId;
-        String? sendcloudTrackingUrl;
-        String? sendcloudStatus;
+        // Auto-register on Ship24
+        String? trackerId;
         try {
-          final scResult = await _sendcloudService.registerTracking(
+          final result = await _sendcloudService.registerTracking(
             trackingCode,
             carrier: carrier.id != 'generic' ? carrier.id : null,
           );
-          sendcloudId = scResult['sendcloudId'];
-          sendcloudTrackingUrl = scResult['trackingUrl'];
-          sendcloudStatus = scResult['status'];
+          trackerId = result['trackerId'];
         } catch (_) {
-          // Sendcloud registration failed — continue without it
+          // Ship24 registration failed — continue without it
         }
 
         final shipment = Shipment(
@@ -176,9 +172,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
           productId: productRef.id,
           status: ShipmentStatus.pending,
           createdAt: DateTime.now(),
-          sendcloudId: sendcloudId,
-          sendcloudTrackingUrl: sendcloudTrackingUrl,
-          sendcloudStatus: sendcloudStatus,
+          sendcloudId: null,
+          sendcloudTrackingUrl: trackerId != null ? 'https://t.ship24.com/t/$trackingCode' : null,
+          sendcloudStatus: null,
         );
         await _firestoreService.addShipment(shipment);
       }

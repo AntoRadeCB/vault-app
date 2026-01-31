@@ -66,7 +66,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
       if (_shipment.id != null) {
         await _fs.updateShipmentSendcloud(
           _shipment.id!,
-          sendcloudId: result.sendcloudId,
+          sendcloudId: null,
           sendcloudStatus: result.status,
           sendcloudTrackingUrl: result.trackingUrl,
           appStatus: appStatusStr,
@@ -78,7 +78,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
       // Update local state
       setState(() {
         _shipment = _shipment.copyWith(
-          sendcloudId: result.sendcloudId,
+          sendcloudId: null,
           sendcloudStatus: result.status,
           sendcloudTrackingUrl: result.trackingUrl,
           status: result.appStatus,
