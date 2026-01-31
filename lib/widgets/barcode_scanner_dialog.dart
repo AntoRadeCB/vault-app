@@ -26,16 +26,51 @@ class BarcodeScannerDialog extends StatefulWidget {
 }
 
 class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
-  final MobileScannerController _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.normal,
-    facing: CameraFacing.back,
-  );
+  MobileScannerController? _controller;
   bool _scanned = false;
   String? _lastCode;
+  String? _error;
+  bool _torchOn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCamera();
+  }
+
+  Future<void> _startCamera() async {
+    try {
+      _controller = MobileScannerController(
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+        torchEnabled: false,
+      );
+
+      await _controller!.start();
+
+      if (mounted && _controller!.value.error != null) {
+        setState(() {
+          _error = _controller!.value.error!.errorDetails?.message ??
+              'Errore fotocamera: ${_controller!.value.error!.errorCode}';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Impossibile avviare la fotocamera.\n\n'
+              'Assicurati di:\n'
+              '• Consentire l\'accesso alla fotocamera\n'
+              '• Usare HTTPS (non HTTP)\n'
+              '• Chiudere altre app che usano la camera\n\n'
+              'Errore: $e';
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -55,20 +90,178 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
     });
   }
 
+  Future<void> _toggleTorch() async {
+    try {
+      await _controller?.toggleTorch();
+      setState(() => _torchOn = !_torchOn);
+    } catch (_) {}
+  }
+
+  /// Fallback: manual barcode entry
+  void _showManualEntry() {
+    final textController = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Inserisci Barcode Manualmente',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: textController,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontFamily: 'monospace',
+                  letterSpacing: 2,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Es. 8001234567890',
+                  hintStyle: const TextStyle(color: AppColors.textMuted),
+                  filled: true,
+                  fillColor: AppColors.cardDark,
+                  prefixIcon: const Icon(Icons.qr_code, color: AppColors.accentTeal),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.accentTeal, width: 1.5),
+                  ),
+                ),
+                onSubmitted: (value) {
+                  if (value.trim().isNotEmpty) {
+                    Navigator.pop(ctx);
+                    Navigator.of(context).pop(value.trim());
+                  }
+                },
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Annulla',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        final v = textController.text.trim();
+                        if (v.isNotEmpty) {
+                          Navigator.pop(ctx);
+                          Navigator.of(context).pop(v);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [AppColors.accentTeal, Color(0xFF00897B)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Conferma',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Camera feed
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-          ),
+          // Camera feed or error
+          if (_error != null)
+            _buildErrorView()
+          else if (_controller != null)
+            MobileScanner(
+              controller: _controller!,
+              onDetect: _onDetect,
+              errorBuilder: (context, error) {
+                return _buildErrorView(
+                  message: error.errorDetails?.message ?? error.errorCode.toString(),
+                );
+              },
+            )
+          else
+            const Center(
+              child: CircularProgressIndicator(color: AppColors.accentTeal),
+            ),
 
-          // Dark overlay with cutout
-          _ScanOverlay(scanned: _scanned),
+          // Dark overlay with cutout (only if camera is working)
+          if (_error == null) _ScanOverlay(scanned: _scanned),
 
           // Top bar
           Positioned(
@@ -96,8 +289,8 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                       ),
                     ),
                     _circleButton(
-                      icon: Icons.flash_on,
-                      onTap: () => _controller.toggleTorch(),
+                      icon: _torchOn ? Icons.flash_off : Icons.flash_on,
+                      onTap: _toggleTorch,
                     ),
                   ],
                 ),
@@ -105,47 +298,87 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
             ),
           ),
 
-          // Bottom info
+          // Bottom bar
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: SafeArea(
-              child: Container(
-                margin: const EdgeInsets.all(24),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                decoration: BoxDecoration(
-                  color: _scanned
-                      ? AppColors.accentGreen.withValues(alpha: 0.9)
-                      : AppColors.surface.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _scanned
-                        ? AppColors.accentGreen.withValues(alpha: 0.5)
-                        : Colors.white.withValues(alpha: 0.1),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      _scanned ? Icons.check_circle : Icons.qr_code_scanner,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 12),
-                    Flexible(
-                      child: Text(
-                        _scanned
-                            ? 'Codice: $_lastCode'
-                            : 'Inquadra il codice a barre del prodotto',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                    // Status card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: _scanned
+                            ? AppColors.accentGreen.withValues(alpha: 0.9)
+                            : AppColors.surface.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _scanned
+                              ? AppColors.accentGreen.withValues(alpha: 0.5)
+                              : Colors.white.withValues(alpha: 0.1),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _scanned ? Icons.check_circle : Icons.qr_code_scanner,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text(
+                              _scanned
+                                  ? 'Codice: $_lastCode'
+                                  : 'Inquadra il codice a barre',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Manual entry button
+                    GestureDetector(
+                      onTap: _showManualEntry,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.keyboard, color: Colors.white70, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Inserisci manualmente',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -154,6 +387,79 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildErrorView({String? message}) {
+    final msg = message ?? _error ?? 'Errore sconosciuto';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.accentRed.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.videocam_off,
+                color: AppColors.accentRed,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Fotocamera non disponibile',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              msg,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: _showManualEntry,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.accentTeal, Color(0xFF00897B)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.keyboard, color: Colors.white, size: 20),
+                    SizedBox(width: 10),
+                    Text(
+                      'Inserisci Manualmente',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -210,7 +516,7 @@ class _ScanOverlay extends StatelessWidget {
                       width: scanSize,
                       height: scanSize,
                       decoration: BoxDecoration(
-                        color: Colors.red, // any color, will be cut out
+                        color: Colors.red,
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
