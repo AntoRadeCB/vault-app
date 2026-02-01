@@ -3,6 +3,7 @@ import '../theme/app_theme.dart';
 import '../models/product.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
+import '../l10n/app_localizations.dart';
 
 class InventoryScreen extends StatefulWidget {
   final void Function(Product product)? onEditProduct;
@@ -36,22 +37,23 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   void _confirmDelete(Product product) {
+    final l = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Elimina Prodotto',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(l.deleteProduct,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
-          'Sei sicuro di voler eliminare "${product.name}"?',
+          l.confirmDeleteProduct(product.name),
           style: const TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annulla',
-                style: TextStyle(color: AppColors.textMuted)),
+            child: Text(l.cancel,
+                style: const TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
             onPressed: () {
@@ -60,7 +62,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                 _firestoreService.deleteProduct(product.id!);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('${product.name} eliminato'),
+                    content: Text(l.productDeleted(product.name)),
                     backgroundColor: AppColors.accentRed,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
@@ -70,8 +72,8 @@ class _InventoryScreenState extends State<InventoryScreen>
                 );
               }
             },
-            child: const Text('Elimina',
-                style: TextStyle(
+            child: Text(l.delete,
+                style: const TextStyle(
                     color: AppColors.accentRed, fontWeight: FontWeight.bold)),
           ),
         ],
@@ -81,6 +83,7 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return StreamBuilder<List<Product>>(
       stream: _firestoreService.getProducts(),
       builder: (context, snapshot) {
@@ -100,9 +103,9 @@ class _InventoryScreenState extends State<InventoryScreen>
                 index: 0,
                 child: Row(
                   children: [
-                    const Text(
-                      'Inventario',
-                      style: TextStyle(
+                    Text(
+                      l.inventory,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 26,
                         fontWeight: FontWeight.bold,
@@ -121,7 +124,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                         ),
                       ),
                       child: Text(
-                        '${products.length} RECORDS',
+                        l.nRecords(products.length),
                         style: const TextStyle(
                           color: AppColors.accentBlue,
                           fontSize: 11,
@@ -165,9 +168,9 @@ class _InventoryScreenState extends State<InventoryScreen>
                     labelStyle: const TextStyle(
                         fontWeight: FontWeight.w600, fontSize: 13),
                     dividerColor: Colors.transparent,
-                    tabs: const [
-                      Tab(text: 'Storico Record'),
-                      Tab(text: 'Riepilogo Prodotti'),
+                    tabs: [
+                      Tab(text: l.historicalRecords),
+                      Tab(text: l.productSummary),
                     ],
                   ),
                 ),
@@ -205,7 +208,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                           setState(() => _searchQuery = value),
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        hintText: 'Cerca prodotto...',
+                        hintText: l.searchProduct,
                         prefixIcon: Icon(
                           Icons.search,
                           color: _searchFocused
@@ -256,6 +259,7 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   Widget _buildEmptyState() {
+    final l = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -263,18 +267,18 @@ class _InventoryScreenState extends State<InventoryScreen>
           Icon(Icons.inventory_2_outlined,
               color: AppColors.textMuted.withValues(alpha: 0.5), size: 64),
           const SizedBox(height: 16),
-          const Text(
-            'Nessun prodotto',
-            style: TextStyle(
+          Text(
+            l.noProducts,
+            style: const TextStyle(
               color: AppColors.textMuted,
               fontSize: 18,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Aggiungi il tuo primo prodotto!',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+          Text(
+            l.addYourFirstProduct,
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
           ),
         ],
       ),
@@ -323,6 +327,7 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   Widget _buildProductSummary(List<Product> products) {
+    final l = AppLocalizations.of(context)!;
     final totalValue =
         products.fold<double>(0, (sum, p) => sum + (p.price * p.quantity));
     final shipped =
@@ -338,25 +343,25 @@ class _InventoryScreenState extends State<InventoryScreen>
       children: [
         StaggeredFadeSlide(
           index: 0,
-          child: _buildSummaryCard('Valore Totale Inventario',
+          child: _buildSummaryCard(l.totalInventoryValue,
               '€${totalValue.toStringAsFixed(2)}', Icons.euro, AppColors.accentBlue),
         ),
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 1,
-          child: _buildSummaryCard('Prodotti Spediti', '$shipped',
+          child: _buildSummaryCard(l.shippedProducts, '$shipped',
               Icons.local_shipping, AppColors.accentOrange),
         ),
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 2,
-          child: _buildSummaryCard('In Inventario', '$inStock',
+          child: _buildSummaryCard(l.inInventory, '$inStock',
               Icons.inventory_2, AppColors.accentTeal),
         ),
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 3,
-          child: _buildSummaryCard('In Vendita', '$listed', Icons.storefront,
+          child: _buildSummaryCard(l.onSale, '$listed', Icons.storefront,
               AppColors.accentGreen),
         ),
       ],

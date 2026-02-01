@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/auth_service.dart';
+import '../l10n/app_localizations.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -152,10 +153,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               Colors.white.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Text(
-                            'Annulla',
-                            style: TextStyle(
+                            AppLocalizations.of(context)!.cancel,
+                            style: const TextStyle(
                               color: AppColors.textSecondary,
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
@@ -173,7 +174,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onSave(controller.text);
                         }
                         Navigator.pop(ctx);
-                        _showSuccessSnackbar('$title aggiornato!');
+                        _showSuccessSnackbar(AppLocalizations.of(context)!.fieldUpdated(title));
                       },
                       child: Container(
                         padding:
@@ -190,10 +191,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ],
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Text(
-                            'Salva',
-                            style: TextStyle(
+                            AppLocalizations.of(context)!.save,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
@@ -366,10 +367,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   gradient: AppColors.blueButtonGradient,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'Chiudi',
-                    style: TextStyle(
+                    AppLocalizations.of(context)!.close,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -441,29 +442,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Esporta Dati',
-              style: TextStyle(
+            Text(
+              AppLocalizations.of(context)!.exportData,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Scegli il formato di esportazione',
-              style: TextStyle(
+            Text(
+              AppLocalizations.of(context)!.chooseExportFormat,
+              style: const TextStyle(
                   color: AppColors.textMuted, fontSize: 14),
             ),
             const SizedBox(height: 20),
             _exportOption(ctx, Icons.table_chart, 'CSV',
-                'Tutti i record in formato CSV', Colors.green),
+                AppLocalizations.of(context)!.allRecordsCsv, Colors.green),
             const SizedBox(height: 10),
             _exportOption(ctx, Icons.picture_as_pdf, 'PDF',
-                'Report formattato per stampa', Colors.red),
+                AppLocalizations.of(context)!.formattedReport, Colors.red),
             const SizedBox(height: 10),
             _exportOption(ctx, Icons.code, 'JSON',
-                'Dati grezzi in formato JSON', Colors.orange),
+                AppLocalizations.of(context)!.rawDataJson, Colors.orange),
             const SizedBox(height: 16),
           ],
         ),
@@ -476,7 +477,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ScaleOnPress(
       onTap: () {
         Navigator.pop(ctx);
-        _showSuccessSnackbar('Esportazione $title avviata!');
+        _showSuccessSnackbar(AppLocalizations.of(context)!.exportStarted(title));
       },
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -529,26 +530,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20)),
-        title: const Text('Logout',
-            style: TextStyle(
+        title: Text(AppLocalizations.of(context)!.logout,
+            style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text(
-          'Sei sicuro di voler uscire dal tuo account?',
-          style: TextStyle(color: AppColors.textSecondary),
+        content: Text(
+          AppLocalizations.of(context)!.confirmLogout,
+          style: const TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annulla',
-                style: TextStyle(color: AppColors.textMuted)),
+            child: Text(AppLocalizations.of(context)!.cancel,
+                style: const TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
               await _authService.signOut();
             },
-            child: const Text('Esci',
-                style: TextStyle(
+            child: Text(AppLocalizations.of(context)!.exit,
+                style: const TextStyle(
                     color: AppColors.accentRed,
                     fontWeight: FontWeight.bold)),
           ),
@@ -567,9 +568,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           StaggeredFadeSlide(
             index: 0,
-            child: const Text(
-              'Settings',
-              style: TextStyle(
+            child: Text(
+              AppLocalizations.of(context)!.settings,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
@@ -650,8 +651,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   .withValues(alpha: 0.25),
                             ),
                           ),
-                          child: const Text(
-                            'PRO PLAN',
+                          child: Text(
+                            AppLocalizations.of(context)!.proPlan,
                             style: TextStyle(
                               color: AppColors.accentBlue,
                               fontSize: 10,
@@ -665,7 +666,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   ScaleOnPress(
                     onTap: () => _showEditDialog(
-                      title: 'Nome Utente',
+                      title: AppLocalizations.of(context)!.userName,
                       currentValue: _userName,
                       onSave: (v) async {
                         await _authService.updateDisplayName(v);
@@ -698,12 +699,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           StaggeredFadeSlide(
             index: 2,
             child: _buildSection(
-              title: 'Account',
+              title: AppLocalizations.of(context)!.account,
               icon: Icons.person_outline,
               children: [
                 _buildSettingsRow(
                   icon: Icons.email_outlined,
-                  title: 'Email',
+                  title: AppLocalizations.of(context)!.email,
                   subtitle: _userEmail,
                   onTap: () => _showEditDialog(
                     title: 'Email',
@@ -712,9 +713,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       try {
                         await _authService.updateEmail(v);
                         _showSuccessSnackbar(
-                            'Verifica inviata alla nuova email');
+                            AppLocalizations.of(context)!.verificationSent);
                       } catch (e) {
-                        _showSuccessSnackbar('Errore: $e');
+                        _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
                       }
                     },
                   ),
@@ -722,27 +723,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _buildSettingsRow(
                   icon: Icons.lock_outline,
-                  title: 'Password',
-                  subtitle: 'Reset via email',
+                  title: AppLocalizations.of(context)!.password,
+                  subtitle: AppLocalizations.of(context)!.resetViaEmail,
                   onTap: () async {
                     try {
                       await _authService
                           .resetPassword(_userEmail);
                       _showSuccessSnackbar(
-                          'Email di reset inviata a $_userEmail');
+                          AppLocalizations.of(context)!.resetEmailSent(_userEmail));
                     } catch (e) {
-                      _showSuccessSnackbar('Errore: $e');
+                      _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
                     }
                   },
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
                   icon: Icons.security,
-                  title: '2FA Authentication',
-                  subtitle: 'Non disponibile',
+                  title: AppLocalizations.of(context)!.twoFactorAuth,
+                  subtitle: AppLocalizations.of(context)!.notAvailable,
                   onTap: () => _showInfoSheet(
-                    'Autenticazione a 2 Fattori',
-                    'La 2FA sarà disponibile in un prossimo aggiornamento.\n\nPer ora, assicurati di usare una password sicura.',
+                    AppLocalizations.of(context)!.twoFactorTitle,
+                    AppLocalizations.of(context)!.twoFactorDescription,
                   ),
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(
@@ -771,15 +772,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           StaggeredFadeSlide(
             index: 3,
             child: _buildSection(
-              title: 'Workspace',
+              title: AppLocalizations.of(context)!.workspace,
               icon: Icons.workspaces_outline,
               children: [
                 _buildSettingsRow(
                   icon: Icons.store,
-                  title: 'Workspace Attivo',
+                  title: AppLocalizations.of(context)!.workspaceActive,
                   subtitle: _workspace,
                   onTap: () => _showSelectDialog(
-                    title: 'Seleziona Workspace',
+                    title: AppLocalizations.of(context)!.selectWorkspace,
                     options: [
                       'Reselling Vinted 2025',
                       'Reselling eBay',
@@ -794,15 +795,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _buildSettingsRow(
                   icon: Icons.cloud_upload_outlined,
-                  title: 'Auto Backup',
-                  subtitle: 'Sincronizza dati su cloud',
+                  title: AppLocalizations.of(context)!.autoBackup,
+                  subtitle: AppLocalizations.of(context)!.syncDataCloud,
                   trailing: _buildSwitch(_autoBackup,
                       (v) => setState(() => _autoBackup = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.download_outlined,
-                  title: 'Esporta Tutti i Dati',
-                  subtitle: 'CSV, PDF, JSON',
+                  title: AppLocalizations.of(context)!.exportAllData,
+                  subtitle: AppLocalizations.of(context)!.csvPdfJson,
                   onTap: _showExportDialog,
                   trailing: _buildChevron(),
                 ),
@@ -815,20 +816,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           StaggeredFadeSlide(
             index: 4,
             child: _buildSection(
-              title: 'Notifiche',
+              title: AppLocalizations.of(context)!.notifications,
               icon: Icons.notifications_outlined,
               children: [
                 _buildSettingsRow(
                   icon: Icons.notifications_active_outlined,
-                  title: 'Notifiche In-App',
-                  subtitle: 'Avvisi vendite e spedizioni',
+                  title: AppLocalizations.of(context)!.notificationsInApp,
+                  subtitle: AppLocalizations.of(context)!.salesShipmentAlerts,
                   trailing: _buildSwitch(_notifications,
                       (v) => setState(() => _notifications = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.phone_android,
-                  title: 'Push Notifications',
-                  subtitle: 'Ricevi su mobile',
+                  title: AppLocalizations.of(context)!.pushNotifications,
+                  subtitle: AppLocalizations.of(context)!.receiveOnMobile,
                   trailing: _buildSwitch(
                       _pushNotifications,
                       (v) => setState(
@@ -836,8 +837,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _buildSettingsRow(
                   icon: Icons.mail_outline,
-                  title: 'Email Digest',
-                  subtitle: 'Report settimanale',
+                  title: AppLocalizations.of(context)!.emailDigest,
+                  subtitle: AppLocalizations.of(context)!.weeklyReport,
                   trailing: _buildSwitch(_emailDigest,
                       (v) => setState(() => _emailDigest = v)),
                 ),
@@ -850,27 +851,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
           StaggeredFadeSlide(
             index: 5,
             child: _buildSection(
-              title: 'Aspetto',
+              title: AppLocalizations.of(context)!.appearance,
               icon: Icons.palette_outlined,
               children: [
                 _buildSettingsRow(
                   icon: Icons.dark_mode_outlined,
-                  title: 'Dark Mode',
-                  subtitle: 'Usa tema scuro',
+                  title: AppLocalizations.of(context)!.darkMode,
+                  subtitle: AppLocalizations.of(context)!.useDarkTheme,
                   trailing: _buildSwitch(_darkMode,
                       (v) => setState(() => _darkMode = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.text_fields,
-                  title: 'Dimensione Font',
+                  title: AppLocalizations.of(context)!.fontSize,
                   subtitle: _fontSize,
                   onTap: () => _showSelectDialog(
-                    title: 'Dimensione Font',
+                    title: AppLocalizations.of(context)!.fontSize,
                     options: [
-                      'Small',
-                      'Medium',
-                      'Large',
-                      'Extra Large'
+                      AppLocalizations.of(context)!.small,
+                      AppLocalizations.of(context)!.medium,
+                      AppLocalizations.of(context)!.large,
+                      AppLocalizations.of(context)!.extraLarge,
                     ],
                     currentValue: _fontSize,
                     onSelect: (v) =>
@@ -880,20 +881,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _buildSettingsRow(
                   icon: Icons.color_lens_outlined,
-                  title: 'Colore Accento',
+                  title: AppLocalizations.of(context)!.accentColor,
                   subtitle: [
-                    'Blu-Viola',
-                    'Verde',
-                    'Arancione'
+                    AppLocalizations.of(context)!.blueViolet,
+                    AppLocalizations.of(context)!.green,
+                    AppLocalizations.of(context)!.orange,
                   ][_accentIndex],
                   onTap: () {
                     final colors = [
-                      'Blu-Viola',
-                      'Verde',
-                      'Arancione'
+                      AppLocalizations.of(context)!.blueViolet,
+                      AppLocalizations.of(context)!.green,
+                      AppLocalizations.of(context)!.orange,
                     ];
                     _showSelectDialog(
-                      title: 'Colore Accento',
+                      title: AppLocalizations.of(context)!.accentColor,
                       options: colors,
                       currentValue: colors[_accentIndex],
                       onSelect: (v) => setState(
@@ -920,39 +921,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
           StaggeredFadeSlide(
             index: 6,
             child: _buildSection(
-              title: 'Info',
+              title: AppLocalizations.of(context)!.info,
               icon: Icons.info_outline,
               children: [
                 _buildSettingsRow(
                   icon: Icons.code,
-                  title: 'Versione',
+                  title: AppLocalizations.of(context)!.version,
                   subtitle: 'Vault v1.0.0',
                 ),
                 _buildSettingsRow(
                   icon: Icons.description_outlined,
-                  title: 'Termini di Servizio',
+                  title: AppLocalizations.of(context)!.termsOfService,
                   onTap: () => _showInfoSheet(
-                    'Termini di Servizio',
-                    'Vault Reselling Tracker — Termini di Servizio\n\nUtilizzando questa app accetti i seguenti termini:\n\n1. L\'app è fornita "così com\'è" senza garanzie.\n2. I dati inseriti sono di tua responsabilità.\n3. Non siamo responsabili per perdite derivanti dall\'uso dell\'app.\n4. I dati sono archiviati su Firebase Cloud.\n5. Puoi esportare e cancellare i tuoi dati in qualsiasi momento.\n\nUltimo aggiornamento: Gennaio 2025',
+                    AppLocalizations.of(context)!.termsOfService,
+                    AppLocalizations.of(context)!.termsContent,
                   ),
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
                   icon: Icons.privacy_tip_outlined,
-                  title: 'Privacy Policy',
+                  title: AppLocalizations.of(context)!.privacyPolicy,
                   onTap: () => _showInfoSheet(
-                    'Privacy Policy',
-                    'La tua privacy è importante per noi.\n\n• I dati sono salvati in modo sicuro su Firebase\n• L\'autenticazione è gestita da Firebase Auth\n• Non condividiamo informazioni con terzi\n• Puoi richiedere la cancellazione dei dati in qualsiasi momento\n\nPer domande: privacy@vault-app.com',
+                    AppLocalizations.of(context)!.privacyPolicy,
+                    AppLocalizations.of(context)!.privacyContent,
                   ),
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
                   icon: Icons.bug_report_outlined,
-                  title: 'Segnala un Bug',
+                  title: AppLocalizations.of(context)!.reportBug,
                   onTap: () => _showEditDialog(
-                    title: 'Segnala un Bug',
+                    title: AppLocalizations.of(context)!.reportBug,
                     currentValue: '',
-                    hint: 'Descrivi il problema...',
+                    hint: AppLocalizations.of(context)!.describeProblem,
                     onSave: (_) {},
                   ),
                   trailing: _buildChevron(),

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../widgets/animated_widgets.dart';
+import '../l10n/app_localizations.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -70,32 +71,34 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   String _firebaseErrorMessage(FirebaseAuthException e) {
+    final l = AppLocalizations.of(context)!;
     switch (e.code) {
       case 'user-not-found':
-        return 'Nessun utente trovato con questa email.';
+        return l.userNotFound;
       case 'wrong-password':
-        return 'Password errata.';
+        return l.wrongPassword;
       case 'invalid-email':
-        return 'Email non valida.';
+        return l.invalidEmail;
       case 'user-disabled':
-        return 'Account disabilitato.';
+        return l.accountDisabled;
       case 'email-already-in-use':
-        return 'Email già registrata.';
+        return l.emailAlreadyInUse;
       case 'weak-password':
-        return 'Password troppo debole (minimo 6 caratteri).';
+        return l.weakPassword;
       case 'invalid-credential':
-        return 'Credenziali non valide.';
+        return l.invalidCredential;
       default:
-        return e.message ?? 'Errore sconosciuto.';
+        return e.message ?? l.unknownError;
     }
   }
 
   Future<void> _handleLogin() async {
+    final l = AppLocalizations.of(context)!;
     final email = _loginEmailController.text.trim();
     final password = _loginPasswordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      _showError('Inserisci email e password.');
+      _showError(l.enterEmailAndPassword);
       return;
     }
 
@@ -113,20 +116,21 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Future<void> _handleRegister() async {
+    final l = AppLocalizations.of(context)!;
     final email = _registerEmailController.text.trim();
     final password = _registerPasswordController.text.trim();
     final confirm = _registerConfirmController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      _showError('Inserisci email e password.');
+      _showError(l.enterEmailAndPassword);
       return;
     }
     if (password != confirm) {
-      _showError('Le password non corrispondono.');
+      _showError(l.passwordsDoNotMatch);
       return;
     }
     if (password.length < 6) {
-      _showError('La password deve avere almeno 6 caratteri.');
+      _showError(l.passwordMinLength);
       return;
     }
 
@@ -144,6 +148,7 @@ class _AuthScreenState extends State<AuthScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
@@ -231,9 +236,9 @@ class _AuthScreenState extends State<AuthScreen>
                       labelStyle: const TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 14),
                       dividerColor: Colors.transparent,
-                      tabs: const [
-                        Tab(text: 'Accedi'),
-                        Tab(text: 'Registrati'),
+                      tabs: [
+                        Tab(text: l.login),
+                        Tab(text: l.register),
                       ],
                     ),
                   ),
@@ -264,18 +269,19 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Widget _buildLoginForm() {
+    final l = AppLocalizations.of(context)!;
     return Column(
       children: [
         _buildTextField(
           controller: _loginEmailController,
-          hint: 'Email',
+          hint: l.email,
           icon: Icons.email_outlined,
           keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 16),
         _buildTextField(
           controller: _loginPasswordController,
-          hint: 'Password',
+          hint: l.password,
           icon: Icons.lock_outline,
           obscure: _obscureLogin,
           toggleObscure: () =>
@@ -283,7 +289,7 @@ class _AuthScreenState extends State<AuthScreen>
         ),
         const SizedBox(height: 28),
         _buildSubmitButton(
-          label: 'Accedi',
+          label: l.login,
           loading: _loginLoading,
           onTap: _handleLogin,
         ),
@@ -292,18 +298,19 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Widget _buildRegisterForm() {
+    final l = AppLocalizations.of(context)!;
     return Column(
       children: [
         _buildTextField(
           controller: _registerEmailController,
-          hint: 'Email',
+          hint: l.email,
           icon: Icons.email_outlined,
           keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 16),
         _buildTextField(
           controller: _registerPasswordController,
-          hint: 'Password',
+          hint: l.password,
           icon: Icons.lock_outline,
           obscure: _obscureRegister,
           toggleObscure: () =>
@@ -312,7 +319,7 @@ class _AuthScreenState extends State<AuthScreen>
         const SizedBox(height: 16),
         _buildTextField(
           controller: _registerConfirmController,
-          hint: 'Conferma Password',
+          hint: l.confirmPassword,
           icon: Icons.lock_outline,
           obscure: _obscureConfirm,
           toggleObscure: () =>
@@ -320,7 +327,7 @@ class _AuthScreenState extends State<AuthScreen>
         ),
         const SizedBox(height: 28),
         _buildSubmitButton(
-          label: 'Crea Account',
+          label: l.createAccount,
           loading: _registerLoading,
           onTap: _handleRegister,
         ),

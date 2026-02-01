@@ -5,6 +5,7 @@ import '../services/firestore_service.dart';
 import '../models/product.dart';
 import '../models/sale.dart';
 import '../models/purchase.dart';
+import '../l10n/app_localizations.dart';
 
 class DashboardScreen extends StatelessWidget {
   final VoidCallback? onNewPurchase;
@@ -22,26 +23,27 @@ class DashboardScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            StaggeredFadeSlide(index: 0, child: _buildHeader()),
+            StaggeredFadeSlide(index: 0, child: _buildHeader(context)),
             const SizedBox(height: 24),
-            _buildMainStatCards(),
+            _buildMainStatCards(context),
             const SizedBox(height: 16),
-            _buildQuickStats(),
+            _buildQuickStats(context),
             const SizedBox(height: 24),
             StaggeredFadeSlide(index: 7, child: _buildActionButtons(context)),
             const SizedBox(height: 24),
-            StaggeredFadeSlide(index: 8, child: _buildRecentSales()),
+            StaggeredFadeSlide(index: 8, child: _buildRecentSales(context)),
             const SizedBox(height: 24),
-            StaggeredFadeSlide(index: 9, child: _buildRecentPurchases()),
+            StaggeredFadeSlide(index: 9, child: _buildRecentPurchases(context)),
             const SizedBox(height: 24),
-            StaggeredFadeSlide(index: 10, child: _buildOperationalStatus()),
+            StaggeredFadeSlide(index: 10, child: _buildOperationalStatus(context)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return GlassCard(
       padding: const EdgeInsets.all(20),
       glowColor: AppColors.accentPurple,
@@ -51,9 +53,9 @@ class DashboardScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Reselling Vinted 2025',
-                  style: TextStyle(
+                Text(
+                  l.resellingVinted2025,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -65,9 +67,9 @@ class DashboardScreen extends StatelessWidget {
                   children: [
                     const PulsingDot(color: AppColors.accentGreen, size: 8),
                     const SizedBox(width: 8),
-                    const Text(
-                      'ONLINE',
-                      style: TextStyle(
+                    Text(
+                      l.online,
+                      style: const TextStyle(
                         color: AppColors.accentGreen,
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -99,7 +101,7 @@ class DashboardScreen extends StatelessWidget {
                     const Icon(Icons.inventory_2, color: AppColors.accentBlue, size: 14),
                     const SizedBox(width: 6),
                     Text(
-                      '$count items',
+                      l.nItems(count),
                       style: const TextStyle(
                         color: AppColors.accentBlue,
                         fontSize: 12,
@@ -120,7 +122,8 @@ class DashboardScreen extends StatelessWidget {
   //  MAIN 4 STAT CARDS — all from Firestore real-time
   // ════════════════════════════════════════════════════
 
-  Widget _buildMainStatCards() {
+  Widget _buildMainStatCards(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return StreamBuilder<List<Product>>(
       stream: _firestoreService.getProducts(),
       builder: (context, productSnap) {
@@ -141,13 +144,13 @@ class DashboardScreen extends StatelessWidget {
             final profitto = profitSnap.data ?? 0;
 
             final cards = [
-              _StatData('Capitale Immobilizzato', capitaleImmobilizzato, '€',
+              _StatData(l.capitaleImmobilizzato, capitaleImmobilizzato, '€',
                   Icons.lock_outline, AppColors.accentBlue),
-              _StatData('Ordini in Arrivo', ordiniInArrivo, '€',
+              _StatData(l.ordiniInArrivo, ordiniInArrivo, '€',
                   Icons.local_shipping_outlined, AppColors.accentTeal),
-              _StatData('Capitale Spedito', capitaleSpedito, '€',
+              _StatData(l.capitaleSpedito, capitaleSpedito, '€',
                   Icons.send_outlined, AppColors.accentOrange),
-              _StatData('Profitto Consolidato', profitto, '€',
+              _StatData(l.profittoConsolidato, profitto, '€',
                   Icons.trending_up, AppColors.accentGreen),
             ];
 
@@ -217,7 +220,8 @@ class DashboardScreen extends StatelessWidget {
   //  QUICK STATS ROW — acquisti, vendite, ROI
   // ════════════════════════════════════════════════════
 
-  Widget _buildQuickStats() {
+  Widget _buildQuickStats(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return StaggeredFadeSlide(
       index: 5,
       child: Row(
@@ -227,7 +231,7 @@ class DashboardScreen extends StatelessWidget {
               stream: _firestoreService.getTotalSpent(),
               builder: (context, snap) {
                 return _QuickStatChip(
-                  label: 'Totale Speso',
+                  label: l.totalSpent,
                   value: '€${(snap.data ?? 0).toStringAsFixed(0)}',
                   icon: Icons.shopping_cart_outlined,
                   color: AppColors.accentRed,
@@ -241,7 +245,7 @@ class DashboardScreen extends StatelessWidget {
               stream: _firestoreService.getTotalRevenue(),
               builder: (context, snap) {
                 return _QuickStatChip(
-                  label: 'Totale Ricavi',
+                  label: l.totalRevenue,
                   value: '€${(snap.data ?? 0).toStringAsFixed(0)}',
                   icon: Icons.payments_outlined,
                   color: AppColors.accentGreen,
@@ -256,7 +260,7 @@ class DashboardScreen extends StatelessWidget {
               builder: (context, snap) {
                 final avg = snap.data ?? 0;
                 return _QuickStatChip(
-                  label: 'Media Profitto',
+                  label: l.avgProfit,
                   value: '€${avg.toStringAsFixed(1)}',
                   icon: Icons.analytics_outlined,
                   color: AppColors.accentPurple,
@@ -274,6 +278,7 @@ class DashboardScreen extends StatelessWidget {
   // ════════════════════════════════════════════════════
 
   Widget _buildActionButtons(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return Row(
       children: [
         Expanded(
@@ -284,12 +289,12 @@ class DashboardScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.add_shopping_cart, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
+                children: [
+                  const Icon(Icons.add_shopping_cart, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
                   Text(
-                    'Nuovo Acquisto',
-                    style: TextStyle(
+                    l.newPurchase,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
@@ -311,12 +316,12 @@ class DashboardScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.sell_outlined, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
+                children: [
+                  const Icon(Icons.sell_outlined, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
                   Text(
-                    'Registra Vendita',
-                    style: TextStyle(
+                    l.registerSale,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
@@ -335,7 +340,8 @@ class DashboardScreen extends StatelessWidget {
   //  RECENT SALES — live from Firestore
   // ════════════════════════════════════════════════════
 
-  Widget _buildRecentSales() {
+  Widget _buildRecentSales(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return StreamBuilder<List<Sale>>(
       stream: _firestoreService.getSales(),
       builder: (context, snapshot) {
@@ -350,9 +356,9 @@ class DashboardScreen extends StatelessWidget {
                 children: [
                   const Icon(Icons.sell, color: AppColors.accentGreen, size: 18),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Ultime Vendite',
-                    style: TextStyle(
+                  Text(
+                    l.recentSales,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
@@ -366,7 +372,7 @@ class DashboardScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${sales.length} totali',
+                      l.nTotal(sales.length),
                       style: const TextStyle(
                         color: AppColors.accentGreen,
                         fontSize: 11,
@@ -378,12 +384,12 @@ class DashboardScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               if (sales.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Center(
                     child: Text(
-                      'Nessuna vendita registrata',
-                      style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                      l.noSalesRegistered,
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
                     ),
                   ),
                 )
@@ -403,7 +409,8 @@ class DashboardScreen extends StatelessWidget {
   //  RECENT PURCHASES — live from Firestore
   // ════════════════════════════════════════════════════
 
-  Widget _buildRecentPurchases() {
+  Widget _buildRecentPurchases(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return StreamBuilder<List<Purchase>>(
       stream: _firestoreService.getPurchases(),
       builder: (context, snapshot) {
@@ -418,9 +425,9 @@ class DashboardScreen extends StatelessWidget {
                 children: [
                   const Icon(Icons.shopping_cart, color: AppColors.accentBlue, size: 18),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Ultimi Acquisti',
-                    style: TextStyle(
+                  Text(
+                    l.recentPurchases,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
@@ -434,7 +441,7 @@ class DashboardScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${purchases.length} totali',
+                      l.nTotal(purchases.length),
                       style: const TextStyle(
                         color: AppColors.accentBlue,
                         fontSize: 11,
@@ -446,12 +453,12 @@ class DashboardScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               if (purchases.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Center(
                     child: Text(
-                      'Nessun acquisto registrato',
-                      style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                      l.noPurchasesRegistered,
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
                     ),
                   ),
                 )
@@ -471,7 +478,8 @@ class DashboardScreen extends StatelessWidget {
   //  OPERATIONAL STATUS
   // ════════════════════════════════════════════════════
 
-  Widget _buildOperationalStatus() {
+  Widget _buildOperationalStatus(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return StreamBuilder<List<Product>>(
       stream: _firestoreService.getProducts(),
       builder: (context, snapshot) {
@@ -488,9 +496,9 @@ class DashboardScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Stato Operativo',
-                style: TextStyle(
+              Text(
+                l.operationalStatus,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
@@ -499,18 +507,18 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(height: 16),
               if (shippedCount > 0)
                 _buildStatusItem(
-                    '$shippedCount spedizioni in transito', AppColors.accentBlue),
+                    l.nShipmentsInTransit(shippedCount), AppColors.accentBlue),
               if (shippedCount > 0) const SizedBox(height: 12),
               if (listedCount > 0)
                 _buildStatusItem(
-                    '$listedCount prodotti in vendita', AppColors.accentOrange),
+                    l.nProductsOnSale(listedCount), AppColors.accentOrange),
               if (listedCount > 0) const SizedBox(height: 12),
               if (lowStock.isNotEmpty)
                 _buildStatusItem(
-                    'Stock basso: ${lowStock.first.name}', AppColors.accentOrange),
+                    l.lowStockProduct(lowStock.first.name), AppColors.accentOrange),
               if (lowStock.isNotEmpty) const SizedBox(height: 12),
               if (shippedCount == 0 && listedCount == 0 && lowStock.isEmpty)
-                _buildStatusItem('Nessun avviso attivo', AppColors.accentGreen),
+                _buildStatusItem(l.noActiveAlerts, AppColors.accentGreen),
             ],
           ),
         );

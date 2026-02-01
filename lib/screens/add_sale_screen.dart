@@ -8,6 +8,7 @@ import '../models/sale.dart';
 import '../models/shipment.dart';
 import '../services/firestore_service.dart';
 import '../services/tracking_service.dart';
+import '../l10n/app_localizations.dart';
 
 class AddSaleScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -48,7 +49,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_selectedProduct == null) {
-      _showError('Seleziona un prodotto da vendere.');
+      _showError(AppLocalizations.of(context)!.selectProductToSell);
       return;
     }
 
@@ -126,7 +127,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Vendita registrata! Profitto: €${_profit.toStringAsFixed(2)}',
+                  AppLocalizations.of(context)!.saleRegistered(_profit.toStringAsFixed(2)),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -168,7 +169,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Trovato: ${product.name}',
+                    AppLocalizations.of(context)!.found(product.name),
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -181,7 +182,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
           ),
         );
       } else {
-        _showError('Nessun prodotto trovato con barcode: $code');
+        _showError(AppLocalizations.of(context)!.noProductFoundBarcode(code));
       }
     } catch (e) {
       if (mounted) _showError('Errore scansione: $e');
@@ -212,6 +213,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(24),
@@ -240,9 +242,9 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  const Text(
-                    'Registra Vendita',
-                    style: TextStyle(
+                  Text(
+                    l.registerSale,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -258,7 +260,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
             StaggeredFadeSlide(
               index: 1,
               child: _buildField(
-                label: 'Prodotto',
+                label: l.product,
                 child: Column(
                   children: [
                     // Scan barcode button
@@ -291,8 +293,8 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                               const Icon(Icons.qr_code_scanner,
                                   color: AppColors.accentTeal, size: 20),
                             const SizedBox(width: 10),
-                            const Text(
-                              'Scansiona Barcode Prodotto',
+                            Text(
+                              l.scanBarcodeProduct,
                               style: TextStyle(
                                 color: AppColors.accentTeal,
                                 fontWeight: FontWeight.w600,
@@ -319,13 +321,13 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                             color: AppColors.accentOrange.withValues(alpha: 0.3),
                           ),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.warning_amber, color: AppColors.accentOrange, size: 20),
-                            SizedBox(width: 10),
+                            const Icon(Icons.warning_amber, color: AppColors.accentOrange, size: 20),
+                            const SizedBox(width: 10),
                             Text(
-                              'Nessun prodotto in inventario',
-                              style: TextStyle(color: AppColors.accentOrange, fontSize: 14),
+                              l.noProductsInInventory,
+                              style: const TextStyle(color: AppColors.accentOrange, fontSize: 14),
                             ),
                           ],
                         ),
@@ -347,8 +349,8 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                         child: DropdownButton<String>(
                           value: _selectedProduct?.id,
                           isExpanded: true,
-                          hint: const Text(
-                            'Seleziona prodotto...',
+                          hint: Text(
+                            l.selectProduct,
                             style: TextStyle(color: AppColors.textMuted),
                           ),
                           dropdownColor: AppColors.surface,
@@ -434,9 +436,9 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text(
-                            'COSTO',
-                            style: TextStyle(
+                          Text(
+                            l.costUpperCase,
+                            style: const TextStyle(
                               color: AppColors.textMuted,
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -465,7 +467,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
             StaggeredFadeSlide(
               index: 3,
               child: _buildField(
-                label: 'Prezzo di Vendita (€)',
+                label: l.salePrice,
                 child: _GlowTextField(
                   controller: _salePriceController,
                   hintText: '0.00',
@@ -473,8 +475,8 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                   prefixText: '€ ',
                   onChanged: (_) => setState(() {}),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Inserisci il prezzo di vendita';
-                    if (double.tryParse(v) == null) return 'Prezzo non valido';
+                    if (v == null || v.isEmpty) return l.enterSalePrice;
+                    if (double.tryParse(v) == null) return l.invalidPrice;
                     return null;
                   },
                 ),
@@ -486,7 +488,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
             StaggeredFadeSlide(
               index: 4,
               child: _buildField(
-                label: 'Commissioni / Spedizione (€)',
+                label: l.feesShipping,
                 child: _GlowTextField(
                   controller: _feesController,
                   hintText: '0.00',
@@ -495,7 +497,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                   onChanged: (_) => setState(() {}),
                   validator: (v) {
                     if (v != null && v.isNotEmpty && double.tryParse(v) == null) {
-                      return 'Valore non valido';
+                      return l.invalidValue;
                     }
                     return null;
                   },
@@ -520,22 +522,22 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                       child: const Icon(Icons.remove_shopping_cart, color: AppColors.accentOrange, size: 18),
                     ),
                     const SizedBox(width: 14),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Rimuovi da inventario',
-                            style: TextStyle(
+                            l.removeFromInventory,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          SizedBox(height: 2),
+                          const SizedBox(height: 2),
                           Text(
-                            'Scala 1 unità dal prodotto',
-                            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                            l.scaleOneUnit,
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                           ),
                         ],
                       ),
@@ -563,9 +565,9 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                   glowColor: _profit >= 0 ? AppColors.accentGreen : AppColors.accentRed,
                   child: Column(
                     children: [
-                      const Text(
-                        'RIEPILOGO VENDITA',
-                        style: TextStyle(
+                      Text(
+                        l.saleSummary,
+                        style: const TextStyle(
                           color: AppColors.textMuted,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -573,12 +575,12 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _buildSummaryRow('Prezzo vendita', '+€${_salePrice.toStringAsFixed(2)}', AppColors.accentGreen),
+                      _buildSummaryRow(l.salePriceLabel, '+€${_salePrice.toStringAsFixed(2)}', AppColors.accentGreen),
                       const SizedBox(height: 8),
-                      _buildSummaryRow('Costo acquisto', '-€${_purchasePrice.toStringAsFixed(2)}', AppColors.accentRed),
+                      _buildSummaryRow(l.purchaseCost, '-€${_purchasePrice.toStringAsFixed(2)}', AppColors.accentRed),
                       if (_fees > 0) ...[
                         const SizedBox(height: 8),
-                        _buildSummaryRow('Commissioni', '-€${_fees.toStringAsFixed(2)}', AppColors.accentOrange),
+                        _buildSummaryRow(l.fees, '-€${_fees.toStringAsFixed(2)}', AppColors.accentOrange),
                       ],
                       const SizedBox(height: 12),
                       Divider(color: Colors.white.withValues(alpha: 0.08)),
@@ -586,9 +588,9 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'PROFITTO',
-                            style: TextStyle(
+                          Text(
+                            l.profit,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -651,9 +653,9 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
                       else ...[
                         const Icon(Icons.sell, color: Colors.white, size: 22),
                         const SizedBox(width: 10),
-                        const Text(
-                          'Conferma Vendita',
-                          style: TextStyle(
+                        Text(
+                          l.confirmSale,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 17,
                             fontWeight: FontWeight.bold,

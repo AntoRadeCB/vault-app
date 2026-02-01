@@ -6,6 +6,7 @@ import '../widgets/animated_widgets.dart';
 import '../models/shipment.dart';
 import '../services/firestore_service.dart';
 import '../services/tracking_service.dart';
+import '../l10n/app_localizations.dart';
 
 class TrackingDetailScreen extends StatefulWidget {
   final Shipment shipment;
@@ -96,7 +97,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Aggiornato: ${result.status}',
+                  AppLocalizations.of(context)!.statusUpdated(result.status),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -124,7 +125,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Errore: $e'),
+          content: Text(AppLocalizations.of(context)!.error('$e')),
           backgroundColor: AppColors.accentRed,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -157,7 +158,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Stato aggiornato: ${_statusLabel(newStatus)}'),
+        content: Text(AppLocalizations.of(context)!.statusUpdated(_statusLabel(newStatus))),
         backgroundColor: AppColors.accentGreen,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -168,17 +169,18 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
   }
 
   String _statusLabel(ShipmentStatus s) {
+    final l = AppLocalizations.of(context)!;
     switch (s) {
       case ShipmentStatus.pending:
-        return 'In attesa';
+        return l.pending;
       case ShipmentStatus.inTransit:
-        return 'In transito';
+        return l.inTransit;
       case ShipmentStatus.delivered:
-        return 'Consegnato';
+        return l.deliveredStatus;
       case ShipmentStatus.exception:
-        return 'Problema';
+        return l.problem;
       case ShipmentStatus.unknown:
-        return 'Sconosciuto';
+        return l.unknown;
     }
   }
 
@@ -245,10 +247,10 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
                   ),
                 ),
                 const SizedBox(width: 14),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Tracciamento',
-                    style: TextStyle(
+                    AppLocalizations.of(context)!.tracking,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -315,16 +317,19 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
                       ],
                     ),
                   ),
-                  itemBuilder: (_) => [
-                    _menuItem(ShipmentStatus.pending, 'In attesa',
-                        Icons.schedule, AppColors.accentOrange),
-                    _menuItem(ShipmentStatus.inTransit, 'In transito',
-                        Icons.local_shipping, AppColors.accentBlue),
-                    _menuItem(ShipmentStatus.delivered, 'Consegnato',
-                        Icons.check_circle, AppColors.accentGreen),
-                    _menuItem(ShipmentStatus.exception, 'Problema',
-                        Icons.warning, AppColors.accentRed),
-                  ],
+                  itemBuilder: (_) {
+                    final l = AppLocalizations.of(context)!;
+                    return [
+                      _menuItem(ShipmentStatus.pending, l.pending,
+                          Icons.schedule, AppColors.accentOrange),
+                      _menuItem(ShipmentStatus.inTransit, l.inTransit,
+                          Icons.local_shipping, AppColors.accentBlue),
+                      _menuItem(ShipmentStatus.delivered, l.deliveredStatus,
+                          Icons.check_circle, AppColors.accentGreen),
+                      _menuItem(ShipmentStatus.exception, l.problem,
+                          Icons.warning, AppColors.accentRed),
+                    ];
+                  },
                 ),
               ],
             ),
@@ -448,7 +453,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
                                 ClipboardData(text: s.trackingCode));
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: const Text('Codice copiato!'),
+                                content: Text(AppLocalizations.of(context)!.codeCopied),
                                 backgroundColor: AppColors.accentTeal,
                                 behavior: SnackBarBehavior.floating,
                                 shape: RoundedRectangleBorder(
@@ -486,7 +491,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
                               color: AppColors.accentTeal, size: 16),
                           const SizedBox(width: 8),
                           Text(
-                            'Apri su ${s.carrierName}',
+                            AppLocalizations.of(context)!.openOn(s.carrierName),
                             style: const TextStyle(
                               color: AppColors.accentTeal,
                               fontWeight: FontWeight.w600,
@@ -532,18 +537,18 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
                   color: AppColors.textMuted.withValues(alpha: 0.5),
                   size: 56),
               const SizedBox(height: 16),
-              const Text(
-                'Nessun evento di tracking',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context)!.noTrackingEvents,
+                style: const TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Premi il bottone 🔄 per aggiornare\nlo stato da Ship24',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context)!.pressRefreshToUpdate,
+                style: const TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 13,
                 ),
@@ -575,9 +580,9 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
                         const Icon(Icons.refresh,
                             color: Colors.white, size: 18),
                       const SizedBox(width: 8),
-                      const Text(
-                        'Aggiorna da Ship24',
-                        style: TextStyle(
+                      Text(
+                        AppLocalizations.of(context)!.refreshFromShip24,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -612,9 +617,9 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
             children: [
               const Icon(Icons.timeline, color: AppColors.accentBlue, size: 18),
               const SizedBox(width: 8),
-              const Text(
-                'CRONOLOGIA TRACKING',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context)!.trackingTimeline,
+                style: const TextStyle(
                   color: AppColors.accentBlue,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -623,7 +628,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
               ),
               const Spacer(),
               Text(
-                '${sortedHistory.length} eventi',
+                AppLocalizations.of(context)!.nEvents(sortedHistory.length),
                 style: const TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 12,
@@ -818,7 +823,7 @@ class _TimelineEventTile extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          _formatTimestamp(event.timestamp!),
+                          _formatTimestamp(event.timestamp!, AppLocalizations.of(context)!),
                           style: TextStyle(
                             color: AppColors.textMuted.withValues(alpha: 0.7),
                             fontSize: 12,
@@ -858,7 +863,7 @@ class _TimelineEventTile extends StatelessWidget {
     );
   }
 
-  String _formatTimestamp(DateTime ts) {
+  String _formatTimestamp(DateTime ts, AppLocalizations l) {
     final now = DateTime.now();
     final diff = now.difference(ts);
 
@@ -866,9 +871,9 @@ class _TimelineEventTile extends StatelessWidget {
         '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}';
 
     if (diff.inDays == 0) {
-      return 'Oggi, $time';
+      return '${l.today}, $time';
     } else if (diff.inDays == 1) {
-      return 'Ieri, $time';
+      return '${l.yesterday}, $time';
     } else {
       return '${ts.day}/${ts.month}/${ts.year} $time';
     }

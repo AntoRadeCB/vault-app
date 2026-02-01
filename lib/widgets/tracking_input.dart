@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/shipment.dart';
+import '../l10n/app_localizations.dart';
 
 /// Optional tracking code input with carrier auto-detection.
 /// Returns tracking code and detected carrier via controllers.
@@ -63,7 +64,7 @@ class _TrackingInputState extends State<TrackingInput> {
                   color: AppColors.textMuted.withValues(alpha: 0.7), size: 18),
               const SizedBox(width: 8),
               Text(
-                '+ Aggiungi Tracking (facoltativo)',
+                AppLocalizations.of(context)!.addTracking,
                 style: TextStyle(
                   color: AppColors.textMuted.withValues(alpha: 0.7),
                   fontSize: 13,
@@ -83,9 +84,9 @@ class _TrackingInputState extends State<TrackingInput> {
           children: [
             const Icon(Icons.local_shipping_outlined, color: AppColors.accentTeal, size: 16),
             const SizedBox(width: 6),
-            const Text(
-              'TRACKING SPEDIZIONE',
-              style: TextStyle(
+            Text(
+              AppLocalizations.of(context)!.trackingShipment,
+              style: const TextStyle(
                 color: AppColors.accentTeal,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -102,9 +103,9 @@ class _TrackingInputState extends State<TrackingInput> {
                 });
                 widget.onCarrierDetected?.call(null);
               },
-              child: const Text(
-                'Rimuovi',
-                style: TextStyle(
+              child: Text(
+                AppLocalizations.of(context)!.remove,
+                style: const TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
@@ -138,7 +139,7 @@ class _TrackingInputState extends State<TrackingInput> {
                 letterSpacing: 1.5,
               ),
               decoration: InputDecoration(
-                hintText: 'Es. RR123456789IT',
+                hintText: AppLocalizations.of(context)!.trackingHint,
                 hintStyle: const TextStyle(color: AppColors.textMuted),
                 filled: true,
                 fillColor: AppColors.surface,
@@ -186,7 +187,7 @@ class _TrackingInputState extends State<TrackingInput> {
               const Icon(Icons.check_circle, color: AppColors.accentGreen, size: 14),
               const SizedBox(width: 6),
               Text(
-                'Corriere rilevato: ${_carrier!.name}',
+                AppLocalizations.of(context)!.carrierDetected(_carrier!.name),
                 style: const TextStyle(
                   color: AppColors.accentGreen,
                   fontSize: 12,

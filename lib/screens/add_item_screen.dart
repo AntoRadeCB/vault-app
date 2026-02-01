@@ -8,6 +8,7 @@ import '../models/purchase.dart';
 import '../models/shipment.dart';
 import '../services/firestore_service.dart';
 import '../services/tracking_service.dart';
+import '../l10n/app_localizations.dart';
 
 class AddItemScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -65,6 +66,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         _brandController.text = existing.brand;
         _priceController.text = existing.price.toString();
 
+        final l = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -73,7 +75,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Prodotto trovato: ${existing.name}',
+                    l.productFound(existing.name),
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -86,6 +88,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           ),
         );
       } else {
+        final l = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -94,7 +97,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Barcode: $code — compila i dati del prodotto',
+                    l.barcodeScanned(code),
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -195,8 +198,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     const Icon(Icons.check, color: Colors.white, size: 16),
               ),
               const SizedBox(width: 12),
-              const Text(
-                'Acquisto registrato con successo!',
+              Text(
+                AppLocalizations.of(context)!.purchaseRegistered,
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ],
@@ -229,6 +232,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(24),
@@ -260,9 +264,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  const Text(
-                    'Nuovo Acquisto',
-                    style: TextStyle(
+                  Text(
+                    l.newPurchase,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -276,12 +280,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
             StaggeredFadeSlide(
               index: 1,
               child: _buildField(
-                label: 'Nome Oggetto',
+                label: l.itemName,
                 child: _GlowTextField(
                   controller: _nameController,
-                  hintText: 'Es. Nike Air Max 90',
+                  hintText: l.itemNameHint,
                   validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Campo obbligatorio' : null,
+                      (v == null || v.isEmpty) ? l.requiredField : null,
                   suffixIcon: ScaleOnPress(
                     onTap: _barcodeLoading ? null : _scanBarcode,
                     child: Container(
@@ -340,8 +344,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'BARCODE',
+                            Text(
+                              l.barcode,
                               style: TextStyle(
                                 color: AppColors.textMuted,
                                 fontSize: 10,
@@ -377,12 +381,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
             StaggeredFadeSlide(
               index: 3,
               child: _buildField(
-                label: 'Brand',
+                label: l.brand,
                 child: _GlowTextField(
                   controller: _brandController,
-                  hintText: 'Es. Nike, Adidas, Stone Island',
+                  hintText: l.brandHint,
                   validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Campo obbligatorio' : null,
+                      (v == null || v.isEmpty) ? l.requiredField : null,
                 ),
               ),
             ),
@@ -390,15 +394,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
             StaggeredFadeSlide(
               index: 3,
               child: _buildField(
-                label: 'Prezzo Acquisto (€)',
+                label: l.purchasePrice,
                 child: _GlowTextField(
                   controller: _priceController,
                   hintText: '0.00',
                   keyboardType: TextInputType.number,
                   prefixText: '€ ',
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Inserisci un prezzo';
-                    if (double.tryParse(v) == null) return 'Prezzo non valido';
+                    if (v == null || v.isEmpty) return l.enterPrice;
+                    if (double.tryParse(v) == null) return l.invalidPrice;
                     return null;
                   },
                 ),
@@ -408,17 +412,17 @@ class _AddItemScreenState extends State<AddItemScreen> {
             StaggeredFadeSlide(
               index: 4,
               child: _buildField(
-                label: 'Quantità',
+                label: l.quantity,
                 child: _GlowTextField(
                   controller: _quantityController,
                   hintText: '1',
                   keyboardType: TextInputType.number,
                   validator: (v) {
                     if (v == null || v.isEmpty) {
-                      return 'Inserisci una quantità';
+                      return l.enterQuantity;
                     }
                     if (double.tryParse(v) == null) {
-                      return 'Quantità non valida';
+                      return l.invalidQuantity;
                     }
                     return null;
                   },
@@ -429,7 +433,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
             StaggeredFadeSlide(
               index: 5,
               child: _buildField(
-                label: 'Stato',
+                label: l.status,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
@@ -448,16 +452,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
                           color: Colors.white, fontSize: 16),
                       icon: const Icon(Icons.keyboard_arrow_down,
                           color: AppColors.textMuted),
-                      items: const [
+                      items: [
                         DropdownMenuItem(
                             value: 'inInventory',
-                            child: Text('In Inventario')),
+                            child: Text(l.inInventory)),
                         DropdownMenuItem(
                             value: 'shipped',
-                            child: Text('Spedito')),
+                            child: Text(l.shipped)),
                         DropdownMenuItem(
                             value: 'listed',
-                            child: Text('In Vendita')),
+                            child: Text(l.onSale)),
                       ],
                       onChanged: (value) {
                         if (value != null) {
@@ -473,7 +477,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
             StaggeredFadeSlide(
               index: 6,
               child: _buildField(
-                label: 'Workspace',
+                label: l.workspace,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
@@ -544,9 +548,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         const Icon(Icons.check_circle_outline,
                             color: Colors.white, size: 22),
                         const SizedBox(width: 10),
-                        const Text(
-                          'Registra Acquisto',
-                          style: TextStyle(
+                        Text(
+                          l.registerPurchase,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 17,
                             fontWeight: FontWeight.bold,

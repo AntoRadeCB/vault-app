@@ -3,6 +3,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../models/product.dart';
 import '../services/firestore_service.dart';
+import '../l10n/app_localizations.dart';
 
 class EditProductScreen extends StatefulWidget {
   final Product product;
@@ -102,8 +103,8 @@ class _EditProductScreenState extends State<EditProductScreen> {
                 child: const Icon(Icons.check, color: Colors.white, size: 16),
               ),
               const SizedBox(width: 12),
-              const Text(
-                'Prodotto aggiornato!',
+              Text(
+                AppLocalizations.of(context)!.productUpdated,
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ],
@@ -139,29 +140,30 @@ class _EditProductScreenState extends State<EditProductScreen> {
       widget.onBack?.call();
       return;
     }
+    final l = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Modifiche non salvate',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text(
-          'Hai delle modifiche non salvate. Vuoi uscire senza salvare?',
-          style: TextStyle(color: AppColors.textSecondary),
+        title: Text(l.unsavedChanges,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+          l.unsavedChangesMessage,
+          style: const TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Resta', style: TextStyle(color: AppColors.accentBlue)),
+            child: Text(l.stay, style: const TextStyle(color: AppColors.accentBlue)),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               widget.onBack?.call();
             },
-            child: const Text('Esci',
-                style: TextStyle(color: AppColors.accentRed, fontWeight: FontWeight.bold)),
+            child: Text(l.exit,
+                style: const TextStyle(color: AppColors.accentRed, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -170,6 +172,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(24),
@@ -198,10 +201,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Modifica Prodotto',
-                      style: TextStyle(
+                      l.editProduct,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -219,9 +222,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
                           color: AppColors.accentOrange.withValues(alpha: 0.3),
                         ),
                       ),
-                      child: const Text(
-                        'MODIFICATO',
-                        style: TextStyle(
+                      child: Text(
+                        l.modified,
+                        style: const TextStyle(
                           color: AppColors.accentOrange,
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -238,11 +241,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
             StaggeredFadeSlide(
               index: 1,
               child: _buildField(
-                label: 'Nome Oggetto',
+                label: l.itemName,
                 child: _GlowTextField(
                   controller: _nameController,
-                  hintText: 'Es. Nike Air Max 90',
-                  validator: (v) => (v == null || v.isEmpty) ? 'Campo obbligatorio' : null,
+                  hintText: l.itemNameHint,
+                  validator: (v) => (v == null || v.isEmpty) ? l.requiredField : null,
                 ),
               ),
             ),
@@ -252,11 +255,11 @@ class _EditProductScreenState extends State<EditProductScreen> {
             StaggeredFadeSlide(
               index: 2,
               child: _buildField(
-                label: 'Brand',
+                label: l.brand,
                 child: _GlowTextField(
                   controller: _brandController,
-                  hintText: 'Es. Nike, Adidas, Stone Island',
-                  validator: (v) => (v == null || v.isEmpty) ? 'Campo obbligatorio' : null,
+                  hintText: l.brandHint,
+                  validator: (v) => (v == null || v.isEmpty) ? l.requiredField : null,
                 ),
               ),
             ),
@@ -266,15 +269,15 @@ class _EditProductScreenState extends State<EditProductScreen> {
             StaggeredFadeSlide(
               index: 3,
               child: _buildField(
-                label: 'Prezzo Acquisto (€)',
+                label: l.purchasePrice,
                 child: _GlowTextField(
                   controller: _priceController,
                   hintText: '0.00',
                   keyboardType: TextInputType.number,
                   prefixText: '€ ',
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Inserisci un prezzo';
-                    if (double.tryParse(v) == null) return 'Prezzo non valido';
+                    if (v == null || v.isEmpty) return l.enterPrice;
+                    if (double.tryParse(v) == null) return l.invalidPrice;
                     return null;
                   },
                 ),
@@ -286,14 +289,14 @@ class _EditProductScreenState extends State<EditProductScreen> {
             StaggeredFadeSlide(
               index: 4,
               child: _buildField(
-                label: 'Quantità',
+                label: l.quantity,
                 child: _GlowTextField(
                   controller: _quantityController,
                   hintText: '1',
                   keyboardType: TextInputType.number,
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Inserisci una quantità';
-                    if (double.tryParse(v) == null) return 'Quantità non valida';
+                    if (v == null || v.isEmpty) return l.enterQuantity;
+                    if (double.tryParse(v) == null) return l.invalidQuantity;
                     return null;
                   },
                 ),
@@ -305,7 +308,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
             StaggeredFadeSlide(
               index: 5,
               child: _buildField(
-                label: 'Stato',
+                label: l.status,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
@@ -322,10 +325,10 @@ class _EditProductScreenState extends State<EditProductScreen> {
                       dropdownColor: AppColors.surface,
                       style: const TextStyle(color: Colors.white, fontSize: 16),
                       icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-                      items: const [
-                        DropdownMenuItem(value: 'inInventory', child: Text('In Inventario')),
-                        DropdownMenuItem(value: 'shipped', child: Text('Spedito')),
-                        DropdownMenuItem(value: 'listed', child: Text('In Vendita')),
+                      items: [
+                        DropdownMenuItem(value: 'inInventory', child: Text(l.inInventory)),
+                        DropdownMenuItem(value: 'shipped', child: Text(l.shipped)),
+                        DropdownMenuItem(value: 'listed', child: Text(l.onSale)),
                       ],
                       onChanged: (value) {
                         if (value != null) {
@@ -366,9 +369,9 @@ class _EditProductScreenState extends State<EditProductScreen> {
                       else ...[
                         const Icon(Icons.save_outlined, color: Colors.white, size: 22),
                         const SizedBox(width: 10),
-                        const Text(
-                          'Salva Modifiche',
-                          style: TextStyle(
+                        Text(
+                          l.saveChanges,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 17,
                             fontWeight: FontWeight.bold,

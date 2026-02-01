@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'l10n/app_localizations.dart';
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_screen.dart';
@@ -36,6 +38,8 @@ class VaultApp extends StatelessWidget {
       title: 'Vault - Reselling Tracker',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: const AuthGate(),
     );
   }
@@ -294,6 +298,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildSidebar() {
+    final l = AppLocalizations.of(context)!;
     return Container(
       width: 240,
       decoration: BoxDecoration(
@@ -347,35 +352,35 @@ class _MainShellState extends State<MainShell> {
           _SidebarItem(
             icon: Icons.dashboard_outlined,
             selectedIcon: Icons.dashboard,
-            label: 'Dashboard',
+            label: l.dashboard,
             isSelected: _currentIndex == 0 && !_showAddItem,
             onTap: () => _navigateTo(0),
           ),
           _SidebarItem(
             icon: Icons.inventory_2_outlined,
             selectedIcon: Icons.inventory_2,
-            label: 'Inventory',
+            label: l.inventory,
             isSelected: _currentIndex == 1 && !_showAddItem,
             onTap: () => _navigateTo(1),
           ),
           _SidebarItem(
             icon: Icons.local_shipping_outlined,
             selectedIcon: Icons.local_shipping,
-            label: 'Spedizioni',
+            label: l.shipments,
             isSelected: _currentIndex == 2 && !_showAddItem,
             onTap: () => _navigateTo(2),
           ),
           _SidebarItem(
             icon: Icons.bar_chart_outlined,
             selectedIcon: Icons.bar_chart,
-            label: 'Reports',
+            label: l.reports,
             isSelected: _currentIndex == 3 && !_showAddItem,
             onTap: () => _navigateTo(3),
           ),
           _SidebarItem(
             icon: Icons.settings_outlined,
             selectedIcon: Icons.settings,
-            label: 'Settings',
+            label: l.settings,
             isSelected: _currentIndex == 4 && !_showAddItem,
             onTap: () => _navigateTo(4),
           ),
@@ -392,13 +397,13 @@ class _MainShellState extends State<MainShell> {
                   color: AppColors.accentGreen.withValues(alpha: 0.15),
                 ),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  PulsingDot(color: AppColors.accentGreen, size: 8),
-                  SizedBox(width: 10),
+                  const PulsingDot(color: AppColors.accentGreen, size: 8),
+                  const SizedBox(width: 10),
                   Text(
-                    'System Online',
-                    style: TextStyle(
+                    l.systemOnline,
+                    style: const TextStyle(
                       color: AppColors.accentGreen,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -415,6 +420,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildDesktopTopBar() {
+    final l = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       decoration: BoxDecoration(
@@ -463,8 +469,8 @@ class _MainShellState extends State<MainShell> {
                       child: TextField(
                         controller: _searchController,
                         style: const TextStyle(color: Colors.white, fontSize: 14),
-                        decoration: const InputDecoration(
-                          hintText: 'Search items, reports...',
+                        decoration: InputDecoration(
+                          hintText: l.searchItemsReports,
                           hintStyle: TextStyle(color: AppColors.textMuted),
                           border: InputBorder.none,
                           isDense: true,
@@ -510,13 +516,13 @@ class _MainShellState extends State<MainShell> {
                   ),
                 ],
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.add, color: Colors.white, size: 18),
-                  SizedBox(width: 6),
+                  const Icon(Icons.add, color: Colors.white, size: 18),
+                  const SizedBox(width: 6),
                   Text(
-                    'New Item',
-                    style: TextStyle(
+                    l.newItem,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
@@ -568,6 +574,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildBottomNav() {
+    final l = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.navBar,
@@ -590,12 +597,12 @@ class _MainShellState extends State<MainShell> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, 'Home', 0),
-              _buildNavItem(Icons.inventory_2_outlined, Icons.inventory_2, 'Inventario', 1),
+              _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, l.home, 0),
+              _buildNavItem(Icons.inventory_2_outlined, Icons.inventory_2, l.inventory, 1),
               const SizedBox(width: 48), // Space for FAB
-              _buildNavItem(Icons.local_shipping_outlined, Icons.local_shipping, 'Spedizioni', 2),
-              _buildNavItem(Icons.bar_chart_outlined, Icons.bar_chart, 'Reports', 3),
-              _buildNavItem(Icons.settings_outlined, Icons.settings, 'Settings', 4),
+              _buildNavItem(Icons.local_shipping_outlined, Icons.local_shipping, l.shipments, 2),
+              _buildNavItem(Icons.bar_chart_outlined, Icons.bar_chart, l.reports, 3),
+              _buildNavItem(Icons.settings_outlined, Icons.settings, l.settings, 4),
             ],
           ),
         ),

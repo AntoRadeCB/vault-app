@@ -4,6 +4,7 @@ import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
 import '../models/sale.dart';
 import '../models/purchase.dart';
+import '../l10n/app_localizations.dart';
 
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
@@ -11,6 +12,7 @@ class ReportsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fs = FirestoreService();
+    final l = AppLocalizations.of(context)!;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -22,20 +24,20 @@ class ReportsScreen extends StatelessWidget {
             index: 0,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 Text(
-                  'Reports',
-                  style: TextStyle(
+                  l.reports,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                     letterSpacing: -0.3,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Panoramica completa acquisti e vendite',
-                  style: TextStyle(
+                  l.fullOverview,
+                  style: const TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 14,
                   ),
@@ -46,31 +48,31 @@ class ReportsScreen extends StatelessWidget {
           const SizedBox(height: 24),
 
           // ── Overview: Revenue, Spent, Profit, ROI ──
-          StaggeredFadeSlide(index: 1, child: _buildOverviewSection(fs)),
+          StaggeredFadeSlide(index: 1, child: _buildOverviewSection(fs, l)),
           const SizedBox(height: 20),
 
           // ── Sales stats row ──
-          StaggeredFadeSlide(index: 2, child: _buildSalesStatsRow(fs)),
+          StaggeredFadeSlide(index: 2, child: _buildSalesStatsRow(fs, l)),
           const SizedBox(height: 20),
 
           // ── Purchase stats row ──
-          StaggeredFadeSlide(index: 3, child: _buildPurchaseStatsRow(fs)),
+          StaggeredFadeSlide(index: 3, child: _buildPurchaseStatsRow(fs, l)),
           const SizedBox(height: 20),
 
           // ── Profit breakdown ──
-          StaggeredFadeSlide(index: 4, child: _buildProfitBreakdown(fs)),
+          StaggeredFadeSlide(index: 4, child: _buildProfitBreakdown(fs, l)),
           const SizedBox(height: 24),
 
           // ── Export section ──
-          StaggeredFadeSlide(index: 5, child: _buildExportSection(context)),
+          StaggeredFadeSlide(index: 5, child: _buildExportSection(context, l)),
           const SizedBox(height: 24),
 
           // ── All sales ──
-          StaggeredFadeSlide(index: 6, child: _buildAllSales(fs)),
+          StaggeredFadeSlide(index: 6, child: _buildAllSales(fs, l)),
           const SizedBox(height: 24),
 
           // ── All purchases ──
-          StaggeredFadeSlide(index: 7, child: _buildAllPurchases(fs)),
+          StaggeredFadeSlide(index: 7, child: _buildAllPurchases(fs, l)),
           const SizedBox(height: 40),
         ],
       ),
@@ -81,11 +83,11 @@ class ReportsScreen extends StatelessWidget {
   //  OVERVIEW — 4 main financial metrics
   // ════════════════════════════════════════════════════
 
-  Widget _buildOverviewSection(FirestoreService fs) {
+  Widget _buildOverviewSection(FirestoreService fs, AppLocalizations l) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Overview Finanziaria', Icons.account_balance_outlined),
+        _sectionHeader(l.financialOverview, Icons.account_balance_outlined),
         const SizedBox(height: 12),
         // Row 1: Revenue + Spent
         Row(
@@ -95,7 +97,7 @@ class ReportsScreen extends StatelessWidget {
                 stream: fs.getTotalRevenue(),
                 builder: (context, snap) {
                   return _StatCard(
-                    title: 'Ricavi Totali',
+                    title: l.totalRevenueLabel,
                     value: snap.data ?? 0,
                     prefix: '€',
                     icon: Icons.payments_outlined,
@@ -110,7 +112,7 @@ class ReportsScreen extends StatelessWidget {
                 stream: fs.getTotalSpent(),
                 builder: (context, snap) {
                   return _StatCard(
-                    title: 'Totale Speso',
+                    title: l.totalSpentLabel,
                     value: snap.data ?? 0,
                     prefix: '€',
                     icon: Icons.shopping_cart_outlined,
@@ -131,7 +133,7 @@ class ReportsScreen extends StatelessWidget {
                 builder: (context, snap) {
                   final profit = snap.data ?? 0;
                   return _StatCard(
-                    title: 'Profitto Netto',
+                    title: l.netProfit,
                     value: profit,
                     prefix: '€',
                     icon: Icons.trending_up,
@@ -147,7 +149,7 @@ class ReportsScreen extends StatelessWidget {
                 builder: (context, snap) {
                   final roi = snap.data ?? 0;
                   return _StatCard(
-                    title: 'ROI',
+                    title: l.roi,
                     value: roi,
                     prefix: '',
                     suffix: '%',
@@ -168,11 +170,11 @@ class ReportsScreen extends StatelessWidget {
   //  SALES STATS — count, avg profit, best sale, fees
   // ════════════════════════════════════════════════════
 
-  Widget _buildSalesStatsRow(FirestoreService fs) {
+  Widget _buildSalesStatsRow(FirestoreService fs, AppLocalizations l) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Vendite', Icons.sell_outlined),
+        _sectionHeader(l.salesSection, Icons.sell_outlined),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -181,7 +183,7 @@ class ReportsScreen extends StatelessWidget {
                 stream: fs.getSalesCount(),
                 builder: (context, snap) {
                   return _MiniStat(
-                    label: 'N° Vendite',
+                    label: l.salesCount,
                     value: '${snap.data ?? 0}',
                     color: AppColors.accentGreen,
                   );
@@ -194,7 +196,7 @@ class ReportsScreen extends StatelessWidget {
                 stream: fs.getAverageProfitPerSale(),
                 builder: (context, snap) {
                   return _MiniStat(
-                    label: 'Media Profitto',
+                    label: l.avgProfitLabel,
                     value: '€${(snap.data ?? 0).toStringAsFixed(1)}',
                     color: AppColors.accentPurple,
                   );
@@ -207,7 +209,7 @@ class ReportsScreen extends StatelessWidget {
                 stream: fs.getTotalFeesPaid(),
                 builder: (context, snap) {
                   return _MiniStat(
-                    label: 'Totale Fee',
+                    label: l.totalFees,
                     value: '€${(snap.data ?? 0).toStringAsFixed(0)}',
                     color: AppColors.accentOrange,
                   );
@@ -241,8 +243,8 @@ class ReportsScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'MIGLIOR VENDITA',
+                        Text(
+                          l.bestSale,
                           style: TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 10,
@@ -285,11 +287,11 @@ class ReportsScreen extends StatelessWidget {
   //  PURCHASE STATS — count, total value, inventory
   // ════════════════════════════════════════════════════
 
-  Widget _buildPurchaseStatsRow(FirestoreService fs) {
+  Widget _buildPurchaseStatsRow(FirestoreService fs, AppLocalizations l) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Acquisti', Icons.shopping_cart_outlined),
+        _sectionHeader(l.purchasesSection, Icons.shopping_cart_outlined),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -298,7 +300,7 @@ class ReportsScreen extends StatelessWidget {
                 stream: fs.getPurchasesCount(),
                 builder: (context, snap) {
                   return _MiniStat(
-                    label: 'N° Acquisti',
+                    label: l.purchasesCount,
                     value: '${snap.data ?? 0}',
                     color: AppColors.accentBlue,
                   );
@@ -311,7 +313,7 @@ class ReportsScreen extends StatelessWidget {
                 stream: fs.getTotalInventoryValue(),
                 builder: (context, snap) {
                   return _MiniStat(
-                    label: 'Valore Inventario',
+                    label: l.inventoryValue,
                     value: '€${(snap.data ?? 0).toStringAsFixed(0)}',
                     color: AppColors.accentTeal,
                   );
@@ -324,7 +326,7 @@ class ReportsScreen extends StatelessWidget {
                 stream: fs.getTotalInventoryQuantity(),
                 builder: (context, snap) {
                   return _MiniStat(
-                    label: 'Pezzi Totali',
+                    label: l.totalPieces,
                     value: (snap.data ?? 0).toStringAsFixed(0),
                     color: AppColors.accentPurple,
                   );
@@ -341,7 +343,7 @@ class ReportsScreen extends StatelessWidget {
   //  PROFIT BREAKDOWN — fees vs net
   // ════════════════════════════════════════════════════
 
-  Widget _buildProfitBreakdown(FirestoreService fs) {
+  Widget _buildProfitBreakdown(FirestoreService fs, AppLocalizations l) {
     return StreamBuilder<List<Sale>>(
       stream: fs.getSales(),
       builder: (context, salesSnap) {
@@ -362,29 +364,29 @@ class ReportsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Breakdown Finanziario',
-                    style: TextStyle(
+                  Text(
+                    l.financialBreakdown,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _BreakdownRow(label: 'Ricavi vendite', value: totalRevenue, color: AppColors.accentGreen, prefix: '+'),
+                  _BreakdownRow(label: l.salesRevenue, value: totalRevenue, color: AppColors.accentGreen, prefix: '+'),
                   const SizedBox(height: 8),
-                  _BreakdownRow(label: 'Costi acquisto', value: totalCosts, color: AppColors.accentRed, prefix: '-'),
+                  _BreakdownRow(label: l.purchaseCosts, value: totalCosts, color: AppColors.accentRed, prefix: '-'),
                   const SizedBox(height: 8),
-                  _BreakdownRow(label: 'Commissioni pagate', value: totalFees, color: AppColors.accentOrange, prefix: '-'),
+                  _BreakdownRow(label: l.feesPaid, value: totalFees, color: AppColors.accentOrange, prefix: '-'),
                   const SizedBox(height: 12),
                   Divider(color: Colors.white.withValues(alpha: 0.08)),
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'PROFITTO NETTO',
-                        style: TextStyle(
+                      Text(
+                        l.netProfitLabel,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -433,9 +435,9 @@ class ReportsScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _legendDot('Costi', AppColors.accentRed),
-                        _legendDot('Fee', AppColors.accentOrange),
-                        _legendDot('Profitto', AppColors.accentGreen),
+                        _legendDot(l.costsLegend, AppColors.accentRed),
+                        _legendDot(l.feesLegend, AppColors.accentOrange),
+                        _legendDot(l.profitLegend, AppColors.accentGreen),
                       ],
                     ),
                   ],
@@ -466,17 +468,17 @@ class ReportsScreen extends StatelessWidget {
   //  EXPORT
   // ════════════════════════════════════════════════════
 
-  Widget _buildExportSection(BuildContext context) {
+  Widget _buildExportSection(BuildContext context, AppLocalizations l) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Esporta', Icons.download_outlined),
+        _sectionHeader(l.export, Icons.download_outlined),
         const SizedBox(height: 12),
-        _ExportCard(title: 'CSV Full History', icon: Icons.table_chart, color: AppColors.accentGreen),
+        _ExportCard(title: l.csvFullHistory, icon: Icons.table_chart, color: AppColors.accentGreen),
         const SizedBox(height: 10),
-        _ExportCard(title: 'PDF Tax Summary', icon: Icons.picture_as_pdf, color: AppColors.accentRed),
+        _ExportCard(title: l.pdfTaxSummary, icon: Icons.picture_as_pdf, color: AppColors.accentRed),
         const SizedBox(height: 10),
-        _ExportCard(title: 'Monthly Sales Log', icon: Icons.calendar_month, color: AppColors.accentBlue),
+        _ExportCard(title: l.monthlySalesLog, icon: Icons.calendar_month, color: AppColors.accentBlue),
       ],
     );
   }
@@ -485,11 +487,11 @@ class ReportsScreen extends StatelessWidget {
   //  ALL SALES
   // ════════════════════════════════════════════════════
 
-  Widget _buildAllSales(FirestoreService fs) {
+  Widget _buildAllSales(FirestoreService fs, AppLocalizations l) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Storico Vendite', Icons.sell_outlined),
+        _sectionHeader(l.salesHistory, Icons.sell_outlined),
         const SizedBox(height: 12),
         StreamBuilder<List<Sale>>(
           stream: fs.getSales(),
@@ -506,10 +508,10 @@ class ReportsScreen extends StatelessWidget {
             if (sales.isEmpty) {
               return GlassCard(
                 padding: const EdgeInsets.all(24),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'Nessuna vendita registrata',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                    l.noSalesRegistered,
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
                   ),
                 ),
               );
@@ -569,7 +571,7 @@ class ReportsScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Vendita €${sale.salePrice.toStringAsFixed(0)} · Costo €${sale.purchasePrice.toStringAsFixed(0)}${sale.fees > 0 ? ' · Fee €${sale.fees.toStringAsFixed(0)}' : ''}',
+                                  '${l.salePriceLabel} €${sale.salePrice.toStringAsFixed(0)} · ${l.purchaseCost} €${sale.purchasePrice.toStringAsFixed(0)}${sale.fees > 0 ? ' · ${l.fees} €${sale.fees.toStringAsFixed(0)}' : ''}',
                                   style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                                 ),
                               ],
@@ -613,11 +615,11 @@ class ReportsScreen extends StatelessWidget {
   //  ALL PURCHASES
   // ════════════════════════════════════════════════════
 
-  Widget _buildAllPurchases(FirestoreService fs) {
+  Widget _buildAllPurchases(FirestoreService fs, AppLocalizations l) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Storico Acquisti', Icons.shopping_cart_outlined),
+        _sectionHeader(l.purchasesHistory, Icons.shopping_cart_outlined),
         const SizedBox(height: 12),
         StreamBuilder<List<Purchase>>(
           stream: fs.getPurchases(),
@@ -634,10 +636,10 @@ class ReportsScreen extends StatelessWidget {
             if (purchases.isEmpty) {
               return GlassCard(
                 padding: const EdgeInsets.all(24),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'Nessun acquisto registrato',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                    l.noPurchasesRegistered,
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
                   ),
                 ),
               );

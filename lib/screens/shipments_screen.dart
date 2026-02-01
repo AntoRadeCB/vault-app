@@ -5,6 +5,7 @@ import '../models/shipment.dart';
 import '../services/firestore_service.dart';
 import '../services/tracking_service.dart';
 import 'package:flutter/services.dart';
+import '../l10n/app_localizations.dart';
 
 class ShipmentsScreen extends StatefulWidget {
   final void Function(Shipment shipment)? onTrackShipment;
@@ -106,7 +107,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Aggiornato: ${result.status}',
+                  AppLocalizations.of(context)!.updated(result.status),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -161,30 +162,31 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
   }
 
   void _confirmDelete(Shipment shipment) {
+    final l = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Elimina Spedizione',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(l.deleteShipment,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
-          'Eliminare la spedizione ${shipment.trackingCode}?',
+          l.confirmDeleteShipment(shipment.trackingCode),
           style: const TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annulla',
-                style: TextStyle(color: AppColors.textMuted)),
+            child: Text(l.cancel,
+                style: const TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               if (shipment.id != null) _fs.deleteShipment(shipment.id!);
             },
-            child: const Text('Elimina',
-                style: TextStyle(
+            child: Text(l.delete,
+                style: const TextStyle(
                     color: AppColors.accentRed, fontWeight: FontWeight.bold)),
           ),
         ],
@@ -194,6 +196,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -203,9 +206,9 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
             index: 0,
             child: Row(
               children: [
-                const Text(
-                  'Spedizioni',
-                  style: TextStyle(
+                Text(
+                  l.shipments,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
@@ -229,7 +232,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
                         ),
                       ),
                       child: Text(
-                        '$count ATTIVE',
+                        l.nActive(count),
                         style: const TextStyle(
                           color: AppColors.accentOrange,
                           fontSize: 11,
@@ -274,10 +277,10 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
                 labelStyle:
                     const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 dividerColor: Colors.transparent,
-                tabs: const [
-                  Tab(text: 'Tutte'),
-                  Tab(text: 'In Corso'),
-                  Tab(text: 'Consegnate'),
+                tabs: [
+                  Tab(text: l.all),
+                  Tab(text: l.inProgress),
+                  Tab(text: l.delivered),
                 ],
               ),
             ),
@@ -316,6 +319,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
   }
 
   Widget _buildList(List<Shipment> shipments) {
+    final l = AppLocalizations.of(context)!;
     if (shipments.isEmpty) {
       return Center(
         child: Column(
@@ -324,17 +328,17 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
             Icon(Icons.local_shipping_outlined,
                 color: AppColors.textMuted.withValues(alpha: 0.5), size: 64),
             const SizedBox(height: 16),
-            const Text(
-              'Nessuna spedizione',
-              style: TextStyle(
+            Text(
+              l.noShipments,
+              style: const TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 18,
                   fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Aggiungi un codice tracking quando registri\nun acquisto o una vendita',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+            Text(
+              l.addTrackingWhenRegistering,
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
               textAlign: TextAlign.center,
             ),
           ],
@@ -416,6 +420,7 @@ class _ShipmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return GlassCard(
       padding: const EdgeInsets.all(16),
       glowColor: _statusColor,
@@ -543,7 +548,7 @@ class _ShipmentCard extends StatelessWidget {
                         ClipboardData(text: shipment.trackingCode));
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: const Text('Codice copiato!'),
+                        content: Text(l.codeCopied),
                         backgroundColor: AppColors.accentTeal,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(
@@ -575,8 +580,8 @@ class _ShipmentCard extends StatelessWidget {
                         color: AppColors.accentTeal.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
-                        'SHIP24',
+                      child: Text(
+                        l.ship24,
                         style: TextStyle(
                           color: AppColors.accentTeal,
                           fontSize: 9,
@@ -587,7 +592,7 @@ class _ShipmentCard extends StatelessWidget {
                     ),
                   if (shipment.lastUpdate != null)
                     Text(
-                      'Ultimo agg: ${_formatDate(shipment.lastUpdate!)}',
+                      l.lastUpdate(_formatDate(shipment.lastUpdate!)),
                       style: const TextStyle(
                         color: AppColors.textMuted,
                         fontSize: 11,
@@ -613,15 +618,15 @@ class _ShipmentCard extends StatelessWidget {
                       ),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.open_in_new,
+                        const Icon(Icons.open_in_new,
                             color: Colors.white, size: 16),
-                        SizedBox(width: 6),
+                        const SizedBox(width: 6),
                         Text(
-                          'Traccia',
-                          style: TextStyle(
+                          l.track,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
@@ -666,13 +671,13 @@ class _ShipmentCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12)),
                 onSelected: onUpdateStatus,
                 itemBuilder: (_) => [
-                  _statusMenuItem(ShipmentStatus.pending, 'In attesa',
+                  _statusMenuItem(ShipmentStatus.pending, l.pending,
                       Icons.schedule, AppColors.accentOrange),
-                  _statusMenuItem(ShipmentStatus.inTransit, 'In transito',
+                  _statusMenuItem(ShipmentStatus.inTransit, l.inTransit,
                       Icons.local_shipping, AppColors.accentBlue),
-                  _statusMenuItem(ShipmentStatus.delivered, 'Consegnato',
+                  _statusMenuItem(ShipmentStatus.delivered, l.deliveredStatus,
                       Icons.check_circle, AppColors.accentGreen),
-                  _statusMenuItem(ShipmentStatus.exception, 'Problema',
+                  _statusMenuItem(ShipmentStatus.exception, l.problem,
                       Icons.warning, AppColors.accentRed),
                 ],
                 child: Container(
@@ -714,10 +719,10 @@ class _ShipmentCard extends StatelessWidget {
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final diff = now.difference(date);
-    if (diff.inMinutes < 1) return 'Adesso';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m fa';
-    if (diff.inHours < 24) return '${diff.inHours}h fa';
-    if (diff.inDays < 7) return '${diff.inDays}g fa';
+    if (diff.inMinutes < 1) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
     return '${date.day}/${date.month}/${date.year}';
   }
 
