@@ -72,7 +72,8 @@ class _AuthScreenState extends State<AuthScreen>
 
   String _firebaseErrorMessage(FirebaseAuthException e) {
     final l = AppLocalizations.of(context)!;
-    switch (e.code) {
+    final code = e.code.toLowerCase().replaceAll('auth/', '');
+    switch (code) {
       case 'user-not-found':
         return l.userNotFound;
       case 'wrong-password':
@@ -86,9 +87,16 @@ class _AuthScreenState extends State<AuthScreen>
       case 'weak-password':
         return l.weakPassword;
       case 'invalid-credential':
+      case 'invalid-login-credentials':
+      case 'invalid_login_credentials':
         return l.invalidCredential;
       default:
-        return e.message ?? l.unknownError;
+        // e.message on web is often just "Error" — use localized fallback
+        final msg = e.message;
+        if (msg == null || msg == 'Error' || msg.isEmpty) {
+          return l.unknownError;
+        }
+        return msg;
     }
   }
 
@@ -109,7 +117,7 @@ class _AuthScreenState extends State<AuthScreen>
     } on FirebaseAuthException catch (e) {
       _showError(_firebaseErrorMessage(e));
     } catch (e) {
-      _showError('Errore: ${e.toString()}');
+      _showError(AppLocalizations.of(context)!.error(e.toString()));
     } finally {
       if (mounted) setState(() => _loginLoading = false);
     }
@@ -140,7 +148,7 @@ class _AuthScreenState extends State<AuthScreen>
     } on FirebaseAuthException catch (e) {
       _showError(_firebaseErrorMessage(e));
     } catch (e) {
-      _showError('Errore: ${e.toString()}');
+      _showError(AppLocalizations.of(context)!.error(e.toString()));
     } finally {
       if (mounted) setState(() => _registerLoading = false);
     }
