@@ -5,7 +5,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../models/shipment.dart';
 import '../services/firestore_service.dart';
-import '../services/sendcloud_service.dart';
+import '../services/tracking_service.dart';
 
 class TrackingDetailScreen extends StatefulWidget {
   final Shipment shipment;
@@ -23,7 +23,7 @@ class TrackingDetailScreen extends StatefulWidget {
 
 class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
   final FirestoreService _fs = FirestoreService();
-  final SendcloudService _sendcloud = SendcloudService();
+  final TrackingService _tracking = TrackingService();
   bool _isRefreshing = false;
   late Shipment _shipment;
 
@@ -37,14 +37,14 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
     setState(() => _isRefreshing = true);
 
     try {
-      final result = await _sendcloud.getTrackingStatus(
+      final result = await _tracking.getTrackingStatus(
         trackingNumber: _shipment.trackingCode,
-        sendcloudId: _shipment.sendcloudId,
+        trackerId: _shipment.trackerId,
       );
 
       if (!mounted) return;
 
-      // Map Sendcloud status to app status
+      // Map Ship24 status to app status
       String appStatusStr;
       switch (result.appStatus) {
         case ShipmentStatus.pending:
@@ -64,11 +64,11 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
       }
 
       if (_shipment.id != null) {
-        await _fs.updateShipmentSendcloud(
+        await _fs.updateShipmentTracking(
           _shipment.id!,
-          sendcloudId: null,
-          sendcloudStatus: result.status,
-          sendcloudTrackingUrl: result.trackingUrl,
+          trackerId: result.trackerId,
+          trackingApiStatus: result.status,
+          externalTrackingUrl: result.trackingUrl,
           appStatus: appStatusStr,
           trackingHistory:
               result.trackingHistory.isNotEmpty ? result.trackingHistory : null,
@@ -78,9 +78,9 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
       // Update local state
       setState(() {
         _shipment = _shipment.copyWith(
-          sendcloudId: null,
-          sendcloudStatus: result.status,
-          sendcloudTrackingUrl: result.trackingUrl,
+          trackerId: result.trackerId,
+          trackingApiStatus: result.status,
+          externalTrackingUrl: result.trackingUrl,
           status: result.appStatus,
           trackingHistory:
               result.trackingHistory.isNotEmpty ? result.trackingHistory : null,
@@ -109,7 +109,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
           duration: const Duration(seconds: 2),
         ),
       );
-    } on SendcloudException catch (e) {
+    } on TrackingException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -388,7 +388,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
                                       color: AppColors.textMuted,
                                       fontSize: 13),
                                 ),
-                                if (s.sendcloudId != null) ...[
+                                if (s.trackerId != null) ...[
                                   const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
@@ -399,7 +399,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: const Text(
-                                      'SENDCLOUD',
+                                      'SHIP24',
                                       style: TextStyle(
                                         color: AppColors.accentTeal,
                                         fontSize: 9,
@@ -542,7 +542,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Premi il bottone 🔄 per aggiornare\nlo stato da Sendcloud',
+                'Premi il bottone 🔄 per aggiornare\nlo stato da Ship24',
                 style: TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 13,
@@ -576,7 +576,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
                             color: Colors.white, size: 18),
                       const SizedBox(width: 8),
                       const Text(
-                        'Aggiorna da Sendcloud',
+                        'Aggiorna da Ship24',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,

@@ -4,7 +4,7 @@ enum ShipmentType { purchase, sale }
 
 enum ShipmentStatus { pending, inTransit, delivered, exception, unknown }
 
-/// Represents a single tracking event from Sendcloud
+/// Represents a single tracking event from Ship24
 class TrackingEvent {
   final String status;
   final DateTime? timestamp;
@@ -62,11 +62,11 @@ class Shipment {
   final DateTime? lastUpdate;
   final String? lastEvent;
 
-  // Sendcloud-specific fields
-  final int? sendcloudId;
-  final String? sendcloudStatus;
+  // Ship24 tracking fields
+  final String? trackerId;
+  final String? trackingApiStatus;
   final List<TrackingEvent>? trackingHistory;
-  final String? sendcloudTrackingUrl;
+  final String? externalTrackingUrl;
 
   const Shipment({
     this.id,
@@ -80,10 +80,10 @@ class Shipment {
     required this.createdAt,
     this.lastUpdate,
     this.lastEvent,
-    this.sendcloudId,
-    this.sendcloudStatus,
+    this.trackerId,
+    this.trackingApiStatus,
     this.trackingHistory,
-    this.sendcloudTrackingUrl,
+    this.externalTrackingUrl,
   });
 
   String get statusLabel {
@@ -101,8 +101,8 @@ class Shipment {
     }
   }
 
-  /// Display status: prefer sendcloudStatus when available
-  String get displayStatus => sendcloudStatus ?? statusLabel;
+  /// Display status: prefer API status when available
+  String get displayStatus => trackingApiStatus ?? statusLabel;
 
   String get typeLabel => type == ShipmentType.purchase ? 'Acquisto' : 'Vendita';
 
@@ -164,10 +164,10 @@ class Shipment {
     return CarrierInfo('generic', 'Corriere');
   }
 
-  /// Get tracking URL — prefer Sendcloud URL when available
+  /// Get tracking URL — prefer external URL when available
   String get trackingUrl {
-    if (sendcloudTrackingUrl != null && sendcloudTrackingUrl!.isNotEmpty) {
-      return sendcloudTrackingUrl!;
+    if (externalTrackingUrl != null && externalTrackingUrl!.isNotEmpty) {
+      return externalTrackingUrl!;
     }
     return carrierTrackingUrl;
   }
@@ -234,10 +234,11 @@ class Shipment {
           : data['lastEvent'] is Map
               ? (data['lastEvent'] as Map)['status']?.toString()
               : null,
-      sendcloudId: data['sendcloudId'],
-      sendcloudStatus: data['sendcloudStatus'],
+      // Backward compat: read old sendcloud* fields if new ones don't exist
+      trackerId: data['trackerId'] ?? data['sendcloudId']?.toString(),
+      trackingApiStatus: data['trackingApiStatus'] ?? data['sendcloudStatus'],
       trackingHistory: history,
-      sendcloudTrackingUrl: data['sendcloudTrackingUrl'] ?? data['trackingUrl'],
+      externalTrackingUrl: data['externalTrackingUrl'] ?? data['sendcloudTrackingUrl'] ?? data['trackingUrl'],
     );
   }
 
@@ -253,11 +254,11 @@ class Shipment {
       'createdAt': Timestamp.fromDate(createdAt),
       'lastUpdate': lastUpdate != null ? Timestamp.fromDate(lastUpdate!) : null,
       'lastEvent': lastEvent,
-      if (sendcloudId != null) 'sendcloudId': sendcloudId,
-      if (sendcloudStatus != null) 'sendcloudStatus': sendcloudStatus,
+      if (trackerId != null) 'trackerId': trackerId,
+      if (trackingApiStatus != null) 'trackingApiStatus': trackingApiStatus,
       if (trackingHistory != null)
         'trackingHistory': trackingHistory!.map((e) => e.toMap()).toList(),
-      if (sendcloudTrackingUrl != null) 'sendcloudTrackingUrl': sendcloudTrackingUrl,
+      if (externalTrackingUrl != null) 'externalTrackingUrl': externalTrackingUrl,
     };
   }
 
@@ -307,10 +308,10 @@ class Shipment {
     DateTime? createdAt,
     DateTime? lastUpdate,
     String? lastEvent,
-    int? sendcloudId,
-    String? sendcloudStatus,
+    String? trackerId,
+    String? trackingApiStatus,
     List<TrackingEvent>? trackingHistory,
-    String? sendcloudTrackingUrl,
+    String? externalTrackingUrl,
   }) {
     return Shipment(
       id: id ?? this.id,
@@ -324,10 +325,10 @@ class Shipment {
       createdAt: createdAt ?? this.createdAt,
       lastUpdate: lastUpdate ?? this.lastUpdate,
       lastEvent: lastEvent ?? this.lastEvent,
-      sendcloudId: sendcloudId ?? this.sendcloudId,
-      sendcloudStatus: sendcloudStatus ?? this.sendcloudStatus,
+      trackerId: trackerId ?? this.trackerId,
+      trackingApiStatus: trackingApiStatus ?? this.trackingApiStatus,
       trackingHistory: trackingHistory ?? this.trackingHistory,
-      sendcloudTrackingUrl: sendcloudTrackingUrl ?? this.sendcloudTrackingUrl,
+      externalTrackingUrl: externalTrackingUrl ?? this.externalTrackingUrl,
     );
   }
 }

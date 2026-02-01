@@ -7,7 +7,7 @@ import '../models/product.dart';
 import '../models/purchase.dart';
 import '../models/shipment.dart';
 import '../services/firestore_service.dart';
-import '../services/sendcloud_service.dart';
+import '../services/tracking_service.dart';
 
 class AddItemScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -32,7 +32,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   bool _saving = false;
   bool _barcodeLoading = false;
   final FirestoreService _firestoreService = FirestoreService();
-  final SendcloudService _sendcloudService = SendcloudService();
+  final TrackingService _trackingService = TrackingService();
 
   @override
   void dispose() {
@@ -154,7 +154,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         // Auto-register on Ship24
         String? trackerId;
         try {
-          final result = await _sendcloudService.registerTracking(
+          final result = await _trackingService.registerTracking(
             trackingCode,
             carrier: carrier.id != 'generic' ? carrier.id : null,
           );
@@ -172,9 +172,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
           productId: productRef.id,
           status: ShipmentStatus.pending,
           createdAt: DateTime.now(),
-          sendcloudId: null,
-          sendcloudTrackingUrl: trackerId != null ? 'https://t.ship24.com/t/$trackingCode' : null,
-          sendcloudStatus: null,
+          trackerId: trackerId,
+          externalTrackingUrl: trackerId != null ? 'https://t.ship24.com/t/$trackingCode' : null,
+          trackingApiStatus: null,
         );
         await _firestoreService.addShipment(shipment);
       }

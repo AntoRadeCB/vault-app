@@ -16,6 +16,8 @@ import 'screens/edit_product_screen.dart';
 import 'widgets/animated_widgets.dart';
 import 'models/product.dart';
 import 'models/shipment.dart';
+import 'services/firestore_service.dart';
+import 'screens/notifications_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,16 +78,19 @@ class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
   bool _showAddItem = false;
   bool _showAddSale = false;
+  bool _showNotifications = false;
   Product? _editingProduct;
   Shipment? _trackingShipment;
   final _searchController = TextEditingController();
   bool _searchFocused = false;
+  final FirestoreService _firestoreService = FirestoreService();
 
   void _navigateTo(int index) {
     setState(() {
       _currentIndex = index;
       _showAddItem = false;
       _showAddSale = false;
+      _showNotifications = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
@@ -95,6 +100,7 @@ class _MainShellState extends State<MainShell> {
     setState(() {
       _showAddItem = true;
       _showAddSale = false;
+      _showNotifications = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
@@ -104,6 +110,7 @@ class _MainShellState extends State<MainShell> {
     setState(() {
       _showAddSale = true;
       _showAddItem = false;
+      _showNotifications = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
@@ -114,6 +121,7 @@ class _MainShellState extends State<MainShell> {
       _editingProduct = product;
       _showAddItem = false;
       _showAddSale = false;
+      _showNotifications = false;
       _trackingShipment = null;
     });
   }
@@ -123,12 +131,14 @@ class _MainShellState extends State<MainShell> {
       _trackingShipment = shipment;
       _showAddItem = false;
       _showAddSale = false;
+      _showNotifications = false;
       _editingProduct = null;
     });
   }
 
-  void _closeOverlay() {
+  void _showNotificationsScreen() {
     setState(() {
+      _showNotifications = true;
       _showAddItem = false;
       _showAddSale = false;
       _editingProduct = null;
@@ -136,7 +146,22 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
+  void _closeOverlay() {
+    setState(() {
+      _showAddItem = false;
+      _showAddSale = false;
+      _showNotifications = false;
+      _editingProduct = null;
+      _trackingShipment = null;
+    });
+  }
+
   Widget _getCurrentScreen() {
+    if (_showNotifications) {
+      return NotificationsScreen(
+        onBack: _closeOverlay,
+      );
+    }
     if (_showAddItem) {
       return AddItemScreen(
         onBack: _closeOverlay,
@@ -245,6 +270,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   String get _screenKey {
+    if (_showNotifications) return 'notifications';
     if (_showAddItem) return 'add';
     if (_showAddSale) return 'sale';
     if (_editingProduct != null) return 'edit-${_editingProduct!.id}';
@@ -501,23 +527,40 @@ class _MainShellState extends State<MainShell> {
             ),
           ),
           const SizedBox(width: 12),
-          PulsingBadge(
-            count: 3,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.06),
+          StreamBuilder<int>(
+            stream: _firestoreService.getUnreadNotificationCount(),
+            builder: (context, snap) {
+              final count = snap.data ?? 0;
+              return ScaleOnPress(
+                onTap: _showNotificationsScreen,
+                child: PulsingBadge(
+                  count: count,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: _showNotifications
+                          ? AppColors.accentBlue.withValues(alpha: 0.15)
+                          : AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _showNotifications
+                            ? AppColors.accentBlue.withValues(alpha: 0.3)
+                            : Colors.white.withValues(alpha: 0.06),
+                      ),
+                    ),
+                    child: Icon(
+                      _showNotifications
+                          ? Icons.notifications
+                          : Icons.notifications_outlined,
+                      color: _showNotifications
+                          ? AppColors.accentBlue
+                          : AppColors.textMuted,
+                      size: 20,
+                    ),
+                  ),
                 ),
-              ),
-              child: const Icon(
-                Icons.notifications_outlined,
-                color: AppColors.textMuted,
-                size: 20,
-              ),
-            ),
+              );
+            },
           ),
         ],
       ),

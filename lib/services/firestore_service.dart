@@ -4,8 +4,7 @@ import '../models/product.dart';
 import '../models/purchase.dart';
 import '../models/sale.dart';
 import '../models/shipment.dart';
-
-// FieldValue is already available from cloud_firestore
+import '../models/app_notification.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -258,26 +257,66 @@ class FirestoreService {
     return Shipment.fromFirestore(snap.docs.first);
   }
 
-  /// Update shipment with Sendcloud data
-  Future<void> updateShipmentSendcloud(
+  /// Update shipment with Ship24 tracking data
+  Future<void> updateShipmentTracking(
     String id, {
-    int? sendcloudId,
-    String? sendcloudStatus,
-    String? sendcloudTrackingUrl,
+    String? trackerId,
+    String? trackingApiStatus,
+    String? externalTrackingUrl,
     String? appStatus,
     List<TrackingEvent>? trackingHistory,
   }) {
     final Map<String, dynamic> data = {
       'lastUpdate': FieldValue.serverTimestamp(),
     };
-    if (sendcloudId != null) data['sendcloudId'] = sendcloudId;
-    if (sendcloudStatus != null) data['sendcloudStatus'] = sendcloudStatus;
-    if (sendcloudTrackingUrl != null) data['sendcloudTrackingUrl'] = sendcloudTrackingUrl;
+    if (trackerId != null) data['trackerId'] = trackerId;
+    if (trackingApiStatus != null) data['trackingApiStatus'] = trackingApiStatus;
+    if (externalTrackingUrl != null) data['externalTrackingUrl'] = externalTrackingUrl;
     if (appStatus != null) data['status'] = appStatus;
     if (trackingHistory != null) {
       data['trackingHistory'] = trackingHistory.map((e) => e.toMap()).toList();
     }
     return _userCollection('shipments').doc(id).update(data);
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  NOTIFICATIONS
+  // ═══════════════════════════════════════════════════
+
+  Future<DocumentReference> addNotification(AppNotification notification) {
+    return _userCollection('notifications').add(notification.toFirestore());
+  }
+
+  Stream<List<AppNotification>> getNotifications() {
+    return _userCollection('notifications')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => AppNotification.fromFirestore(doc)).toList());
+  }
+
+  Stream<int> getUnreadNotificationCount() {
+    return _userCollection('notifications')
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((snap) => snap.docs.length);
+  }
+
+  Future<void> markNotificationRead(String id) {
+    return _userCollection('notifications').doc(id).update({'read': true});
+  }
+
+  Future<void> deleteNotification(String id) {
+    return _userCollection('notifications').doc(id).delete();
+  }
+
+  Future<void> clearAllNotifications() async {
+    final snap = await _userCollection('notifications').get();
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    return batch.commit();
   }
 
   // ═══════════════════════════════════════════════════

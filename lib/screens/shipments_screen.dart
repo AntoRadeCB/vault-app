@@ -3,7 +3,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../models/shipment.dart';
 import '../services/firestore_service.dart';
-import '../services/sendcloud_service.dart';
+import '../services/tracking_service.dart';
 import 'package:flutter/services.dart';
 
 class ShipmentsScreen extends StatefulWidget {
@@ -19,7 +19,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final FirestoreService _fs = FirestoreService();
-  final SendcloudService _sendcloud = SendcloudService();
+  final TrackingService _tracking = TrackingService();
   final Set<String> _refreshingIds = {};
 
   @override
@@ -56,19 +56,19 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
     });
   }
 
-  Future<void> _refreshFromSendcloud(Shipment shipment) async {
+  Future<void> _refreshTracking(Shipment shipment) async {
     if (shipment.id == null) return;
     setState(() => _refreshingIds.add(shipment.id!));
 
     try {
-      final result = await _sendcloud.getTrackingStatus(
+      final result = await _tracking.getTrackingStatus(
         trackingNumber: shipment.trackingCode,
-        sendcloudId: shipment.sendcloudId,
+        trackerId: shipment.trackerId,
       );
 
       if (!mounted) return;
 
-      // Map Sendcloud status to app status
+      // Map Ship24 status to app status
       String appStatus;
       switch (result.appStatus) {
         case ShipmentStatus.pending:
@@ -87,11 +87,11 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
           appStatus = 'unknown';
       }
 
-      await _fs.updateShipmentSendcloud(
+      await _fs.updateShipmentTracking(
         shipment.id!,
-        sendcloudId: null,
-        sendcloudStatus: result.status,
-        sendcloudTrackingUrl: result.trackingUrl,
+        trackerId: result.trackerId,
+        trackingApiStatus: result.status,
+        externalTrackingUrl: result.trackingUrl,
         appStatus: appStatus,
         trackingHistory:
             result.trackingHistory.isNotEmpty ? result.trackingHistory : null,
@@ -119,7 +119,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
           duration: const Duration(seconds: 2),
         ),
       );
-    } on SendcloudException catch (e) {
+    } on TrackingException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -355,7 +355,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
               shipment: shipments[index],
               isRefreshing: _refreshingIds.contains(shipments[index].id),
               onTrack: () => _openTrackingDetail(shipments[index]),
-              onRefresh: () => _refreshFromSendcloud(shipments[index]),
+              onRefresh: () => _refreshTracking(shipments[index]),
               onUpdateStatus: (status) =>
                   _updateStatus(shipments[index], status),
               onDelete: () => _confirmDelete(shipments[index]),
@@ -484,7 +484,7 @@ class _ShipmentCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Status badge — show sendcloudStatus when available
+              // Status badge
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -561,12 +561,12 @@ class _ShipmentCard extends StatelessWidget {
           ),
 
           // Last update indicator
-          if (shipment.lastUpdate != null || shipment.sendcloudStatus != null)
+          if (shipment.lastUpdate != null || shipment.trackingApiStatus != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Row(
                 children: [
-                  if (shipment.sendcloudId != null)
+                  if (shipment.trackerId != null)
                     Container(
                       margin: const EdgeInsets.only(right: 8),
                       padding: const EdgeInsets.symmetric(
@@ -576,7 +576,7 @@ class _ShipmentCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
-                        'SENDCLOUD',
+                        'SHIP24',
                         style: TextStyle(
                           color: AppColors.accentTeal,
                           fontSize: 9,
@@ -633,7 +633,7 @@ class _ShipmentCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // Refresh from Sendcloud button
+              // Refresh from Ship24 button
               ScaleOnPress(
                 onTap: isRefreshing ? null : onRefresh,
                 child: Container(
