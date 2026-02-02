@@ -69,6 +69,9 @@ class _ProfileProviderWrapperState extends State<ProfileProviderWrapper> {
   String? _activeProfileId;
   bool _loading = true;
 
+  // Local override for demo mode where Firestore writes are no-ops
+  String? _localActiveProfileId;
+
   StreamSubscription? _profilesSub;
   StreamSubscription? _activeIdSub;
 
@@ -100,13 +103,21 @@ class _ProfileProviderWrapperState extends State<ProfileProviderWrapper> {
   }
 
   void _switchProfile(String id) {
-    _fs.setActiveProfile(id);
+    if (FirestoreService.demoMode) {
+      // In demo mode, store selection locally since Firestore writes are no-ops
+      setState(() => _localActiveProfileId = id);
+    } else {
+      _fs.setActiveProfile(id);
+    }
   }
 
+  String? get _effectiveActiveProfileId =>
+      _localActiveProfileId ?? _activeProfileId;
+
   UserProfile? get _activeProfile {
-    if (_profiles.isEmpty || _activeProfileId == null) return null;
+    if (_profiles.isEmpty || _effectiveActiveProfileId == null) return null;
     try {
-      return _profiles.firstWhere((p) => p.id == _activeProfileId);
+      return _profiles.firstWhere((p) => p.id == _effectiveActiveProfileId);
     } catch (_) {
       return _profiles.isNotEmpty ? _profiles.first : null;
     }
