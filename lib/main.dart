@@ -19,6 +19,7 @@ import 'screens/edit_product_screen.dart';
 import 'widgets/animated_widgets.dart';
 import 'models/product.dart';
 import 'models/shipment.dart';
+import 'models/profile.dart';
 import 'services/firestore_service.dart';
 import 'screens/notifications_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -47,7 +48,7 @@ class VaultApp extends StatelessWidget {
   }
 }
 
-/// AuthGate: checks auth state and onboarding completion
+/// AuthGate: checks auth state, onboarding, profile migration
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -56,8 +57,6 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  bool _onboardingDone = true; // assume done until proven otherwise
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
@@ -79,14 +78,13 @@ class _AuthGateState extends State<AuthGate> {
           return const MainShell(key: ValueKey('demo'));
         }
 
-        // User logged in → check if onboarding is complete
+        // User logged in → check onboarding + profile
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .snapshots(),
           builder: (context, profileSnap) {
-            // While loading profile, show a brief loading indicator
             if (profileSnap.connectionState == ConnectionState.waiting &&
                 !profileSnap.hasData) {
               return const Scaffold(
@@ -103,17 +101,83 @@ class _AuthGateState extends State<AuthGate> {
             if (!onboardingComplete) {
               return OnboardingScreen(
                 onComplete: () {
-                  // The StreamBuilder will automatically pick up the change
-                  // from Firestore when onboardingComplete is set to true
+                  // StreamBuilder picks up changes automatically
                 },
               );
             }
 
-            return MainShell(key: ValueKey(user.uid));
+            // Set active profile from user doc
+            final activeProfileId = data?['activeProfileId'] as String?;
+            if (activeProfileId != null && activeProfileId.isNotEmpty) {
+              FirestoreService.activeProfileId = activeProfileId;
+            }
+
+            return _ProfileMigrationGate(
+              key: ValueKey('migration-${user.uid}'),
+              child: MainShell(key: ValueKey(user.uid)),
+            );
           },
         );
       },
     );
+  }
+}
+
+/// Handles migration of old-style data to profiles
+class _ProfileMigrationGate extends StatefulWidget {
+  final Widget child;
+
+  const _ProfileMigrationGate({super.key, required this.child});
+
+  @override
+  State<_ProfileMigrationGate> createState() => _ProfileMigrationGateState();
+}
+
+class _ProfileMigrationGateState extends State<_ProfileMigrationGate> {
+  bool _migrated = false;
+  bool _migrating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkMigration();
+  }
+
+  Future<void> _checkMigration() async {
+    if (_migrating) return;
+    setState(() => _migrating = true);
+    try {
+      final service = FirestoreService();
+      await service.migrateToProfiles();
+
+      // Make sure we have an active profile
+      if (FirestoreService.activeProfileId == null ||
+          FirestoreService.activeProfileId!.isEmpty) {
+        final profiles = await service.getProfilesOnce();
+        if (profiles.isNotEmpty) {
+          await service.setActiveProfile(profiles.first.id!);
+        }
+      }
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _migrated = true;
+        _migrating = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_migrated) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.accentBlue),
+        ),
+      );
+    }
+    return widget.child;
   }
 }
 
@@ -130,6 +194,7 @@ class _MainShellState extends State<MainShell> {
   bool _showAddSale = false;
   bool _showNotifications = false;
   bool _showAuthOverlay = false;
+  bool _showNewProfileOnboarding = false;
   Product? _editingProduct;
   Shipment? _trackingShipment;
   final _searchController = TextEditingController();
@@ -137,7 +202,77 @@ class _MainShellState extends State<MainShell> {
   final FirestoreService _firestoreService = FirestoreService();
   bool _demoBannerDismissed = false;
 
+  /// Active profile object
+  Profile? _activeProfile;
+
   bool get _isLoggedIn => FirebaseAuth.instance.currentUser != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadActiveProfile();
+  }
+
+  Future<void> _loadActiveProfile() async {
+    try {
+      final profile = await _firestoreService.getActiveProfile();
+      if (mounted) {
+        setState(() => _activeProfile = profile);
+      }
+    } catch (_) {}
+  }
+
+  /// Features enabled on the active profile
+  List<String> get _enabledFeatures =>
+      _activeProfile?.features ?? ['reselling', 'shipping', 'analytics', 'inventory', 'pricing', 'collecting'];
+
+  bool _hasFeature(String feature) => _enabledFeatures.contains(feature);
+
+  /// Build navigation items dynamically based on features
+  List<_NavItem> get _navItems {
+    final l = AppLocalizations.of(context);
+    final items = <_NavItem>[
+      _NavItem(
+        icon: Icons.dashboard_outlined,
+        selectedIcon: Icons.dashboard,
+        label: l?.dashboard ?? 'Dashboard',
+        feature: null, // always visible
+      ),
+      _NavItem(
+        icon: Icons.inventory_2_outlined,
+        selectedIcon: Icons.inventory_2,
+        label: l?.inventory ?? 'Inventario',
+        feature: null, // always visible
+      ),
+    ];
+
+    if (_hasFeature('shipping')) {
+      items.add(_NavItem(
+        icon: Icons.local_shipping_outlined,
+        selectedIcon: Icons.local_shipping,
+        label: l?.shipments ?? 'Spedizioni',
+        feature: 'shipping',
+      ));
+    }
+
+    if (_hasFeature('analytics')) {
+      items.add(_NavItem(
+        icon: Icons.bar_chart_outlined,
+        selectedIcon: Icons.bar_chart,
+        label: l?.reports ?? 'Report',
+        feature: 'analytics',
+      ));
+    }
+
+    items.add(_NavItem(
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings,
+      label: l?.settings ?? 'Impostazioni',
+      feature: null, // always visible
+    ));
+
+    return items;
+  }
 
   void _navigateTo(int index) {
     setState(() {
@@ -146,6 +281,7 @@ class _MainShellState extends State<MainShell> {
       _showAddSale = false;
       _showNotifications = false;
       _showAuthOverlay = false;
+      _showNewProfileOnboarding = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
@@ -161,6 +297,7 @@ class _MainShellState extends State<MainShell> {
       _showAddSale = false;
       _showNotifications = false;
       _showAuthOverlay = false;
+      _showNewProfileOnboarding = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
@@ -176,6 +313,7 @@ class _MainShellState extends State<MainShell> {
       _showAddItem = false;
       _showNotifications = false;
       _showAuthOverlay = false;
+      _showNewProfileOnboarding = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
@@ -192,6 +330,7 @@ class _MainShellState extends State<MainShell> {
       _showAddSale = false;
       _showNotifications = false;
       _showAuthOverlay = false;
+      _showNewProfileOnboarding = false;
       _trackingShipment = null;
     });
   }
@@ -203,6 +342,7 @@ class _MainShellState extends State<MainShell> {
       _showAddSale = false;
       _showNotifications = false;
       _showAuthOverlay = false;
+      _showNewProfileOnboarding = false;
       _editingProduct = null;
     });
   }
@@ -213,6 +353,7 @@ class _MainShellState extends State<MainShell> {
       _showAddItem = false;
       _showAddSale = false;
       _showAuthOverlay = false;
+      _showNewProfileOnboarding = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
@@ -224,6 +365,7 @@ class _MainShellState extends State<MainShell> {
       _showAddItem = false;
       _showAddSale = false;
       _showNotifications = false;
+      _showNewProfileOnboarding = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
@@ -235,9 +377,32 @@ class _MainShellState extends State<MainShell> {
       _showAddSale = false;
       _showNotifications = false;
       _showAuthOverlay = false;
+      _showNewProfileOnboarding = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
+  }
+
+  void _startNewProfileCreation() {
+    setState(() {
+      _showNewProfileOnboarding = true;
+      _showAddItem = false;
+      _showAddSale = false;
+      _showNotifications = false;
+      _showAuthOverlay = false;
+      _editingProduct = null;
+      _trackingShipment = null;
+    });
+  }
+
+  Future<void> _switchToProfile(Profile profile) async {
+    await _firestoreService.setActiveProfile(profile.id!);
+    if (mounted) {
+      setState(() {
+        _activeProfile = profile;
+        _currentIndex = 0;
+      });
+    }
   }
 
   void _showDemoSnackbar() {
@@ -286,6 +451,15 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _getCurrentScreen() {
+    if (_showNewProfileOnboarding) {
+      return OnboardingScreen(
+        skipWelcome: true,
+        onComplete: () {
+          _loadActiveProfile();
+          _closeOverlay();
+        },
+      );
+    }
     if (_showAuthOverlay) {
       return AuthScreen(
         onBack: _closeOverlay,
@@ -319,32 +493,49 @@ class _MainShellState extends State<MainShell> {
         onBack: _closeOverlay,
       );
     }
-    switch (_currentIndex) {
-      case 0:
+
+    // Map current index to the correct screen based on visible nav items
+    final items = _navItems;
+    final safeIndex = _currentIndex.clamp(0, items.length - 1);
+    final item = items[safeIndex];
+
+    // Determine which screen to show based on the nav item's label/feature
+    if (item.feature == null) {
+      // Built-in screens
+      if (safeIndex == 0) {
         return DashboardScreen(
           onNewPurchase: _showAddItemScreen,
           onNewSale: _showAddSaleScreen,
         );
-      case 1:
+      } else if (item.icon == Icons.inventory_2_outlined) {
         return InventoryScreen(
           onEditProduct: _showEditProductScreen,
         );
-      case 2:
-        return ShipmentsScreen(
-          onTrackShipment: _showTrackingDetail,
-        );
-      case 3:
-        return const ReportsScreen();
-      case 4:
+      } else if (item.icon == Icons.settings_outlined) {
         return SettingsScreen(
           onOpenAuth: _openAuthOverlay,
+          activeProfile: _activeProfile,
+          onProfileChanged: () => _loadActiveProfile(),
+          onNewProfile: _startNewProfileCreation,
+          onSwitchProfile: () => _showProfileSwitcher(),
         );
-      default:
-        return DashboardScreen(
-          onNewPurchase: _showAddItemScreen,
-          onNewSale: _showAddSaleScreen,
-        );
+      }
     }
+
+    if (item.feature == 'shipping') {
+      return ShipmentsScreen(
+        onTrackShipment: _showTrackingDetail,
+      );
+    }
+
+    if (item.feature == 'analytics') {
+      return const ReportsScreen();
+    }
+
+    return DashboardScreen(
+      onNewPurchase: _showAddItemScreen,
+      onNewSale: _showAddSaleScreen,
+    );
   }
 
   @override
@@ -480,13 +671,14 @@ class _MainShellState extends State<MainShell> {
   }
 
   String get _screenKey {
+    if (_showNewProfileOnboarding) return 'new-profile';
     if (_showAuthOverlay) return 'auth';
     if (_showNotifications) return 'notifications';
     if (_showAddItem) return 'add';
     if (_showAddSale) return 'sale';
     if (_editingProduct != null) return 'edit-${_editingProduct!.id}';
     if (_trackingShipment != null) return 'track-${_trackingShipment!.trackingCode}';
-    return '$_currentIndex';
+    return '$_currentIndex-${_activeProfile?.id ?? 'none'}';
   }
 
   Widget _buildMobileLayout() {
@@ -530,16 +722,34 @@ class _MainShellState extends State<MainShell> {
             ),
           ),
           const SizedBox(width: 10),
-          const Text(
-            'Vault',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
+          Expanded(
+            child: GestureDetector(
+              onTap: _showProfileSwitcher,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      _activeProfile?.name ?? 'Vault',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.unfold_more,
+                    color: AppColors.textMuted,
+                    size: 16,
+                  ),
+                ],
+              ),
             ),
           ),
-          const Spacer(),
           StreamBuilder<int>(
             stream: _firestoreService.getUnreadNotificationCount(),
             builder: (context, snap) {
@@ -580,8 +790,33 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  void _showProfileSwitcher() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _ProfileSwitcherSheet(
+        firestoreService: _firestoreService,
+        activeProfile: _activeProfile,
+        isDemo: !_isLoggedIn,
+        onSelectProfile: (profile) {
+          Navigator.pop(ctx);
+          _switchToProfile(profile);
+        },
+        onNewProfile: () {
+          Navigator.pop(ctx);
+          if (!_isLoggedIn) {
+            _showDemoSnackbar();
+            return;
+          }
+          _startNewProfileCreation();
+        },
+      ),
+    );
+  }
+
   Widget _buildSidebar() {
-    final l = AppLocalizations.of(context)!;
+    final items = _navItems;
     return Container(
       width: 240,
       decoration: BoxDecoration(
@@ -631,42 +866,24 @@ class _MainShellState extends State<MainShell> {
               ],
             ),
           ),
-          const SizedBox(height: 32),
-          _SidebarItem(
-            icon: Icons.dashboard_outlined,
-            selectedIcon: Icons.dashboard,
-            label: l.dashboard,
-            isSelected: _currentIndex == 0 && !_showAddItem && !_showAuthOverlay,
-            onTap: () => _navigateTo(0),
-          ),
-          _SidebarItem(
-            icon: Icons.inventory_2_outlined,
-            selectedIcon: Icons.inventory_2,
-            label: l.inventory,
-            isSelected: _currentIndex == 1 && !_showAddItem && !_showAuthOverlay,
-            onTap: () => _navigateTo(1),
-          ),
-          _SidebarItem(
-            icon: Icons.local_shipping_outlined,
-            selectedIcon: Icons.local_shipping,
-            label: l.shipments,
-            isSelected: _currentIndex == 2 && !_showAddItem && !_showAuthOverlay,
-            onTap: () => _navigateTo(2),
-          ),
-          _SidebarItem(
-            icon: Icons.bar_chart_outlined,
-            selectedIcon: Icons.bar_chart,
-            label: l.reports,
-            isSelected: _currentIndex == 3 && !_showAddItem && !_showAuthOverlay,
-            onTap: () => _navigateTo(3),
-          ),
-          _SidebarItem(
-            icon: Icons.settings_outlined,
-            selectedIcon: Icons.settings,
-            label: l.settings,
-            isSelected: _currentIndex == 4 && !_showAddItem && !_showAuthOverlay,
-            onTap: () => _navigateTo(4),
-          ),
+          const SizedBox(height: 16),
+
+          // Profile switcher
+          _buildSidebarProfileSwitcher(),
+
+          const SizedBox(height: 16),
+
+          // Nav items
+          ...List.generate(items.length, (i) {
+            return _SidebarItem(
+              icon: items[i].icon,
+              selectedIcon: items[i].selectedIcon,
+              label: items[i].label,
+              isSelected: _currentIndex == i && !_showAddItem && !_showAuthOverlay && !_showNewProfileOnboarding,
+              onTap: () => _navigateTo(i),
+            );
+          }),
+
           const Spacer(),
           // System Online
           Padding(
@@ -693,7 +910,7 @@ class _MainShellState extends State<MainShell> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      _isLoggedIn ? l.systemOnline : 'Demo Mode',
+                      _isLoggedIn ? (AppLocalizations.of(context)?.systemOnline ?? 'Online') : 'Demo Mode',
                       style: TextStyle(
                         color: _isLoggedIn ? AppColors.accentGreen : AppColors.accentOrange,
                         fontSize: 13,
@@ -708,6 +925,79 @@ class _MainShellState extends State<MainShell> {
           ),
           const SizedBox(height: 12),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarProfileSwitcher() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: GestureDetector(
+        onTap: _showProfileSwitcher,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.accentBlue.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: AppColors.accentBlue.withValues(alpha: 0.15),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  gradient: AppColors.blueButtonGradient,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Center(
+                  child: Text(
+                    _activeProfile?.name.isNotEmpty == true
+                        ? _activeProfile!.name[0].toUpperCase()
+                        : 'V',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _activeProfile?.name ?? 'Seleziona profilo',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (_activeProfile != null)
+                      Text(
+                        Profile.categoryShortLabel(_activeProfile!.category),
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 10,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.unfold_more,
+                color: AppColors.textMuted,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -867,7 +1157,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildBottomNav() {
-    final l = AppLocalizations.of(context)!;
+    final items = _navItems;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.navBar,
@@ -889,13 +1179,9 @@ class _MainShellState extends State<MainShell> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, l.home, 0),
-              _buildNavItem(Icons.inventory_2_outlined, Icons.inventory_2, l.inventory, 1),
-              _buildNavItem(Icons.local_shipping_outlined, Icons.local_shipping, l.shipments, 2),
-              _buildNavItem(Icons.bar_chart_outlined, Icons.bar_chart, l.reports, 3),
-              _buildNavItem(Icons.settings_outlined, Icons.settings, l.settings, 4),
-            ],
+            children: List.generate(items.length, (i) {
+              return _buildNavItem(items[i].icon, items[i].selectedIcon, items[i].label, i);
+            }),
           ),
         ),
       ),
@@ -903,7 +1189,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildNavItem(IconData icon, IconData selectedIcon, String label, int index) {
-    final isSelected = _currentIndex == index && !_showAddItem && !_showAuthOverlay;
+    final isSelected = _currentIndex == index && !_showAddItem && !_showAuthOverlay && !_showNewProfileOnboarding;
     return GestureDetector(
       onTap: () => _navigateTo(index),
       behavior: HitTestBehavior.opaque,
@@ -938,6 +1224,242 @@ class _MainShellState extends State<MainShell> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────
+// Nav item model
+// ──────────────────────────────────────────────────
+class _NavItem {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final String? feature;
+
+  const _NavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    this.feature,
+  });
+}
+
+// ──────────────────────────────────────────────────
+// Profile Switcher Bottom Sheet
+// ──────────────────────────────────────────────────
+class _ProfileSwitcherSheet extends StatelessWidget {
+  final FirestoreService firestoreService;
+  final Profile? activeProfile;
+  final bool isDemo;
+  final ValueChanged<Profile> onSelectProfile;
+  final VoidCallback onNewProfile;
+
+  const _ProfileSwitcherSheet({
+    required this.firestoreService,
+    required this.activeProfile,
+    required this.isDemo,
+    required this.onSelectProfile,
+    required this.onNewProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.6,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                Icon(Icons.swap_horiz, color: AppColors.accentBlue, size: 22),
+                SizedBox(width: 10),
+                Text(
+                  'Cambia profilo',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Flexible(
+            child: StreamBuilder<List<Profile>>(
+              stream: firestoreService.getProfiles(),
+              builder: (context, snap) {
+                final profiles = snap.data ?? [];
+                if (profiles.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'Nessun profilo trovato',
+                      style: TextStyle(color: AppColors.textMuted),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: profiles.length,
+                  itemBuilder: (context, index) {
+                    final profile = profiles[index];
+                    final isActive = profile.id == activeProfile?.id;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: GestureDetector(
+                        onTap: () => onSelectProfile(profile),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? AppColors.accentBlue.withValues(alpha: 0.12)
+                                : AppColors.cardDark,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isActive
+                                  ? AppColors.accentBlue.withValues(alpha: 0.4)
+                                  : Colors.white.withValues(alpha: 0.06),
+                              width: isActive ? 2 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  gradient: isActive
+                                      ? AppColors.blueButtonGradient
+                                      : null,
+                                  color: isActive
+                                      ? null
+                                      : AppColors.surface,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    profile.name.isNotEmpty
+                                        ? profile.name[0].toUpperCase()
+                                        : '?',
+                                    style: TextStyle(
+                                      color: isActive
+                                          ? Colors.white
+                                          : AppColors.textMuted,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      profile.name,
+                                      style: TextStyle(
+                                        color: isActive
+                                            ? Colors.white
+                                            : AppColors.textSecondary,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      Profile.categoryLabel(profile.category),
+                                      style: const TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (isActive)
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.accentBlue,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.check, color: Colors.white, size: 14),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: ScaleOnPress(
+              onTap: onNewProfile,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: AppColors.blueButtonGradient,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.accentBlue.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add, color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Crea nuovo profilo',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }

@@ -3,12 +3,25 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
+import '../models/profile.dart';
 import '../l10n/app_localizations.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback? onOpenAuth;
+  final Profile? activeProfile;
+  final VoidCallback? onProfileChanged;
+  final VoidCallback? onNewProfile;
+  final VoidCallback? onSwitchProfile;
 
-  const SettingsScreen({super.key, this.onOpenAuth});
+  const SettingsScreen({
+    super.key,
+    this.onOpenAuth,
+    this.activeProfile,
+    this.onProfileChanged,
+    this.onNewProfile,
+    this.onSwitchProfile,
+  });
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -16,6 +29,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final AuthService _authService = AuthService();
+  final FirestoreService _firestoreService = FirestoreService();
 
   bool _darkMode = true;
   bool _notifications = true;
@@ -30,6 +44,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
   User? get _user => _authService.currentUser;
   String get _userName => _user?.displayName ?? 'Vault User';
   String get _userEmail => _user?.email ?? 'vault@reselling.pro';
+
+  Profile? get _profile => widget.activeProfile;
+
+  // Feature toggle helpers
+  bool _featureEnabled(String feature) =>
+      _profile?.features.contains(feature) ?? true;
+
+  Future<void> _toggleFeature(String feature, bool enabled) async {
+    if (_profile == null || _profile!.id == null) return;
+    final features = List<String>.from(_profile!.features);
+    if (enabled) {
+      if (!features.contains(feature)) features.add(feature);
+    } else {
+      features.remove(feature);
+    }
+    try {
+      await _firestoreService.updateProfile(
+          _profile!.id!, {'features': features});
+      widget.onProfileChanged?.call();
+    } catch (e) {
+      if (mounted) {
+        _showSuccessSnackbar('Errore: $e');
+      }
+    }
+  }
 
   void _showEditDialog({
     required String title,
@@ -403,9 +442,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: Colors.white, size: 14),
             ),
             const SizedBox(width: 10),
-            Text(text,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w600)),
+            Expanded(
+              child: Text(text,
+                  style:
+                      const TextStyle(fontWeight: FontWeight.w600)),
+            ),
           ],
         ),
         backgroundColor: AppColors.accentGreen,
@@ -674,9 +715,149 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildLoginPrompt(),
           if (!_isLoggedIn) const SizedBox(height: 20),
 
+          // ── Profile section (NEW) ──
+          if (_profile != null)
+            StaggeredFadeSlide(
+              index: 1,
+              child: _buildSection(
+                title: 'PROFILO',
+                icon: Icons.account_circle_outlined,
+                children: [
+                  _buildSettingsRow(
+                    icon: Icons.badge_outlined,
+                    title: 'Nome profilo',
+                    subtitle: _profile!.name,
+                    onTap: () => _showEditDialog(
+                      title: 'Nome profilo',
+                      currentValue: _profile!.name,
+                      onSave: (v) async {
+                        if (_profile!.id == null) return;
+                        try {
+                          await _firestoreService.updateProfile(
+                              _profile!.id!, {'name': v});
+                          widget.onProfileChanged?.call();
+                        } catch (e) {
+                          _showSuccessSnackbar('Errore: $e');
+                        }
+                      },
+                    ),
+                    trailing: _buildChevron(),
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.category_outlined,
+                    title: 'Categoria',
+                    subtitle: Profile.categoryLabel(_profile!.category),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentPurple
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.accentPurple
+                              .withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Text(
+                        Profile.categoryShortLabel(_profile!.category),
+                        style: const TextStyle(
+                          color: AppColors.accentPurple,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.swap_horiz,
+                    title: 'Cambia profilo',
+                    subtitle: 'Passa a un altro profilo',
+                    onTap: widget.onSwitchProfile,
+                    trailing: _buildChevron(),
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.add_circle_outline,
+                    title: 'Nuovo profilo',
+                    subtitle: 'Crea un nuovo spazio di lavoro',
+                    onTap: widget.onNewProfile,
+                    trailing: _buildChevron(),
+                  ),
+                ],
+              ),
+            ),
+          if (_profile != null) const SizedBox(height: 20),
+
+          // ── Features section (NEW) ──
+          if (_profile != null)
+            StaggeredFadeSlide(
+              index: 2,
+              child: _buildSection(
+                title: 'FUNZIONALITÀ',
+                icon: Icons.tune,
+                children: [
+                  _buildSettingsRow(
+                    icon: Icons.monetization_on_outlined,
+                    title: 'Rivendita',
+                    subtitle: 'Compra e rivendi per profitto',
+                    trailing: _buildSwitch(
+                      _featureEnabled('reselling'),
+                      (v) => _toggleFeature('reselling', v),
+                    ),
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.collections_bookmark_outlined,
+                    title: 'Collezionismo',
+                    subtitle: 'Tieni traccia della tua collezione',
+                    trailing: _buildSwitch(
+                      _featureEnabled('collecting'),
+                      (v) => _toggleFeature('collecting', v),
+                    ),
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.bar_chart_outlined,
+                    title: 'Report & Analisi',
+                    subtitle: 'Statistiche e insight',
+                    trailing: _buildSwitch(
+                      _featureEnabled('analytics'),
+                      (v) => _toggleFeature('analytics', v),
+                    ),
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.local_shipping_outlined,
+                    title: 'Tracking Spedizioni',
+                    subtitle: 'Monitora pacchi in entrata e uscita',
+                    trailing: _buildSwitch(
+                      _featureEnabled('shipping'),
+                      (v) => _toggleFeature('shipping', v),
+                    ),
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.inventory_2_outlined,
+                    title: 'Gestione Inventario',
+                    subtitle: 'Organizza il tuo magazzino',
+                    trailing: _buildSwitch(
+                      _featureEnabled('inventory'),
+                      (v) => _toggleFeature('inventory', v),
+                    ),
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.calculate_outlined,
+                    title: 'Calcolo Profitti',
+                    subtitle: 'Margini, commissioni e guadagni netti',
+                    trailing: _buildSwitch(
+                      _featureEnabled('pricing'),
+                      (v) => _toggleFeature('pricing', v),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (_profile != null) const SizedBox(height: 20),
+
           // ── Profile card ──
           StaggeredFadeSlide(
-            index: _isLoggedIn ? 1 : 2,
+            index: _profile != null ? 3 : (_isLoggedIn ? 1 : 2),
             child: GlassCard(
               padding: const EdgeInsets.all(20),
               glowColor: AppColors.accentPurple,
@@ -791,7 +972,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Account section ──
           StaggeredFadeSlide(
-            index: 2,
+            index: _profile != null ? 4 : 2,
             child: _buildSection(
               title: AppLocalizations.of(context)!.account,
               icon: Icons.person_outline,
@@ -864,29 +1045,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Workspace section ──
           StaggeredFadeSlide(
-            index: 3,
+            index: _profile != null ? 5 : 3,
             child: _buildSection(
               title: AppLocalizations.of(context)!.workspace,
               icon: Icons.workspaces_outline,
               children: [
-                _buildSettingsRow(
-                  icon: Icons.store,
-                  title: AppLocalizations.of(context)!.workspaceActive,
-                  subtitle: _workspace,
-                  onTap: () => _showSelectDialog(
-                    title: AppLocalizations.of(context)!.selectWorkspace,
-                    options: [
-                      'Reselling Vinted 2025',
-                      'Reselling eBay',
-                      'Reselling Depop',
-                      'Crypto Portfolio'
-                    ],
-                    currentValue: _workspace,
-                    onSelect: (v) =>
-                        setState(() => _workspace = v),
-                  ),
-                  trailing: _buildChevron(),
-                ),
                 _buildSettingsRow(
                   icon: Icons.cloud_upload_outlined,
                   title: AppLocalizations.of(context)!.autoBackup,
@@ -908,7 +1071,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Notifications section ──
           StaggeredFadeSlide(
-            index: 4,
+            index: _profile != null ? 6 : 4,
             child: _buildSection(
               title: AppLocalizations.of(context)!.notifications,
               icon: Icons.notifications_outlined,
@@ -943,7 +1106,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Appearance section ──
           StaggeredFadeSlide(
-            index: 5,
+            index: _profile != null ? 7 : 5,
             child: _buildSection(
               title: AppLocalizations.of(context)!.appearance,
               icon: Icons.palette_outlined,
@@ -1013,7 +1176,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Info section ──
           StaggeredFadeSlide(
-            index: 6,
+            index: _profile != null ? 8 : 6,
             child: _buildSection(
               title: AppLocalizations.of(context)!.info,
               icon: Icons.info_outline,
@@ -1060,7 +1223,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── Logout button (only when logged in) ──
           if (_isLoggedIn)
             StaggeredFadeSlide(
-              index: 7,
+              index: _profile != null ? 9 : 7,
               child: ScaleOnPress(
                 onTap: _showLogoutDialog,
                 child: Container(

@@ -6,14 +6,48 @@ import '../models/purchase.dart';
 import '../models/sale.dart';
 import '../models/shipment.dart';
 import '../models/app_notification.dart';
+import '../models/profile.dart';
 
 // ═══════════════════════════════════════════════════
 //  DEMO DATA — Rich sample data for unauthenticated users
+//  Now organized by demo profile
 // ═══════════════════════════════════════════════════
 class _DemoData {
   static final _now = DateTime.now();
 
-  static List<Product> get products => [
+  // ─── Demo Profiles ─────────────────────────────────
+  static List<Profile> get profiles => [
+        Profile(
+          id: 'demo_profile_1',
+          name: 'Reselling Vinted',
+          features: ['reselling', 'shipping', 'analytics', 'inventory', 'pricing', 'collecting'],
+          platforms: ['vinted', 'ebay', 'depop'],
+          category: 'generic',
+          experienceLevel: 'intermediate',
+          createdAt: _now.subtract(const Duration(days: 30)),
+        ),
+        Profile(
+          id: 'demo_profile_2',
+          name: 'Pokémon TCG',
+          features: ['collecting', 'analytics', 'inventory', 'pricing'],
+          platforms: ['cardmarket', 'ebay'],
+          category: 'cards',
+          experienceLevel: 'expert',
+          createdAt: _now.subtract(const Duration(days: 20)),
+        ),
+        Profile(
+          id: 'demo_profile_3',
+          name: 'Sneaker Vault',
+          features: ['reselling', 'shipping', 'analytics', 'inventory', 'pricing'],
+          platforms: ['stockx', 'goat', 'ebay'],
+          category: 'sneakers',
+          experienceLevel: 'intermediate',
+          createdAt: _now.subtract(const Duration(days: 15)),
+        ),
+      ];
+
+  // ─── Profile 1: Reselling Vinted (generic) ─────────
+  static List<Product> get productsGeneric => [
         Product(
           id: 'demo_p1',
           name: 'Nike Air Max 90',
@@ -79,7 +113,7 @@ class _DemoData {
         ),
       ];
 
-  static List<Sale> get sales => [
+  static List<Sale> get salesGeneric => [
         Sale(
           id: 'demo_s1',
           productName: 'Nike Dunk Low',
@@ -114,14 +148,14 @@ class _DemoData {
         ),
       ];
 
-  static List<Purchase> get purchases => [
+  static List<Purchase> get purchasesGeneric => [
         Purchase(
           id: 'demo_pu1',
           productName: 'Nike Air Max 90',
           price: 45,
           quantity: 1,
           date: _now.subtract(const Duration(days: 2)),
-          workspace: 'Reselling Vinted 2025',
+          workspace: 'Reselling Vinted',
         ),
         Purchase(
           id: 'demo_pu2',
@@ -129,7 +163,7 @@ class _DemoData {
           price: 65,
           quantity: 2,
           date: _now.subtract(const Duration(days: 5)),
-          workspace: 'Reselling Vinted 2025',
+          workspace: 'Reselling Vinted',
         ),
         Purchase(
           id: 'demo_pu3',
@@ -137,7 +171,7 @@ class _DemoData {
           price: 120,
           quantity: 1,
           date: _now.subtract(const Duration(days: 8)),
-          workspace: 'Reselling Vinted 2025',
+          workspace: 'Reselling Vinted',
         ),
         Purchase(
           id: 'demo_pu4',
@@ -145,7 +179,7 @@ class _DemoData {
           price: 85,
           quantity: 1,
           date: _now.subtract(const Duration(days: 3)),
-          workspace: 'Reselling Vinted 2025',
+          workspace: 'Reselling Vinted',
         ),
         Purchase(
           id: 'demo_pu5',
@@ -153,7 +187,7 @@ class _DemoData {
           price: 190,
           quantity: 1,
           date: _now.subtract(const Duration(days: 1)),
-          workspace: 'Reselling Vinted 2025',
+          workspace: 'Reselling Vinted',
         ),
         Purchase(
           id: 'demo_pu6',
@@ -161,11 +195,11 @@ class _DemoData {
           price: 150,
           quantity: 1,
           date: _now.subtract(const Duration(days: 12)),
-          workspace: 'Reselling Vinted 2025',
+          workspace: 'Reselling Vinted',
         ),
       ];
 
-  static List<Shipment> get shipments => [
+  static List<Shipment> get shipmentsGeneric => [
         Shipment(
           id: 'demo_sh1',
           trackingCode: 'RR123456789IT',
@@ -237,7 +271,7 @@ class _DemoData {
         ),
       ];
 
-  static List<AppNotification> get notifications => [
+  static List<AppNotification> get notificationsGeneric => [
         AppNotification(
           id: 'demo_n1',
           title: 'Spedizione consegnata',
@@ -264,19 +298,596 @@ class _DemoData {
           read: false,
         ),
       ];
+
+  // ─── Profile 2: Pokémon TCG (cards) ────────────────
+  static List<Product> get productsCards => [
+        Product(
+          id: 'demo_cp1',
+          name: 'Charizard VMAX',
+          brand: 'POKÉMON',
+          quantity: 1,
+          price: 280,
+          status: ProductStatus.inInventory,
+          createdAt: _now.subtract(const Duration(days: 3)),
+        ),
+        Product(
+          id: 'demo_cp2',
+          name: 'Pikachu Gold Star',
+          brand: 'POKÉMON',
+          quantity: 1,
+          price: 450,
+          status: ProductStatus.listed,
+          createdAt: _now.subtract(const Duration(days: 7)),
+        ),
+        Product(
+          id: 'demo_cp3',
+          name: 'Mewtwo GX',
+          brand: 'POKÉMON',
+          quantity: 2,
+          price: 35,
+          status: ProductStatus.inInventory,
+          createdAt: _now.subtract(const Duration(days: 10)),
+        ),
+        Product(
+          id: 'demo_cp4',
+          name: 'Booster Box Base Set',
+          brand: 'POKÉMON',
+          quantity: 1,
+          price: 8500,
+          status: ProductStatus.inInventory,
+          createdAt: _now.subtract(const Duration(days: 14)),
+        ),
+        Product(
+          id: 'demo_cp5',
+          name: 'Trainer Gallery Lot',
+          brand: 'POKÉMON',
+          quantity: 15,
+          price: 12,
+          status: ProductStatus.listed,
+          createdAt: _now.subtract(const Duration(days: 1)),
+        ),
+      ];
+
+  static List<Sale> get salesCards => [
+        Sale(
+          id: 'demo_cs1',
+          productName: 'Umbreon VMAX Alt Art',
+          salePrice: 320,
+          purchasePrice: 180,
+          fees: 16,
+          date: _now.subtract(const Duration(days: 5)),
+        ),
+        Sale(
+          id: 'demo_cs2',
+          productName: 'Eevee Heroes Booster Box',
+          salePrice: 210,
+          purchasePrice: 140,
+          fees: 10,
+          date: _now.subtract(const Duration(days: 12)),
+        ),
+        Sale(
+          id: 'demo_cs3',
+          productName: 'Rayquaza V Alt Art',
+          salePrice: 150,
+          purchasePrice: 85,
+          fees: 8,
+          date: _now.subtract(const Duration(days: 18)),
+        ),
+      ];
+
+  static List<Purchase> get purchasesCards => [
+        Purchase(
+          id: 'demo_cpu1',
+          productName: 'Charizard VMAX',
+          price: 280,
+          quantity: 1,
+          date: _now.subtract(const Duration(days: 3)),
+          workspace: 'Pokémon TCG',
+        ),
+        Purchase(
+          id: 'demo_cpu2',
+          productName: 'Pikachu Gold Star',
+          price: 450,
+          quantity: 1,
+          date: _now.subtract(const Duration(days: 7)),
+          workspace: 'Pokémon TCG',
+        ),
+        Purchase(
+          id: 'demo_cpu3',
+          productName: 'Booster Box Base Set',
+          price: 8500,
+          quantity: 1,
+          date: _now.subtract(const Duration(days: 14)),
+          workspace: 'Pokémon TCG',
+        ),
+      ];
+
+  static List<Shipment> get shipmentsCards => [];
+
+  static List<AppNotification> get notificationsCards => [
+        AppNotification(
+          id: 'demo_cn1',
+          title: 'Nuova vendita!',
+          body: 'Hai venduto "Umbreon VMAX Alt Art" per €320. Profitto: €124 🎉',
+          type: NotificationType.sale,
+          createdAt: _now.subtract(const Duration(days: 5)),
+          read: false,
+        ),
+        AppNotification(
+          id: 'demo_cn2',
+          title: 'Prezzo in crescita',
+          body: 'Il valore di "Charizard VMAX" è salito del 15% questa settimana.',
+          type: NotificationType.system,
+          createdAt: _now.subtract(const Duration(days: 2)),
+          read: false,
+        ),
+      ];
+
+  // ─── Profile 3: Sneaker Vault (sneakers) ───────────
+  static List<Product> get productsSneakers => [
+        Product(
+          id: 'demo_sp1',
+          name: 'Jordan 1 Retro High OG',
+          brand: 'JORDAN',
+          quantity: 1,
+          price: 170,
+          status: ProductStatus.inInventory,
+          createdAt: _now.subtract(const Duration(days: 2)),
+        ),
+        Product(
+          id: 'demo_sp2',
+          name: 'Yeezy 350 V2 Zebra',
+          brand: 'ADIDAS',
+          quantity: 1,
+          price: 230,
+          status: ProductStatus.shipped,
+          createdAt: _now.subtract(const Duration(days: 4)),
+        ),
+        Product(
+          id: 'demo_sp3',
+          name: 'Nike Dunk Low Panda',
+          brand: 'NIKE',
+          quantity: 2,
+          price: 110,
+          status: ProductStatus.listed,
+          createdAt: _now.subtract(const Duration(days: 6)),
+        ),
+        Product(
+          id: 'demo_sp4',
+          name: 'Air Max 90 OG',
+          brand: 'NIKE',
+          quantity: 1,
+          price: 140,
+          status: ProductStatus.inInventory,
+          createdAt: _now.subtract(const Duration(days: 9)),
+        ),
+        Product(
+          id: 'demo_sp5',
+          name: 'New Balance 550',
+          brand: 'NEW BALANCE',
+          quantity: 1,
+          price: 120,
+          status: ProductStatus.listed,
+          createdAt: _now.subtract(const Duration(days: 11)),
+        ),
+      ];
+
+  static List<Sale> get salesSneakers => [
+        Sale(
+          id: 'demo_ss1',
+          productName: 'Jordan 4 Black Cat',
+          salePrice: 420,
+          purchasePrice: 280,
+          fees: 42,
+          date: _now.subtract(const Duration(days: 3)),
+        ),
+        Sale(
+          id: 'demo_ss2',
+          productName: 'Nike SB Dunk Low Travis Scott',
+          salePrice: 1200,
+          purchasePrice: 850,
+          fees: 120,
+          date: _now.subtract(const Duration(days: 10)),
+        ),
+        Sale(
+          id: 'demo_ss3',
+          productName: 'Yeezy 700 Wave Runner',
+          salePrice: 350,
+          purchasePrice: 220,
+          fees: 35,
+          date: _now.subtract(const Duration(days: 16)),
+        ),
+      ];
+
+  static List<Purchase> get purchasesSneakers => [
+        Purchase(
+          id: 'demo_spu1',
+          productName: 'Jordan 1 Retro High OG',
+          price: 170,
+          quantity: 1,
+          date: _now.subtract(const Duration(days: 2)),
+          workspace: 'Sneaker Vault',
+        ),
+        Purchase(
+          id: 'demo_spu2',
+          productName: 'Yeezy 350 V2 Zebra',
+          price: 230,
+          quantity: 1,
+          date: _now.subtract(const Duration(days: 4)),
+          workspace: 'Sneaker Vault',
+        ),
+        Purchase(
+          id: 'demo_spu3',
+          productName: 'Nike Dunk Low Panda',
+          price: 110,
+          quantity: 2,
+          date: _now.subtract(const Duration(days: 6)),
+          workspace: 'Sneaker Vault',
+        ),
+        Purchase(
+          id: 'demo_spu4',
+          productName: 'Air Max 90 OG',
+          price: 140,
+          quantity: 1,
+          date: _now.subtract(const Duration(days: 9)),
+          workspace: 'Sneaker Vault',
+        ),
+      ];
+
+  static List<Shipment> get shipmentsSneakers => [
+        Shipment(
+          id: 'demo_ssh1',
+          trackingCode: '1Z888BB20234567890',
+          carrier: 'ups',
+          carrierName: 'UPS',
+          type: ShipmentType.purchase,
+          productName: 'Yeezy 350 V2 Zebra',
+          status: ShipmentStatus.inTransit,
+          createdAt: _now.subtract(const Duration(days: 3)),
+          lastUpdate: _now.subtract(const Duration(hours: 12)),
+          lastEvent: 'In transito — Hub di Amsterdam',
+          trackingHistory: [
+            TrackingEvent(
+              status: 'In transito',
+              timestamp: _now.subtract(const Duration(hours: 12)),
+              location: 'Amsterdam, NL',
+              description: 'Il pacco è stato processato',
+            ),
+            TrackingEvent(
+              status: 'Spedito',
+              timestamp: _now.subtract(const Duration(days: 2)),
+              location: 'Londra, UK',
+              description: 'Il pacco è stato spedito',
+            ),
+          ],
+        ),
+        Shipment(
+          id: 'demo_ssh2',
+          trackingCode: 'RR987654321IT',
+          carrier: 'poste_italiane',
+          carrierName: 'Poste Italiane',
+          type: ShipmentType.sale,
+          productName: 'Nike Dunk Low Panda',
+          status: ShipmentStatus.pending,
+          createdAt: _now.subtract(const Duration(hours: 6)),
+          lastEvent: 'Etichetta creata',
+        ),
+      ];
+
+  static List<AppNotification> get notificationsSneakers => [
+        AppNotification(
+          id: 'demo_sn1',
+          title: 'Nuova vendita!',
+          body: 'Hai venduto "Jordan 4 Black Cat" per €420. Profitto: €98 🔥',
+          type: NotificationType.sale,
+          createdAt: _now.subtract(const Duration(days: 3)),
+          read: false,
+        ),
+        AppNotification(
+          id: 'demo_sn2',
+          title: 'Spedizione in transito',
+          body: 'Il tuo ordine "Yeezy 350 V2 Zebra" è in transito da Amsterdam.',
+          type: NotificationType.shipmentUpdate,
+          createdAt: _now.subtract(const Duration(hours: 12)),
+          read: false,
+        ),
+        AppNotification(
+          id: 'demo_sn3',
+          title: 'Drop imminente',
+          body: 'Nike Dunk Low "Panda" restock previsto per domani alle 10:00.',
+          type: NotificationType.system,
+          createdAt: _now.subtract(const Duration(hours: 2)),
+          read: false,
+        ),
+      ];
+
+  // ─── Helper: get data by profile ID ────────────────
+  static List<Product> productsForProfile(String profileId) {
+    switch (profileId) {
+      case 'demo_profile_2':
+        return productsCards;
+      case 'demo_profile_3':
+        return productsSneakers;
+      case 'demo_profile_1':
+      default:
+        return productsGeneric;
+    }
+  }
+
+  static List<Sale> salesForProfile(String profileId) {
+    switch (profileId) {
+      case 'demo_profile_2':
+        return salesCards;
+      case 'demo_profile_3':
+        return salesSneakers;
+      case 'demo_profile_1':
+      default:
+        return salesGeneric;
+    }
+  }
+
+  static List<Purchase> purchasesForProfile(String profileId) {
+    switch (profileId) {
+      case 'demo_profile_2':
+        return purchasesCards;
+      case 'demo_profile_3':
+        return purchasesSneakers;
+      case 'demo_profile_1':
+      default:
+        return purchasesGeneric;
+    }
+  }
+
+  static List<Shipment> shipmentsForProfile(String profileId) {
+    switch (profileId) {
+      case 'demo_profile_2':
+        return shipmentsCards;
+      case 'demo_profile_3':
+        return shipmentsSneakers;
+      case 'demo_profile_1':
+      default:
+        return shipmentsGeneric;
+    }
+  }
+
+  static List<AppNotification> notificationsForProfile(String profileId) {
+    switch (profileId) {
+      case 'demo_profile_2':
+        return notificationsCards;
+      case 'demo_profile_3':
+        return notificationsSneakers;
+      case 'demo_profile_1':
+      default:
+        return notificationsGeneric;
+    }
+  }
 }
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  /// Currently active profile ID for authenticated users
+  static String? activeProfileId;
+
+  /// Currently active demo profile ID for demo mode
+  static String activeDemoProfileId = 'demo_profile_1';
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   /// Whether the service is in demo mode (no authenticated user)
   bool get isDemoMode => _uid == null;
 
-  // ─── Helper: user-scoped collection ──────────────
+  /// The effective profile ID (demo or real)
+  String? get _effectiveProfileId =>
+      isDemoMode ? activeDemoProfileId : activeProfileId;
+
+  // ─── Helper: user-scoped collection through profile ─
   CollectionReference _userCollection(String collection) {
+    final profileId = _effectiveProfileId;
+    if (profileId != null && profileId.isNotEmpty) {
+      return _db
+          .collection('users')
+          .doc(_uid)
+          .collection('profiles')
+          .doc(profileId)
+          .collection(collection);
+    }
+    // Fallback: old-style direct under user (for migration)
     return _db.collection('users').doc(_uid).collection(collection);
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  PROFILES
+  // ═══════════════════════════════════════════════════
+
+  /// Get all profiles for current user
+  Stream<List<Profile>> getProfiles() {
+    if (isDemoMode) return Stream.value(_DemoData.profiles);
+    return _db
+        .collection('users')
+        .doc(_uid)
+        .collection('profiles')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => Profile.fromFirestore(doc)).toList());
+  }
+
+  /// Get all profiles once (future)
+  Future<List<Profile>> getProfilesOnce() async {
+    if (isDemoMode) return _DemoData.profiles;
+    final snap = await _db
+        .collection('users')
+        .doc(_uid)
+        .collection('profiles')
+        .orderBy('createdAt', descending: false)
+        .get();
+    return snap.docs.map((doc) => Profile.fromFirestore(doc)).toList();
+  }
+
+  /// Add a new profile
+  Future<DocumentReference> addProfile(Profile profile) {
+    if (isDemoMode) return Future.error('demo');
+    return _db
+        .collection('users')
+        .doc(_uid)
+        .collection('profiles')
+        .add(profile.toFirestore());
+  }
+
+  /// Update a profile
+  Future<void> updateProfile(String id, Map<String, dynamic> data) {
+    if (isDemoMode) return Future.error('demo');
+    return _db
+        .collection('users')
+        .doc(_uid)
+        .collection('profiles')
+        .doc(id)
+        .update(data);
+  }
+
+  /// Delete a profile
+  Future<void> deleteProfile(String id) {
+    if (isDemoMode) return Future.error('demo');
+    return _db
+        .collection('users')
+        .doc(_uid)
+        .collection('profiles')
+        .doc(id)
+        .delete();
+  }
+
+  /// Set active profile (updates user doc and static field)
+  Future<void> setActiveProfile(String profileId) async {
+    if (isDemoMode) {
+      activeDemoProfileId = profileId;
+      return;
+    }
+    activeProfileId = profileId;
+    await _db.collection('users').doc(_uid).set(
+      {'activeProfileId': profileId},
+      SetOptions(merge: true),
+    );
+  }
+
+  /// Get active profile object
+  Future<Profile?> getActiveProfile() async {
+    if (isDemoMode) {
+      try {
+        return _DemoData.profiles
+            .firstWhere((p) => p.id == activeDemoProfileId);
+      } catch (_) {
+        return _DemoData.profiles.first;
+      }
+    }
+
+    if (activeProfileId == null || activeProfileId!.isEmpty) {
+      // Try to load from user doc
+      final userDoc = await _db.collection('users').doc(_uid).get();
+      final data = userDoc.data();
+      if (data != null && data['activeProfileId'] != null) {
+        activeProfileId = data['activeProfileId'];
+      }
+    }
+
+    if (activeProfileId == null || activeProfileId!.isEmpty) return null;
+
+    final doc = await _db
+        .collection('users')
+        .doc(_uid)
+        .collection('profiles')
+        .doc(activeProfileId)
+        .get();
+    if (!doc.exists) return null;
+    return Profile.fromFirestore(doc);
+  }
+
+  /// Get a single profile by ID
+  Future<Profile?> getProfileById(String profileId) async {
+    if (isDemoMode) {
+      try {
+        return _DemoData.profiles.firstWhere((p) => p.id == profileId);
+      } catch (_) {
+        return null;
+      }
+    }
+    final doc = await _db
+        .collection('users')
+        .doc(_uid)
+        .collection('profiles')
+        .doc(profileId)
+        .get();
+    if (!doc.exists) return null;
+    return Profile.fromFirestore(doc);
+  }
+
+  /// Migrate old-style data (products directly under user) to a default profile
+  Future<void> migrateToProfiles() async {
+    if (isDemoMode) return;
+
+    // Check if user already has profiles
+    final profilesSnap = await _db
+        .collection('users')
+        .doc(_uid)
+        .collection('profiles')
+        .limit(1)
+        .get();
+
+    if (profilesSnap.docs.isNotEmpty) return; // Already has profiles
+
+    // Check if user has old-style products
+    final oldProducts = await _db
+        .collection('users')
+        .doc(_uid)
+        .collection('products')
+        .limit(1)
+        .get();
+
+    if (oldProducts.docs.isEmpty) return; // No old data to migrate
+
+    // Create default profile
+    final profileRef = await addProfile(Profile(
+      name: 'Profilo principale',
+      features: ['reselling', 'shipping', 'analytics', 'inventory', 'pricing', 'collecting'],
+      category: 'generic',
+      experienceLevel: 'intermediate',
+      createdAt: DateTime.now(),
+    ));
+
+    final newProfileId = profileRef.id;
+
+    // Migrate products
+    final collections = ['products', 'sales', 'purchases', 'shipments', 'notifications'];
+    for (final collection in collections) {
+      final oldDocs = await _db
+          .collection('users')
+          .doc(_uid)
+          .collection(collection)
+          .get();
+
+      final batch = _db.batch();
+      for (final doc in oldDocs.docs) {
+        final newRef = _db
+            .collection('users')
+            .doc(_uid)
+            .collection('profiles')
+            .doc(newProfileId)
+            .collection(collection)
+            .doc(doc.id);
+        batch.set(newRef, doc.data());
+      }
+      await batch.commit();
+
+      // Delete old docs
+      final deleteBatch = _db.batch();
+      for (final doc in oldDocs.docs) {
+        deleteBatch.delete(doc.reference);
+      }
+      await deleteBatch.commit();
+    }
+
+    // Set as active profile
+    await setActiveProfile(newProfileId);
   }
 
   // ═══════════════════════════════════════════════════
@@ -299,7 +910,9 @@ class FirestoreService {
   }
 
   Stream<List<Product>> getProducts() {
-    if (isDemoMode) return Stream.value(_DemoData.products);
+    if (isDemoMode) {
+      return Stream.value(_DemoData.productsForProfile(activeDemoProfileId));
+    }
     return _userCollection('products')
         .orderBy('createdAt', descending: true)
         .snapshots()
@@ -310,7 +923,8 @@ class FirestoreService {
   Future<Product?> getProductById(String id) async {
     if (isDemoMode) {
       try {
-        return _DemoData.products.firstWhere((p) => p.id == id);
+        return _DemoData.productsForProfile(activeDemoProfileId)
+            .firstWhere((p) => p.id == id);
       } catch (_) {
         return null;
       }
@@ -341,7 +955,9 @@ class FirestoreService {
   }
 
   Stream<List<Purchase>> getPurchases() {
-    if (isDemoMode) return Stream.value(_DemoData.purchases);
+    if (isDemoMode) {
+      return Stream.value(_DemoData.purchasesForProfile(activeDemoProfileId));
+    }
     return _userCollection('purchases')
         .orderBy('date', descending: true)
         .snapshots()
@@ -359,7 +975,9 @@ class FirestoreService {
   }
 
   Stream<List<Sale>> getSales() {
-    if (isDemoMode) return Stream.value(_DemoData.sales);
+    if (isDemoMode) {
+      return Stream.value(_DemoData.salesForProfile(activeDemoProfileId));
+    }
     return _userCollection('sales')
         .orderBy('date', descending: true)
         .snapshots()
@@ -513,7 +1131,9 @@ class FirestoreService {
   }
 
   Stream<List<Shipment>> getShipments() {
-    if (isDemoMode) return Stream.value(_DemoData.shipments);
+    if (isDemoMode) {
+      return Stream.value(_DemoData.shipmentsForProfile(activeDemoProfileId));
+    }
     return _userCollection('shipments')
         .orderBy('createdAt', descending: true)
         .snapshots()
@@ -534,7 +1154,8 @@ class FirestoreService {
   Future<Shipment?> getShipmentByTrackingCode(String code) async {
     if (isDemoMode) {
       try {
-        return _DemoData.shipments.firstWhere((s) => s.trackingCode == code);
+        return _DemoData.shipmentsForProfile(activeDemoProfileId)
+            .firstWhere((s) => s.trackingCode == code);
       } catch (_) {
         return null;
       }
@@ -580,7 +1201,10 @@ class FirestoreService {
   }
 
   Stream<List<AppNotification>> getNotifications() {
-    if (isDemoMode) return Stream.value(_DemoData.notifications);
+    if (isDemoMode) {
+      return Stream.value(
+          _DemoData.notificationsForProfile(activeDemoProfileId));
+    }
     return _userCollection('notifications')
         .orderBy('createdAt', descending: true)
         .snapshots()
@@ -591,7 +1215,9 @@ class FirestoreService {
   Stream<int> getUnreadNotificationCount() {
     if (isDemoMode) {
       return Stream.value(
-          _DemoData.notifications.where((n) => !n.read).length);
+          _DemoData.notificationsForProfile(activeDemoProfileId)
+              .where((n) => !n.read)
+              .length);
     }
     return _userCollection('notifications')
         .where('read', isEqualTo: false)

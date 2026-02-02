@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
+import '../models/profile.dart';
 
 // ═══════════════════════════════════════════════════
 //  ONBOARDING — Post-registration profile setup
-//  4 steps: Welcome → Features → Platforms → Level
+//  4 steps: Welcome → Features → Categories → Level
+//  When creating additional profiles, starts at step 2
 // ═══════════════════════════════════════════════════
 
 class _SelectableItem {
@@ -86,112 +89,49 @@ const _features = [
   ),
 ];
 
-// ── Platforms (Step 3) ────────────────────────────
-const _platforms = [
+// ── Categories (Step 3 — replaces platforms) ──────
+const _categories = [
   _SelectableItem(
-    id: 'vinted',
-    label: 'Vinted',
-    emoji: '👗',
-    description: 'Moda second-hand',
-    color: Color(0xFF09B1BA),
-  ),
-  _SelectableItem(
-    id: 'ebay',
-    label: 'eBay',
-    emoji: '🛒',
-    description: 'Aste e compra subito',
-    color: Color(0xFFE53238),
-  ),
-  _SelectableItem(
-    id: 'cardmarket',
-    label: 'Cardmarket',
+    id: 'cards',
+    label: 'Carte Collezionabili',
     emoji: '🃏',
-    description: 'TCG: Pokémon, Magic, Yu-Gi-Oh!',
+    description: 'Pokémon, Magic, Yu-Gi-Oh!',
     color: Color(0xFF1E3A5F),
   ),
   _SelectableItem(
-    id: 'stockx',
-    label: 'StockX',
-    emoji: '📈',
-    description: 'Sneakers, streetwear, elettronica',
+    id: 'sneakers',
+    label: 'Sneakers & Streetwear',
+    emoji: '👟',
+    description: 'Nike, Jordan, Adidas, Yeezy',
     color: Color(0xFF006340),
   ),
   _SelectableItem(
-    id: 'depop',
-    label: 'Depop',
-    emoji: '🔴',
-    description: 'Moda vintage e streetwear',
-    color: Color(0xFFFF2300),
-  ),
-  _SelectableItem(
-    id: 'wallapop',
-    label: 'Wallapop',
-    emoji: '💬',
-    description: 'Compravendita locale',
-    color: Color(0xFF13C1AC),
-  ),
-  _SelectableItem(
-    id: 'subito',
-    label: 'Subito.it',
-    emoji: '🇮🇹',
-    description: 'Annunci in Italia',
-    color: Color(0xFFFA4B00),
-  ),
-  _SelectableItem(
-    id: 'grailed',
-    label: 'Grailed',
-    emoji: '🖤',
-    description: 'Menswear & designer',
-    color: Color(0xFF000000),
-  ),
-  _SelectableItem(
-    id: 'goat',
-    label: 'GOAT',
-    emoji: '🐐',
-    description: 'Sneakers autenticate',
-    color: Color(0xFF121212),
-  ),
-  _SelectableItem(
-    id: 'vestiaire',
-    label: 'Vestiaire Collective',
+    id: 'luxury',
+    label: 'Luxury & Designer',
     emoji: '💎',
-    description: 'Luxury second-hand',
-    color: Color(0xFF2D5F2D),
+    description: 'Gucci, LV, Balenciaga',
+    color: Color(0xFF9C27B0),
   ),
   _SelectableItem(
-    id: 'facebook_mp',
-    label: 'Facebook Marketplace',
-    emoji: '🏪',
-    description: 'Vendita locale e spedita',
-    color: Color(0xFF1877F2),
+    id: 'vintage',
+    label: 'Moda & Vintage',
+    emoji: '👗',
+    description: 'Abbigliamento, second-hand',
+    color: Color(0xFFFF5722),
   ),
   _SelectableItem(
-    id: 'etsy',
-    label: 'Etsy',
-    emoji: '🎨',
-    description: 'Artigianato e vintage',
-    color: Color(0xFFF1641E),
+    id: 'tech',
+    label: 'Tech & Elettronica',
+    emoji: '🎮',
+    description: 'Console, smartphone, gadget',
+    color: Color(0xFF00BCD4),
   ),
   _SelectableItem(
-    id: 'amazon',
-    label: 'Amazon',
-    emoji: '📦',
-    description: 'FBA e reselling',
-    color: Color(0xFFFF9900),
-  ),
-  _SelectableItem(
-    id: 'zalando',
-    label: 'Zalando Pre-owned',
-    emoji: '🧡',
-    description: 'Moda e scarpe',
-    color: Color(0xFFFF6900),
-  ),
-  _SelectableItem(
-    id: 'other',
-    label: 'Altro',
-    emoji: '➕',
-    description: 'Piattaforma non in lista',
-    color: AppColors.textMuted,
+    id: 'generic',
+    label: 'Marketplace Generico',
+    emoji: '🛒',
+    description: 'Un po\' di tutto',
+    color: AppColors.accentBlue,
   ),
 ];
 
@@ -227,7 +167,18 @@ const _experienceLevels = [
 class OnboardingScreen extends StatefulWidget {
   final VoidCallback onComplete;
 
-  const OnboardingScreen({super.key, required this.onComplete});
+  /// If true, skip step 1 (welcome/name) — used when creating additional profiles
+  final bool skipWelcome;
+
+  /// Optional profile name override for additional profiles
+  final String? profileNameOverride;
+
+  const OnboardingScreen({
+    super.key,
+    required this.onComplete,
+    this.skipWelcome = false,
+    this.profileNameOverride,
+  });
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -235,14 +186,16 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen>
     with TickerProviderStateMixin {
-  final _pageController = PageController();
+  late final PageController _pageController;
   final _nameController = TextEditingController();
+  final _profileNameController = TextEditingController();
   final _firestoreService = FirestoreService();
 
-  int _currentPage = 0;
-  final int _totalPages = 4;
+  late int _currentPage;
+  late int _totalPages;
+  late int _pageOffset; // 0 for full onboarding, 1 for skip-welcome
   final Set<String> _selectedFeatures = {};
-  final Set<String> _selectedPlatforms = {};
+  final Set<String> _selectedCategories = {};
   String? _selectedExperience;
   bool _saving = false;
 
@@ -252,6 +205,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   void initState() {
     super.initState();
+    _pageOffset = widget.skipWelcome ? 1 : 0;
+    _totalPages = 4 - _pageOffset;
+    _currentPage = 0;
+    _pageController = PageController();
+
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -267,6 +225,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   void dispose() {
     _pageController.dispose();
     _nameController.dispose();
+    _profileNameController.dispose();
     _fadeController.dispose();
     super.dispose();
   }
@@ -292,13 +251,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   bool get _canProceed {
-    switch (_currentPage) {
+    final actualStep = _currentPage + _pageOffset;
+    switch (actualStep) {
       case 0:
         return true; // name is optional
       case 1:
         return _selectedFeatures.isNotEmpty;
       case 2:
-        return _selectedPlatforms.isNotEmpty;
+        return _selectedCategories.isNotEmpty;
       case 3:
         return _selectedExperience != null;
       default:
@@ -306,21 +266,71 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
   }
 
+  String _determineCategoryFromSelection() {
+    if (_selectedCategories.length == 1) {
+      return _selectedCategories.first;
+    }
+    return 'generic';
+  }
+
   Future<void> _finishOnboarding() async {
     if (_saving) return;
     setState(() => _saving = true);
 
     try {
-      await _firestoreService.setUserProfile({
-        'displayName': _nameController.text.trim().isEmpty
-            ? null
-            : _nameController.text.trim(),
-        'interests': _selectedFeatures.toList(),
-        'platforms': _selectedPlatforms.toList(),
-        'experienceLevel': _selectedExperience,
-        'onboardingComplete': true,
-        'onboardingCompletedAt': DateTime.now().toIso8601String(),
-      });
+      final displayName = _nameController.text.trim();
+      final category = _determineCategoryFromSelection();
+
+      if (widget.skipWelcome) {
+        // Creating additional profile
+        final profileName = _profileNameController.text.trim().isEmpty
+            ? Profile.categoryLabel(category)
+            : _profileNameController.text.trim();
+
+        final profile = Profile(
+          name: profileName,
+          features: _selectedFeatures.toList(),
+          platforms: _selectedCategories.toList(),
+          category: category,
+          experienceLevel: _selectedExperience ?? 'intermediate',
+          createdAt: DateTime.now(),
+        );
+
+        final ref = await _firestoreService.addProfile(profile);
+        await _firestoreService.setActiveProfile(ref.id);
+      } else {
+        // First-time onboarding
+
+        // Save displayName to FirebaseAuth
+        if (displayName.isNotEmpty) {
+          await FirebaseAuth.instance.currentUser?.updateDisplayName(displayName);
+        }
+
+        // Save user doc
+        await _firestoreService.setUserProfile({
+          'displayName': displayName.isEmpty ? null : displayName,
+          'onboardingComplete': true,
+          'onboardingCompletedAt': DateTime.now().toIso8601String(),
+        });
+
+        // Create first profile
+        final profileName = _profileNameController.text.trim().isEmpty
+            ? (displayName.isNotEmpty ? 'Profilo di $displayName' : Profile.categoryLabel(category))
+            : _profileNameController.text.trim();
+
+        final profile = Profile(
+          name: profileName,
+          features: _selectedFeatures.toList(),
+          platforms: _selectedCategories.toList(),
+          category: category,
+          experienceLevel: _selectedExperience ?? 'intermediate',
+          createdAt: DateTime.now(),
+        );
+
+        final ref = await _firestoreService.addProfile(profile);
+        await _firestoreService.setActiveProfile(ref.id);
+      }
+
       widget.onComplete();
     } catch (e) {
       if (mounted) {
@@ -355,19 +365,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   physics: const NeverScrollableScrollPhysics(),
                   onPageChanged: (i) => setState(() => _currentPage = i),
                   children: [
-                    _buildWelcomePage(),
-                    _buildGridPage(
-                      title: 'Cosa ti interessa?',
-                      subtitle: 'Seleziona le funzionalità che usi di più',
-                      items: _features,
-                      selected: _selectedFeatures,
-                    ),
-                    _buildGridPage(
-                      title: 'Dove compri e vendi?',
-                      subtitle: 'Seleziona le piattaforme che usi',
-                      items: _platforms,
-                      selected: _selectedPlatforms,
-                    ),
+                    if (!widget.skipWelcome) _buildWelcomePage(),
+                    _buildFeaturesPage(),
+                    _buildCategoriesPage(),
                     _buildExperiencePage(),
                   ],
                 ),
@@ -537,7 +537,226 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // ─── Reusable grid page (features / platforms) ─────
+  // ─── Page 2: Features ──────────────────────────────
+  Widget _buildFeaturesPage() {
+    return _buildGridPage(
+      title: 'Cosa ti interessa?',
+      subtitle: 'Seleziona le funzionalità che usi di più',
+      items: _features,
+      selected: _selectedFeatures,
+    );
+  }
+
+  // ─── Page 3: Categories (replaces platforms) ───────
+  Widget _buildCategoriesPage() {
+    return Column(
+      children: [
+        const SizedBox(height: 24),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            'Cosa compri e vendi?',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Scegli la categoria del tuo profilo',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 15,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        if (_selectedCategories.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(
+              _selectedCategories.length == 1
+                  ? '1 categoria selezionata'
+                  : '${_selectedCategories.length} categorie → Profilo generico',
+              style: TextStyle(
+                color: AppColors.accentBlue.withValues(alpha: 0.8),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: ListView.builder(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                itemCount: _categories.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildCategoryCard(_categories[index]),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+        // Profile name field
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(left: 4, bottom: 6),
+                child: Text(
+                  'Nome profilo (opzionale)',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                ),
+                child: TextField(
+                  controller: _profileNameController,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: _selectedCategories.length == 1
+                        ? Profile.categoryLabel(_selectedCategories.first)
+                        : 'es. "Reselling 2025"',
+                    hintStyle:
+                        const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                    prefixIcon: const Icon(Icons.edit_outlined,
+                        color: AppColors.textMuted, size: 18),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildCategoryCard(_SelectableItem item) {
+    final isSelected = _selectedCategories.contains(item.id);
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (isSelected) {
+            _selectedCategories.remove(item.id);
+          } else {
+            _selectedCategories.add(item.id);
+          }
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? item.color.withValues(alpha: 0.12)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? item.color.withValues(alpha: 0.5)
+                : Colors.white.withValues(alpha: 0.06),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: item.color.withValues(alpha: 0.2),
+                    blurRadius: 16,
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          children: [
+            Text(item.emoji, style: const TextStyle(fontSize: 32)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.label,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.description,
+                    style: TextStyle(
+                      color: isSelected
+                          ? AppColors.textSecondary
+                          : AppColors.textMuted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? item.color : Colors.transparent,
+                border: Border.all(
+                  color: isSelected
+                      ? item.color
+                      : AppColors.textMuted.withValues(alpha: 0.4),
+                  width: 2,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: item.color.withValues(alpha: 0.4),
+                          blurRadius: 8,
+                        ),
+                      ]
+                    : [],
+              ),
+              child: isSelected
+                  ? const Icon(Icons.check, color: Colors.white, size: 16)
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Reusable grid page (features) ─────────────────
   Widget _buildGridPage({
     required String title,
     required String subtitle,
@@ -741,7 +960,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               }),
               const SizedBox(height: 32),
               // Summary chips
-              if (_selectedFeatures.isNotEmpty || _selectedPlatforms.isNotEmpty)
+              if (_selectedFeatures.isNotEmpty || _selectedCategories.isNotEmpty)
                 _buildSummary(),
               const SizedBox(height: 40),
             ],
@@ -776,9 +995,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           ),
           const SizedBox(height: 18),
         ],
-        if (_selectedPlatforms.isNotEmpty) ...[
+        if (_selectedCategories.isNotEmpty) ...[
           const Text(
-            'PIATTAFORME',
+            'CATEGORIE',
             style: TextStyle(
               color: AppColors.textMuted,
               fontSize: 11,
@@ -790,8 +1009,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _selectedPlatforms.map((id) {
-              final item = _platforms.firstWhere((i) => i.id == id);
+            children: _selectedCategories.map((id) {
+              final item = _categories.firstWhere((i) => i.id == id);
               return _buildChip(item);
             }).toList(),
           ),
