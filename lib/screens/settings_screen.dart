@@ -691,6 +691,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(24),
@@ -700,7 +701,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           StaggeredFadeSlide(
             index: 0,
             child: Text(
-              AppLocalizations.of(context)!.settings,
+              l.settings,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 26,
@@ -715,10 +716,150 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildLoginPrompt(),
           if (!_isLoggedIn) const SizedBox(height: 20),
 
-          // ── Profile section (NEW) ──
-          if (_profile != null)
+          // ═══════════════════════════════════════════
+          //  ACCOUNT CARD — sempre in cima
+          // ═══════════════════════════════════════════
+          StaggeredFadeSlide(
+            index: 1,
+            child: GlassCard(
+              padding: const EdgeInsets.all(20),
+              glowColor: AppColors.accentPurple,
+              child: Row(
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      gradient: AppColors.headerGradient,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.accentBlue.withValues(alpha: 0.3),
+                          blurRadius: 16,
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        _userName.isNotEmpty ? _userName[0].toUpperCase() : 'V',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _userName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _userEmail,
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (_profile != null) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.accentPurple.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppColors.accentPurple.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Text(
+                              '${Profile.categoryShortLabel(_profile!.category)} · ${_profile!.name}',
+                              style: const TextStyle(
+                                color: AppColors.accentPurple,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  ScaleOnPress(
+                    onTap: () => _showEditDialog(
+                      title: l.userName,
+                      currentValue: _userName,
+                      onSave: (v) async {
+                        await _authService.updateDisplayName(v);
+                        setState(() {});
+                      },
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      child: const Icon(Icons.edit_outlined,
+                          color: AppColors.textMuted, size: 20),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // ═══════════════════════════════════════════
+          //  IMPOSTAZIONI PROFILO
+          // ═══════════════════════════════════════════
+          if (_profile != null) ...[
             StaggeredFadeSlide(
-              index: 1,
+              index: 2,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.blueButtonGradient,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.dashboard_customize_outlined,
+                        color: Colors.white, size: 16),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'IMPOSTAZIONI PROFILO',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Profilo ──
+            StaggeredFadeSlide(
+              index: 3,
               child: _buildSection(
                 title: 'PROFILO',
                 icon: Icons.account_circle_outlined,
@@ -777,12 +918,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.accentPurple
-                            .withValues(alpha: 0.12),
+                        color: AppColors.accentPurple.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: AppColors.accentPurple
-                              .withValues(alpha: 0.25),
+                          color: AppColors.accentPurple.withValues(alpha: 0.25),
                         ),
                       ),
                       child: Text(
@@ -812,12 +951,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-          if (_profile != null) const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-          // ── Features section (NEW) ──
-          if (_profile != null)
+            // ── Funzionalità ──
             StaggeredFadeSlide(
-              index: 2,
+              index: 4,
               child: _buildSection(
                 title: 'FUNZIONALITÀ',
                 icon: Icons.tune,
@@ -879,133 +1017,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-          if (_profile != null) const SizedBox(height: 20),
+            const SizedBox(height: 32),
+          ],
 
-          // ── Profile card ──
+          // ═══════════════════════════════════════════
+          //  IMPOSTAZIONI ACCOUNT
+          // ═══════════════════════════════════════════
           StaggeredFadeSlide(
-            index: _profile != null ? 3 : (_isLoggedIn ? 1 : 2),
-            child: GlassCard(
-              padding: const EdgeInsets.all(20),
-              glowColor: AppColors.accentPurple,
-              child: Row(
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.headerGradient,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.accentBlue
-                              .withValues(alpha: 0.3),
-                          blurRadius: 16,
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        _userName.isNotEmpty
-                            ? _userName[0].toUpperCase()
-                            : 'V',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+            index: _profile != null ? 5 : 2,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentTeal.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.accentTeal.withValues(alpha: 0.3),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _userName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _userEmail,
-                          style: const TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.accentBlue
-                                .withValues(alpha: 0.12),
-                            borderRadius:
-                                BorderRadius.circular(20),
-                            border: Border.all(
-                              color: AppColors.accentBlue
-                                  .withValues(alpha: 0.25),
-                            ),
-                          ),
-                          child: Text(
-                            AppLocalizations.of(context)!.proPlan,
-                            style: TextStyle(
-                              color: AppColors.accentBlue,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: const Icon(Icons.manage_accounts_outlined,
+                      color: AppColors.accentTeal, size: 16),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'IMPOSTAZIONI ACCOUNT',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
                   ),
-                  ScaleOnPress(
-                    onTap: () => _showEditDialog(
-                      title: AppLocalizations.of(context)!.userName,
-                      currentValue: _userName,
-                      onSave: (v) async {
-                        await _authService.updateDisplayName(v);
-                        setState(() {});
-                      },
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.white
-                              .withValues(alpha: 0.06),
-                        ),
-                      ),
-                      child: const Icon(
-                          Icons.edit_outlined,
-                          color: AppColors.textMuted,
-                          size: 20),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 16),
 
-          // ── Account section ──
+          // ── Account ──
           StaggeredFadeSlide(
-            index: _profile != null ? 4 : 2,
+            index: _profile != null ? 6 : 3,
             child: _buildSection(
-              title: AppLocalizations.of(context)!.account,
+              title: l.account,
               icon: Icons.person_outline,
               children: [
                 _buildSettingsRow(
                   icon: Icons.email_outlined,
-                  title: AppLocalizations.of(context)!.email,
+                  title: l.email,
                   subtitle: _userEmail,
                   onTap: () => _showEditDialog(
                     title: 'Email',
@@ -1013,10 +1071,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onSave: (v) async {
                       try {
                         await _authService.updateEmail(v);
-                        _showSuccessSnackbar(
-                            AppLocalizations.of(context)!.verificationSent);
+                        _showSuccessSnackbar(l.verificationSent);
                       } catch (e) {
-                        _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
+                        _showSuccessSnackbar(l.error('$e'));
                       }
                     },
                   ),
@@ -1024,34 +1081,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _buildSettingsRow(
                   icon: Icons.lock_outline,
-                  title: AppLocalizations.of(context)!.password,
-                  subtitle: AppLocalizations.of(context)!.resetViaEmail,
+                  title: l.password,
+                  subtitle: l.resetViaEmail,
                   onTap: () async {
                     try {
-                      await _authService
-                          .resetPassword(_userEmail);
-                      _showSuccessSnackbar(
-                          AppLocalizations.of(context)!.resetEmailSent(_userEmail));
+                      await _authService.resetPassword(_userEmail);
+                      _showSuccessSnackbar(l.resetEmailSent(_userEmail));
                     } catch (e) {
-                      _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
+                      _showSuccessSnackbar(l.error('$e'));
                     }
                   },
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
                   icon: Icons.security,
-                  title: AppLocalizations.of(context)!.twoFactorAuth,
-                  subtitle: AppLocalizations.of(context)!.notAvailable,
+                  title: l.twoFactorAuth,
+                  subtitle: l.notAvailable,
                   onTap: () => _showInfoSheet(
-                    AppLocalizations.of(context)!.twoFactorTitle,
-                    AppLocalizations.of(context)!.twoFactorDescription,
+                    l.twoFactorTitle,
+                    l.twoFactorDescription,
                   ),
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppColors.textMuted
-                          .withValues(alpha: 0.12),
+                      color: AppColors.textMuted.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: const Text(
@@ -1069,24 +1123,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 20),
 
-          // ── Workspace section ──
+          // ── Dati & Backup ──
           StaggeredFadeSlide(
-            index: _profile != null ? 5 : 3,
+            index: _profile != null ? 7 : 4,
             child: _buildSection(
-              title: AppLocalizations.of(context)!.workspace,
-              icon: Icons.workspaces_outline,
+              title: 'DATI & BACKUP',
+              icon: Icons.cloud_outlined,
               children: [
                 _buildSettingsRow(
                   icon: Icons.cloud_upload_outlined,
-                  title: AppLocalizations.of(context)!.autoBackup,
-                  subtitle: AppLocalizations.of(context)!.syncDataCloud,
-                  trailing: _buildSwitch(_autoBackup,
-                      (v) => setState(() => _autoBackup = v)),
+                  title: l.autoBackup,
+                  subtitle: l.syncDataCloud,
+                  trailing: _buildSwitch(
+                      _autoBackup, (v) => setState(() => _autoBackup = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.download_outlined,
-                  title: AppLocalizations.of(context)!.exportAllData,
-                  subtitle: AppLocalizations.of(context)!.csvPdfJson,
+                  title: l.exportAllData,
+                  subtitle: l.csvPdfJson,
                   onTap: _showExportDialog,
                   trailing: _buildChevron(),
                 ),
@@ -1095,93 +1149,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 20),
 
-          // ── Notifications section ──
+          // ── Notifiche ──
           StaggeredFadeSlide(
-            index: _profile != null ? 6 : 4,
+            index: _profile != null ? 8 : 5,
             child: _buildSection(
-              title: AppLocalizations.of(context)!.notifications,
+              title: l.notifications,
               icon: Icons.notifications_outlined,
               children: [
                 _buildSettingsRow(
                   icon: Icons.notifications_active_outlined,
-                  title: AppLocalizations.of(context)!.notificationsInApp,
-                  subtitle: AppLocalizations.of(context)!.salesShipmentAlerts,
-                  trailing: _buildSwitch(_notifications,
-                      (v) => setState(() => _notifications = v)),
+                  title: l.notificationsInApp,
+                  subtitle: l.salesShipmentAlerts,
+                  trailing: _buildSwitch(
+                      _notifications, (v) => setState(() => _notifications = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.phone_android,
-                  title: AppLocalizations.of(context)!.pushNotifications,
-                  subtitle: AppLocalizations.of(context)!.receiveOnMobile,
-                  trailing: _buildSwitch(
-                      _pushNotifications,
-                      (v) => setState(
-                          () => _pushNotifications = v)),
+                  title: l.pushNotifications,
+                  subtitle: l.receiveOnMobile,
+                  trailing: _buildSwitch(_pushNotifications,
+                      (v) => setState(() => _pushNotifications = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.mail_outline,
-                  title: AppLocalizations.of(context)!.emailDigest,
-                  subtitle: AppLocalizations.of(context)!.weeklyReport,
-                  trailing: _buildSwitch(_emailDigest,
-                      (v) => setState(() => _emailDigest = v)),
+                  title: l.emailDigest,
+                  subtitle: l.weeklyReport,
+                  trailing: _buildSwitch(
+                      _emailDigest, (v) => setState(() => _emailDigest = v)),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
-          // ── Appearance section ──
+          // ── Aspetto ──
           StaggeredFadeSlide(
-            index: _profile != null ? 7 : 5,
+            index: _profile != null ? 9 : 6,
             child: _buildSection(
-              title: AppLocalizations.of(context)!.appearance,
+              title: l.appearance,
               icon: Icons.palette_outlined,
               children: [
                 _buildSettingsRow(
                   icon: Icons.dark_mode_outlined,
-                  title: AppLocalizations.of(context)!.darkMode,
-                  subtitle: AppLocalizations.of(context)!.useDarkTheme,
-                  trailing: _buildSwitch(_darkMode,
-                      (v) => setState(() => _darkMode = v)),
+                  title: l.darkMode,
+                  subtitle: l.useDarkTheme,
+                  trailing: _buildSwitch(
+                      _darkMode, (v) => setState(() => _darkMode = v)),
                 ),
                 _buildSettingsRow(
                   icon: Icons.text_fields,
-                  title: AppLocalizations.of(context)!.fontSize,
+                  title: l.fontSize,
                   subtitle: _fontSize,
                   onTap: () => _showSelectDialog(
-                    title: AppLocalizations.of(context)!.fontSize,
-                    options: [
-                      AppLocalizations.of(context)!.small,
-                      AppLocalizations.of(context)!.medium,
-                      AppLocalizations.of(context)!.large,
-                      AppLocalizations.of(context)!.extraLarge,
-                    ],
+                    title: l.fontSize,
+                    options: [l.small, l.medium, l.large, l.extraLarge],
                     currentValue: _fontSize,
-                    onSelect: (v) =>
-                        setState(() => _fontSize = v),
+                    onSelect: (v) => setState(() => _fontSize = v),
                   ),
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
                   icon: Icons.color_lens_outlined,
-                  title: AppLocalizations.of(context)!.accentColor,
-                  subtitle: [
-                    AppLocalizations.of(context)!.blueViolet,
-                    AppLocalizations.of(context)!.green,
-                    AppLocalizations.of(context)!.orange,
-                  ][_accentIndex],
+                  title: l.accentColor,
+                  subtitle: [l.blueViolet, l.green, l.orange][_accentIndex],
                   onTap: () {
-                    final colors = [
-                      AppLocalizations.of(context)!.blueViolet,
-                      AppLocalizations.of(context)!.green,
-                      AppLocalizations.of(context)!.orange,
-                    ];
+                    final colors = [l.blueViolet, l.green, l.orange];
                     _showSelectDialog(
-                      title: AppLocalizations.of(context)!.accentColor,
+                      title: l.accentColor,
                       options: colors,
                       currentValue: colors[_accentIndex],
-                      onSelect: (v) => setState(
-                          () => _accentIndex = colors.indexOf(v)),
+                      onSelect: (v) =>
+                          setState(() => _accentIndex = colors.indexOf(v)),
                     );
                   },
                   trailing: Row(
@@ -1200,43 +1238,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 20),
 
-          // ── Info section ──
+          // ── Info ──
           StaggeredFadeSlide(
-            index: _profile != null ? 8 : 6,
+            index: _profile != null ? 10 : 7,
             child: _buildSection(
-              title: AppLocalizations.of(context)!.info,
+              title: l.info,
               icon: Icons.info_outline,
               children: [
                 _buildSettingsRow(
                   icon: Icons.code,
-                  title: AppLocalizations.of(context)!.version,
+                  title: l.version,
                   subtitle: 'Vault v1.0.0',
                 ),
                 _buildSettingsRow(
                   icon: Icons.description_outlined,
-                  title: AppLocalizations.of(context)!.termsOfService,
-                  onTap: () => _showInfoSheet(
-                    AppLocalizations.of(context)!.termsOfService,
-                    AppLocalizations.of(context)!.termsContent,
-                  ),
+                  title: l.termsOfService,
+                  onTap: () => _showInfoSheet(l.termsOfService, l.termsContent),
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
                   icon: Icons.privacy_tip_outlined,
-                  title: AppLocalizations.of(context)!.privacyPolicy,
-                  onTap: () => _showInfoSheet(
-                    AppLocalizations.of(context)!.privacyPolicy,
-                    AppLocalizations.of(context)!.privacyContent,
-                  ),
+                  title: l.privacyPolicy,
+                  onTap: () => _showInfoSheet(l.privacyPolicy, l.privacyContent),
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
                   icon: Icons.bug_report_outlined,
-                  title: AppLocalizations.of(context)!.reportBug,
+                  title: l.reportBug,
                   onTap: () => _showEditDialog(
-                    title: AppLocalizations.of(context)!.reportBug,
+                    title: l.reportBug,
                     currentValue: '',
-                    hint: AppLocalizations.of(context)!.describeProblem,
+                    hint: l.describeProblem,
                     onSave: (_) {},
                   ),
                   trailing: _buildChevron(),
@@ -1246,29 +1278,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 28),
 
-          // ── Logout button (only when logged in) ──
+          // ── Logout ──
           if (_isLoggedIn)
             StaggeredFadeSlide(
-              index: _profile != null ? 9 : 7,
+              index: _profile != null ? 11 : 8,
               child: ScaleOnPress(
                 onTap: _showLogoutDialog,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(
-                    color:
-                        AppColors.accentRed.withValues(alpha: 0.1),
+                    color: AppColors.accentRed.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: AppColors.accentRed
-                          .withValues(alpha: 0.25),
+                      color: AppColors.accentRed.withValues(alpha: 0.25),
                     ),
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.logout,
-                          color: AppColors.accentRed, size: 20),
+                      Icon(Icons.logout, color: AppColors.accentRed, size: 20),
                       SizedBox(width: 8),
                       Text(
                         'Logout',
