@@ -6,7 +6,11 @@ import '../widgets/animated_widgets.dart';
 import '../l10n/app_localizations.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  /// Optional callback: when provided, the screen shows a back button and acts
+  /// as an overlay inside MainShell (not the full-screen blocking gate).
+  final VoidCallback? onBack;
+
+  const AuthScreen({super.key, this.onBack});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -113,7 +117,8 @@ class _AuthScreenState extends State<AuthScreen>
     setState(() => _loginLoading = true);
     try {
       await _authService.signIn(email: email, password: password);
-      // Auth state listener in main.dart will redirect
+      // If used as overlay, close it; AuthGate will rebuild MainShell.
+      if (mounted && widget.onBack != null) widget.onBack!();
     } on FirebaseAuthException catch (e) {
       _showError(_firebaseErrorMessage(e));
     } catch (e) {
@@ -145,6 +150,7 @@ class _AuthScreenState extends State<AuthScreen>
     setState(() => _registerLoading = true);
     try {
       await _authService.register(email: email, password: password);
+      // Don't call onBack — AuthGate will detect the new user and show onboarding
     } on FirebaseAuthException catch (e) {
       _showError(_firebaseErrorMessage(e));
     } catch (e) {
@@ -167,6 +173,41 @@ class _AuthScreenState extends State<AuthScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // Back button when used as overlay
+                if (widget.onBack != null) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: GestureDetector(
+                      onTap: widget.onBack,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.06),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.arrow_back, color: AppColors.textMuted, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              l.cancel,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 // Logo
                 StaggeredFadeSlide(
                   index: 0,
