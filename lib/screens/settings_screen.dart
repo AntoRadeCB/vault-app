@@ -1004,34 +1004,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-
-                  // ── Info ──
-                  _buildSection(
-                    title: l.info,
-                    icon: Icons.info_outline,
-                    children: [
-                      _buildSettingsRow(icon: Icons.code, title: l.version, subtitle: 'Vault v1.0.0'),
-                      _buildSettingsRow(
-                        icon: Icons.description_outlined,
-                        title: l.termsOfService,
-                        onTap: () => _showInfoSheet(l.termsOfService, l.termsContent),
-                        trailing: _buildChevron(),
-                      ),
-                      _buildSettingsRow(
-                        icon: Icons.privacy_tip_outlined,
-                        title: l.privacyPolicy,
-                        onTap: () => _showInfoSheet(l.privacyPolicy, l.privacyContent),
-                        trailing: _buildChevron(),
-                      ),
-                      _buildSettingsRow(
-                        icon: Icons.bug_report_outlined,
-                        title: l.reportBug,
-                        onTap: () => _showEditDialog(title: l.reportBug, currentValue: '', hint: l.describeProblem, onSave: (_) {}),
-                        trailing: _buildChevron(),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -1201,11 +1173,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
           ],
 
+          // ── Info (sempre visibile) ──
+          StaggeredFadeSlide(
+            index: 4,
+            child: _buildSection(
+              title: l.info,
+              icon: Icons.info_outline,
+              children: [
+                _buildSettingsRow(icon: Icons.code, title: l.version, subtitle: 'Vault v1.0.0'),
+                _buildSettingsRow(
+                  icon: Icons.description_outlined,
+                  title: l.termsOfService,
+                  onTap: () => _showInfoSheet(l.termsOfService, l.termsContent),
+                  trailing: _buildChevron(),
+                ),
+                _buildSettingsRow(
+                  icon: Icons.privacy_tip_outlined,
+                  title: l.privacyPolicy,
+                  onTap: () => _showInfoSheet(l.privacyPolicy, l.privacyContent),
+                  trailing: _buildChevron(),
+                ),
+                _buildSettingsRow(
+                  icon: Icons.bug_report_outlined,
+                  title: l.reportBug,
+                  onTap: () => _showEditDialog(title: l.reportBug, currentValue: '', hint: l.describeProblem, onSave: (_) {}),
+                  trailing: _buildChevron(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
           // ── Logout ──
-          if (_isLoggedIn) ...[
-            const SizedBox(height: 12),
+          if (_isLoggedIn)
             StaggeredFadeSlide(
-              index: 4,
+              index: 5,
               child: ScaleOnPress(
                 onTap: _showLogoutDialog,
                 child: Container(
@@ -1227,7 +1229,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-          ],
           const SizedBox(height: 40),
         ],
       ),
