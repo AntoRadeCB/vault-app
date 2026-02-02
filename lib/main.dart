@@ -284,15 +284,90 @@ class _MainShellState extends State<MainShell> {
 
   Widget _buildMobileLayout() {
     return SafeArea(
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        transitionBuilder: (child, animation) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        child: KeyedSubtree(
-          key: ValueKey<String>(_screenKey),
-          child: _getCurrentScreen(),
-        ),
+      child: Column(
+        children: [
+          _buildMobileTopBar(),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+              child: KeyedSubtree(
+                key: ValueKey<String>(_screenKey),
+                child: _getCurrentScreen(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileTopBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              gradient: AppColors.headerGradient,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.view_in_ar,
+              color: Colors.white,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'Vault',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const Spacer(),
+          StreamBuilder<int>(
+            stream: _firestoreService.getUnreadNotificationCount(),
+            builder: (context, snap) {
+              final count = snap.data ?? 0;
+              return GestureDetector(
+                onTap: _showNotificationsScreen,
+                child: PulsingBadge(
+                  count: count,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: _showNotifications
+                          ? AppColors.accentBlue.withValues(alpha: 0.15)
+                          : AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _showNotifications
+                            ? AppColors.accentBlue.withValues(alpha: 0.3)
+                            : Colors.white.withValues(alpha: 0.06),
+                      ),
+                    ),
+                    child: Icon(
+                      _showNotifications
+                          ? Icons.notifications
+                          : Icons.notifications_outlined,
+                      color: _showNotifications
+                          ? AppColors.accentBlue
+                          : AppColors.textMuted,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
