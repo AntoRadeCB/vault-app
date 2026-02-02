@@ -1,7 +1,6 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import express from "express";
-import swaggerUi from "swagger-ui-express";
 
 import { db } from "./config/firebase.config";
 import { swaggerSpec } from "./config/swagger.config";
@@ -38,7 +37,32 @@ app.use(corsMiddleware);
 app.use(express.json());
 
 // Swagger docs (no auth required)
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+const swaggerHtml = `<!DOCTYPE html>
+<html><head>
+  <title>Vault API Docs</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+</head><body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    // Detect base path dynamically
+    const currentPath = window.location.pathname;
+    const basePath = currentPath.replace(/\\/docs\\/?$/, '');
+    SwaggerUIBundle({
+      url: basePath + '/docs.json',
+      dom_id: '#swagger-ui',
+      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+      layout: 'BaseLayout',
+    });
+  </script>
+</body></html>`;
+
+app.get("/docs", (_req, res) => {
+  res.setHeader("Content-Type", "text/html");
+  res.send(swaggerHtml);
+});
 app.get("/docs.json", (_req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.send(swaggerSpec);
