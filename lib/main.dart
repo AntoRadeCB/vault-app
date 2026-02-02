@@ -599,7 +599,6 @@ class _MainShellState extends State<MainShell> {
             children: [
               _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, l.home, 0),
               _buildNavItem(Icons.inventory_2_outlined, Icons.inventory_2, l.inventory, 1),
-              const SizedBox(width: 48), // Space for FAB
               _buildNavItem(Icons.local_shipping_outlined, Icons.local_shipping, l.shipments, 2),
               _buildNavItem(Icons.bar_chart_outlined, Icons.bar_chart, l.reports, 3),
               _buildNavItem(Icons.settings_outlined, Icons.settings, l.settings, 4),
@@ -616,7 +615,7 @@ class _MainShellState extends State<MainShell> {
       onTap: () => _navigateTo(index),
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
