@@ -1,8 +1,10 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
 import '../services/card_catalog_service.dart';
+import '../services/profile_provider.dart';
 import '../models/product.dart';
 import '../models/card_blueprint.dart';
 import '../models/sale.dart';
@@ -27,6 +29,7 @@ class DashboardScreen extends StatelessWidget {
           children: [
             StaggeredFadeSlide(index: 0, child: _buildHeader(context)),
             const SizedBox(height: 24),
+            _buildBudgetCard(context),
             _buildMainStatCards(context),
             const SizedBox(height: 12),
             StaggeredFadeSlide(index: 5, child: _buildMarketValueCard(context)),
@@ -118,6 +121,125 @@ class DashboardScreen extends StatelessWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════
+  //  BUDGET CARD — shown only if profile has a budget
+  // ════════════════════════════════════════════════════
+
+  Widget _buildBudgetCard(BuildContext context) {
+    final provider = ProfileProvider.maybeOf(context);
+    final profile = provider?.profile;
+    if (profile == null || !profile.hasBudget) return const SizedBox.shrink();
+
+    final budget = profile.budgetMonthly!;
+    final spent = profile.budgetSpent ?? 0;
+    final progress = (spent / budget).clamp(0.0, 1.5);
+    final percentage = (progress * 100).toInt();
+
+    // Color: green <70%, orange 70-90%, red >90%
+    Color progressColor;
+    if (progress < 0.7) {
+      progressColor = AppColors.accentGreen;
+    } else if (progress < 0.9) {
+      progressColor = AppColors.accentOrange;
+    } else {
+      progressColor = AppColors.accentRed;
+    }
+
+    return StaggeredFadeSlide(
+      index: 1,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: HoverLiftCard(
+          child: GlassCard(
+            padding: const EdgeInsets.all(20),
+            glowColor: progressColor,
+            child: Row(
+              children: [
+                // Circular progress
+                SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: CustomPaint(
+                    painter: _BudgetCirclePainter(
+                      progress: progress.clamp(0.0, 1.0),
+                      color: progressColor,
+                      trackColor: Colors.white.withValues(alpha: 0.06),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$percentage%',
+                        style: TextStyle(
+                          color: progressColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.savings_outlined, color: progressColor, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            'BUDGET MENSILE',
+                            style: TextStyle(
+                              color: progressColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '€${spent.toStringAsFixed(0)} / €${budget.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Progress bar
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: progress.clamp(0.0, 1.0),
+                          backgroundColor: Colors.white.withValues(alpha: 0.06),
+                          color: progressColor,
+                          minHeight: 6,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        progress >= 1.0
+                            ? 'Budget superato!'
+                            : 'Restano €${(budget - spent).toStringAsFixed(0)}',
+                        style: TextStyle(
+                          color: progress >= 1.0
+                              ? AppColors.accentRed
+                              : AppColors.textMuted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -966,5 +1088,70 @@ class _PurchaseRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ──────────────────────────────────────────────────
+// Custom painter for the budget circular indicator
+// ──────────────────────────────────────────────────
+class _BudgetCirclePainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final Color trackColor;
+
+  _BudgetCirclePainter({
+    required this.progress,
+    required this.color,
+    required this.trackColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - 8) / 2;
+    const strokeWidth = 6.0;
+    const startAngle = -math.pi / 2;
+
+    // Track
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, trackPaint);
+
+    // Progress arc
+    final progressPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      2 * math.pi * progress,
+      false,
+      progressPaint,
+    );
+
+    // Glow
+    final glowPaint = Paint()
+      ..color = color.withValues(alpha: 0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth + 4
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      2 * math.pi * progress,
+      false,
+      glowPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BudgetCirclePainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }
