@@ -45,7 +45,7 @@ class VaultApp extends StatelessWidget {
   }
 }
 
-/// AuthGate: shows AuthScreen if not logged in, MainShell if logged in
+/// AuthGate: always shows MainShell, reactively rebuilds on auth state changes
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -62,10 +62,10 @@ class AuthGate extends StatelessWidget {
             ),
           );
         }
-        if (snapshot.hasData) {
-          return const MainShell();
-        }
-        return const AuthScreen();
+        // Always show the main app — key on uid so it rebuilds (and re-subscribes
+        // to streams) when the user logs in or out.
+        final uid = snapshot.data?.uid ?? 'demo';
+        return MainShell(key: ValueKey(uid));
       },
     );
   }
@@ -83,11 +83,15 @@ class _MainShellState extends State<MainShell> {
   bool _showAddItem = false;
   bool _showAddSale = false;
   bool _showNotifications = false;
+  bool _showAuthOverlay = false;
   Product? _editingProduct;
   Shipment? _trackingShipment;
   final _searchController = TextEditingController();
   bool _searchFocused = false;
   final FirestoreService _firestoreService = FirestoreService();
+  bool _demoBannerDismissed = false;
+
+  bool get _isLoggedIn => FirebaseAuth.instance.currentUser != null;
 
   void _navigateTo(int index) {
     setState(() {
@@ -95,37 +99,53 @@ class _MainShellState extends State<MainShell> {
       _showAddItem = false;
       _showAddSale = false;
       _showNotifications = false;
+      _showAuthOverlay = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
   }
 
   void _showAddItemScreen() {
+    if (!_isLoggedIn) {
+      _showDemoSnackbar();
+      return;
+    }
     setState(() {
       _showAddItem = true;
       _showAddSale = false;
       _showNotifications = false;
+      _showAuthOverlay = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
   }
 
   void _showAddSaleScreen() {
+    if (!_isLoggedIn) {
+      _showDemoSnackbar();
+      return;
+    }
     setState(() {
       _showAddSale = true;
       _showAddItem = false;
       _showNotifications = false;
+      _showAuthOverlay = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
   }
 
   void _showEditProductScreen(Product product) {
+    if (!_isLoggedIn) {
+      _showDemoSnackbar();
+      return;
+    }
     setState(() {
       _editingProduct = product;
       _showAddItem = false;
       _showAddSale = false;
       _showNotifications = false;
+      _showAuthOverlay = false;
       _trackingShipment = null;
     });
   }
@@ -136,6 +156,7 @@ class _MainShellState extends State<MainShell> {
       _showAddItem = false;
       _showAddSale = false;
       _showNotifications = false;
+      _showAuthOverlay = false;
       _editingProduct = null;
     });
   }
@@ -145,6 +166,18 @@ class _MainShellState extends State<MainShell> {
       _showNotifications = true;
       _showAddItem = false;
       _showAddSale = false;
+      _showAuthOverlay = false;
+      _editingProduct = null;
+      _trackingShipment = null;
+    });
+  }
+
+  void _openAuthOverlay() {
+    setState(() {
+      _showAuthOverlay = true;
+      _showAddItem = false;
+      _showAddSale = false;
+      _showNotifications = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
@@ -155,12 +188,63 @@ class _MainShellState extends State<MainShell> {
       _showAddItem = false;
       _showAddSale = false;
       _showNotifications = false;
+      _showAuthOverlay = false;
       _editingProduct = null;
       _trackingShipment = null;
     });
   }
 
+  void _showDemoSnackbar() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.lock_outline, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Accedi per salvare le modifiche',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                _openAuthOverlay();
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Accedi',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.accentOrange,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   Widget _getCurrentScreen() {
+    if (_showAuthOverlay) {
+      return AuthScreen(
+        onBack: _closeOverlay,
+      );
+    }
     if (_showNotifications) {
       return NotificationsScreen(
         onBack: _closeOverlay,
@@ -206,7 +290,9 @@ class _MainShellState extends State<MainShell> {
       case 3:
         return const ReportsScreen();
       case 4:
-        return const SettingsScreen();
+        return SettingsScreen(
+          onOpenAuth: _openAuthOverlay,
+        );
       default:
         return DashboardScreen(
           onNewPurchase: _showAddItemScreen,
@@ -235,6 +321,79 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  // ─── Demo Banner ───────────────────────────────────
+  Widget _buildDemoBanner() {
+    if (_isLoggedIn || _demoBannerDismissed) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.accentOrange.withValues(alpha: 0.15),
+            AppColors.accentOrange.withValues(alpha: 0.08),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.accentOrange.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Text('🎯', style: TextStyle(fontSize: 16)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Modalità Demo — Accedi per salvare i tuoi dati',
+              style: TextStyle(
+                color: AppColors.accentOrange.withValues(alpha: 0.9),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _openAuthOverlay,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF9800), Color(0xFFF57C00)],
+                ),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accentOrange.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: const Text(
+                'Accedi',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () => setState(() => _demoBannerDismissed = true),
+            child: Icon(
+              Icons.close,
+              color: AppColors.accentOrange.withValues(alpha: 0.5),
+              size: 18,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDesktopLayout() {
     return Row(
       children: [
@@ -243,6 +402,7 @@ class _MainShellState extends State<MainShell> {
           child: Column(
             children: [
               _buildDesktopTopBar(),
+              _buildDemoBanner(),
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 350),
@@ -274,6 +434,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   String get _screenKey {
+    if (_showAuthOverlay) return 'auth';
     if (_showNotifications) return 'notifications';
     if (_showAddItem) return 'add';
     if (_showAddSale) return 'sale';
@@ -287,6 +448,7 @@ class _MainShellState extends State<MainShell> {
       child: Column(
         children: [
           _buildMobileTopBar(),
+          _buildDemoBanner(),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
@@ -428,35 +590,35 @@ class _MainShellState extends State<MainShell> {
             icon: Icons.dashboard_outlined,
             selectedIcon: Icons.dashboard,
             label: l.dashboard,
-            isSelected: _currentIndex == 0 && !_showAddItem,
+            isSelected: _currentIndex == 0 && !_showAddItem && !_showAuthOverlay,
             onTap: () => _navigateTo(0),
           ),
           _SidebarItem(
             icon: Icons.inventory_2_outlined,
             selectedIcon: Icons.inventory_2,
             label: l.inventory,
-            isSelected: _currentIndex == 1 && !_showAddItem,
+            isSelected: _currentIndex == 1 && !_showAddItem && !_showAuthOverlay,
             onTap: () => _navigateTo(1),
           ),
           _SidebarItem(
             icon: Icons.local_shipping_outlined,
             selectedIcon: Icons.local_shipping,
             label: l.shipments,
-            isSelected: _currentIndex == 2 && !_showAddItem,
+            isSelected: _currentIndex == 2 && !_showAddItem && !_showAuthOverlay,
             onTap: () => _navigateTo(2),
           ),
           _SidebarItem(
             icon: Icons.bar_chart_outlined,
             selectedIcon: Icons.bar_chart,
             label: l.reports,
-            isSelected: _currentIndex == 3 && !_showAddItem,
+            isSelected: _currentIndex == 3 && !_showAddItem && !_showAuthOverlay,
             onTap: () => _navigateTo(3),
           ),
           _SidebarItem(
             icon: Icons.settings_outlined,
             selectedIcon: Icons.settings,
             label: l.settings,
-            isSelected: _currentIndex == 4 && !_showAddItem,
+            isSelected: _currentIndex == 4 && !_showAddItem && !_showAuthOverlay,
             onTap: () => _navigateTo(4),
           ),
           const Spacer(),
@@ -466,22 +628,32 @@ class _MainShellState extends State<MainShell> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.accentGreen.withValues(alpha: 0.08),
+                color: _isLoggedIn
+                    ? AppColors.accentGreen.withValues(alpha: 0.08)
+                    : AppColors.accentOrange.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: AppColors.accentGreen.withValues(alpha: 0.15),
+                  color: _isLoggedIn
+                      ? AppColors.accentGreen.withValues(alpha: 0.15)
+                      : AppColors.accentOrange.withValues(alpha: 0.15),
                 ),
               ),
               child: Row(
                 children: [
-                  const PulsingDot(color: AppColors.accentGreen, size: 8),
+                  PulsingDot(
+                    color: _isLoggedIn ? AppColors.accentGreen : AppColors.accentOrange,
+                    size: 8,
+                  ),
                   const SizedBox(width: 10),
-                  Text(
-                    l.systemOnline,
-                    style: const TextStyle(
-                      color: AppColors.accentGreen,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Text(
+                      _isLoggedIn ? l.systemOnline : 'Demo Mode',
+                      style: TextStyle(
+                        color: _isLoggedIn ? AppColors.accentGreen : AppColors.accentOrange,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -685,7 +857,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildNavItem(IconData icon, IconData selectedIcon, String label, int index) {
-    final isSelected = _currentIndex == index && !_showAddItem;
+    final isSelected = _currentIndex == index && !_showAddItem && !_showAuthOverlay;
     return GestureDetector(
       onTap: () => _navigateTo(index),
       behavior: HitTestBehavior.opaque,

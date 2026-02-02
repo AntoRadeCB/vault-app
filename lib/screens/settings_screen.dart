@@ -6,7 +6,9 @@ import '../services/auth_service.dart';
 import '../l10n/app_localizations.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onOpenAuth;
+
+  const SettingsScreen({super.key, this.onOpenAuth});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -558,6 +560,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  bool get _isLoggedIn => _authService.currentUser != null;
+
+  Widget _buildLoginPrompt() {
+    if (_isLoggedIn) return const SizedBox.shrink();
+    return StaggeredFadeSlide(
+      index: 1,
+      child: GlassCard(
+        padding: const EdgeInsets.all(20),
+        glowColor: AppColors.accentOrange,
+        child: Column(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF9800), Color(0xFFF57C00)],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accentOrange.withValues(alpha: 0.3),
+                    blurRadius: 16,
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(Icons.person_outline, color: Colors.white, size: 28),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Stai usando la modalità demo',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Accedi o registrati per salvare i tuoi dati e sincronizzarli su tutti i dispositivi.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: ScaleOnPress(
+                    onTap: widget.onOpenAuth,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.blueButtonGradient,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.accentBlue.withValues(alpha: 0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Accedi / Registrati',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -580,9 +670,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 24),
 
+          // ── Login prompt (demo mode) ──
+          _buildLoginPrompt(),
+          if (!_isLoggedIn) const SizedBox(height: 20),
+
           // ── Profile card ──
           StaggeredFadeSlide(
-            index: 1,
+            index: _isLoggedIn ? 1 : 2,
             child: GlassCard(
               padding: const EdgeInsets.all(20),
               glowColor: AppColors.accentPurple,
@@ -963,42 +1057,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 28),
 
-          // ── Logout button ──
-          StaggeredFadeSlide(
-            index: 7,
-            child: ScaleOnPress(
-              onTap: _showLogoutDialog,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color:
-                      AppColors.accentRed.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: AppColors.accentRed
-                        .withValues(alpha: 0.25),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.logout,
-                        color: AppColors.accentRed, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'Logout',
-                      style: TextStyle(
-                        color: AppColors.accentRed,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
+          // ── Logout button (only when logged in) ──
+          if (_isLoggedIn)
+            StaggeredFadeSlide(
+              index: 7,
+              child: ScaleOnPress(
+                onTap: _showLogoutDialog,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color:
+                        AppColors.accentRed.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.accentRed
+                          .withValues(alpha: 0.25),
                     ),
-                  ],
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.logout,
+                          color: AppColors.accentRed, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Logout',
+                        style: TextStyle(
+                          color: AppColors.accentRed,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
           const SizedBox(height: 40),
         ],
       ),
