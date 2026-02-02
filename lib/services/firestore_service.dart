@@ -6,9 +6,13 @@ import '../models/sale.dart';
 import '../models/shipment.dart';
 import '../models/app_notification.dart';
 import '../models/user_profile.dart';
+import 'demo_data_service.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  /// Global demo mode flag — when true, returns local sample data.
+  static bool demoMode = false;
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
@@ -34,6 +38,7 @@ class FirestoreService {
   }
 
   Stream<List<Product>> getProducts() {
+    if (demoMode) return Stream.value(DemoDataService.products);
     return _userCollection('products')
         .orderBy('createdAt', descending: true)
         .snapshots()
@@ -66,6 +71,7 @@ class FirestoreService {
   }
 
   Stream<List<Purchase>> getPurchases() {
+    if (demoMode) return Stream.value(DemoDataService.purchases);
     return _userCollection('purchases')
         .orderBy('date', descending: true)
         .snapshots()
@@ -82,6 +88,7 @@ class FirestoreService {
   }
 
   Stream<List<Sale>> getSales() {
+    if (demoMode) return Stream.value(DemoDataService.sales);
     return _userCollection('sales')
         .orderBy('date', descending: true)
         .snapshots()
@@ -232,6 +239,7 @@ class FirestoreService {
   }
 
   Stream<List<Shipment>> getShipments() {
+    if (demoMode) return Stream.value(DemoDataService.shipments);
     return _userCollection('shipments')
         .orderBy('createdAt', descending: true)
         .snapshots()
@@ -289,6 +297,7 @@ class FirestoreService {
   }
 
   Stream<List<AppNotification>> getNotifications() {
+    if (demoMode) return Stream.value([]);
     return _userCollection('notifications')
         .orderBy('createdAt', descending: true)
         .snapshots()
@@ -297,6 +306,7 @@ class FirestoreService {
   }
 
   Stream<int> getUnreadNotificationCount() {
+    if (demoMode) return Stream.value(0);
     return _userCollection('notifications')
         .where('read', isEqualTo: false)
         .snapshots()
@@ -345,6 +355,7 @@ class FirestoreService {
 
   /// Stream all profiles for the current user.
   Stream<List<UserProfile>> getProfiles() {
+    if (demoMode) return Stream.value(UserProfile.presets);
     return _profilesCollection()
         .orderBy('createdAt', descending: false)
         .snapshots()
@@ -369,6 +380,7 @@ class FirestoreService {
 
   /// Get the active profile id from the user document.
   Stream<String?> getActiveProfileId() {
+    if (demoMode) return Stream.value('generic');
     return _db.collection('users').doc(_uid).snapshots().map((doc) {
       if (!doc.exists) return null;
       final data = doc.data();

@@ -23,6 +23,7 @@ import 'models/product.dart';
 import 'models/shipment.dart';
 import 'models/user_profile.dart';
 import 'services/firestore_service.dart';
+import 'services/demo_data_service.dart';
 import 'services/profile_provider.dart';
 import 'screens/notifications_screen.dart';
 
@@ -50,35 +51,99 @@ class VaultApp extends StatelessWidget {
   }
 }
 
-/// AuthGate: shows AuthScreen if not logged in, checks onboarding, then MainShell
-class AuthGate extends StatelessWidget {
+/// AuthGate: loads app immediately in demo mode.
+/// If user is logged in → Firestore data + onboarding check.
+/// If not logged in → demo mode with sample data, no auth required.
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _showAuth = false;
+
+  void _requestAuth() {
+    setState(() => _showAuth = true);
+  }
+
+  void _dismissAuth() {
+    setState(() => _showAuth = false);
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            backgroundColor: AppColors.background,
-            body: Center(
-              child: CircularProgressIndicator(color: AppColors.accentBlue),
-            ),
-          );
+        final user = snapshot.data;
+        final isLoggedIn = user != null;
+
+        if (isLoggedIn) {
+          // Logged in → check onboarding, then full app with Firestore
+          return _OnboardingGate(key: ValueKey(user.uid));
         }
-        if (snapshot.hasData) {
-          return const _OnboardingGate();
-        }
-        return const AuthScreen();
+
+        // Demo mode: show app immediately with sample data
+        // Pass auth callback so screens can request login when needed
+        return DemoModeWrapper(
+          onAuthRequired: _requestAuth,
+          showAuth: _showAuth,
+          onAuthDismiss: _dismissAuth,
+        );
       },
+    );
+  }
+}
+
+/// Wraps MainShell in demo mode with an auth overlay when needed.
+class DemoModeWrapper extends StatefulWidget {
+  final VoidCallback onAuthRequired;
+  final bool showAuth;
+  final VoidCallback onAuthDismiss;
+
+  const DemoModeWrapper({
+    super.key,
+    required this.onAuthRequired,
+    required this.showAuth,
+    required this.onAuthDismiss,
+  });
+
+  @override
+  State<DemoModeWrapper> createState() => _DemoModeWrapperState();
+}
+
+class _DemoModeWrapperState extends State<DemoModeWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    FirestoreService.demoMode = true;
+  }
+
+  @override
+  void dispose() {
+    FirestoreService.demoMode = false;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ProfileProviderWrapper(
+          child: MainShell(isDemoMode: true, onAuthRequired: widget.onAuthRequired),
+        ),
+        if (widget.showAuth)
+          AuthScreen(onBack: widget.onAuthDismiss),
+      ],
     );
   }
 }
 
 /// Checks if the user has profiles. If not → onboarding. Else → MainShell.
 class _OnboardingGate extends StatefulWidget {
-  const _OnboardingGate();
+  const _OnboardingGate({super.key});
 
   @override
   State<_OnboardingGate> createState() => _OnboardingGateState();
@@ -97,22 +162,7 @@ class _OnboardingGateState extends State<_OnboardingGate> {
 
   Future<void> _check() async {
     try {
-      final isAnon = FirebaseAuth.instance.currentUser?.isAnonymous ?? false;
       final has = await _fs.hasProfiles();
-
-      if (!has && isAnon) {
-        // Demo mode: auto-create default profiles + sample data
-        await _fs.initDefaultProfiles();
-        await _fs.seedDemoData();
-        if (mounted) {
-          setState(() {
-            _needsOnboarding = false;
-            _checking = false;
-          });
-        }
-        return;
-      }
-
       if (mounted) {
         setState(() {
           _needsOnboarding = !has;
@@ -148,7 +198,10 @@ class _OnboardingGateState extends State<_OnboardingGate> {
 }
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  final bool isDemoMode;
+  final VoidCallback? onAuthRequired;
+
+  const MainShell({super.key, this.isDemoMode = false, this.onAuthRequired});
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -372,7 +425,116 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
+  /// Guard: if in demo mode, show auth prompt instead of the action.
+  bool _guardAuth() {
+    if (widget.isDemoMode) {
+      _showDemoAuthPrompt();
+      return true; // blocked
+    }
+    return false; // allowed
+  }
+
+  void _showDemoAuthPrompt() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.accentBlue.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_outline, color: AppColors.accentBlue, size: 32),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Registrati per continuare',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Crea un account gratuito per aggiungere, modificare e salvare i tuoi dati.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onAuthRequired?.call();
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: AppColors.blueButtonGradient,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.accentBlue.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Text(
+                    'Registrati / Accedi',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => Navigator.pop(ctx),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(
+                  'Continua a esplorare',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showAddItemScreen() {
+    if (_guardAuth()) return;
     setState(() {
       _showAddItem = true;
       _showAddSale = false;
@@ -383,6 +545,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _showAddSaleScreen() {
+    if (_guardAuth()) return;
     setState(() {
       _showAddSale = true;
       _showAddItem = false;
