@@ -150,7 +150,7 @@ class _AuthScreenState extends State<AuthScreen>
     setState(() => _registerLoading = true);
     try {
       await _authService.register(email: email, password: password);
-      if (mounted && widget.onBack != null) widget.onBack!();
+      // Don't call onBack — AuthGate will detect the new user and show onboarding
     } on FirebaseAuthException catch (e) {
       _showError(_firebaseErrorMessage(e));
     } catch (e) {

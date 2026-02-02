@@ -6,6 +6,7 @@ import 'l10n/app_localizations.dart';
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/add_item_screen.dart';
@@ -20,6 +21,7 @@ import 'models/product.dart';
 import 'models/shipment.dart';
 import 'services/firestore_service.dart';
 import 'screens/notifications_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,9 +47,16 @@ class VaultApp extends StatelessWidget {
   }
 }
 
-/// AuthGate: always shows MainShell, reactively rebuilds on auth state changes
-class AuthGate extends StatelessWidget {
+/// AuthGate: checks auth state and onboarding completion
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _onboardingDone = true; // assume done until proven otherwise
 
   @override
   Widget build(BuildContext context) {
@@ -62,10 +71,47 @@ class AuthGate extends StatelessWidget {
             ),
           );
         }
-        // Always show the main app — key on uid so it rebuilds (and re-subscribes
-        // to streams) when the user logs in or out.
-        final uid = snapshot.data?.uid ?? 'demo';
-        return MainShell(key: ValueKey(uid));
+
+        final user = snapshot.data;
+
+        // No user → demo mode, show main shell
+        if (user == null) {
+          return const MainShell(key: ValueKey('demo'));
+        }
+
+        // User logged in → check if onboarding is complete
+        return StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .snapshots(),
+          builder: (context, profileSnap) {
+            // While loading profile, show a brief loading indicator
+            if (profileSnap.connectionState == ConnectionState.waiting &&
+                !profileSnap.hasData) {
+              return const Scaffold(
+                backgroundColor: AppColors.background,
+                body: Center(
+                  child: CircularProgressIndicator(color: AppColors.accentBlue),
+                ),
+              );
+            }
+
+            final data = profileSnap.data?.data() as Map<String, dynamic>?;
+            final onboardingComplete = data?['onboardingComplete'] == true;
+
+            if (!onboardingComplete) {
+              return OnboardingScreen(
+                onComplete: () {
+                  // The StreamBuilder will automatically pick up the change
+                  // from Firestore when onboardingComplete is set to true
+                },
+              );
+            }
+
+            return MainShell(key: ValueKey(user.uid));
+          },
+        );
       },
     );
   }
