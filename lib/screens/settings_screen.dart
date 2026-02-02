@@ -23,19 +23,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notifications = true;
   bool _pushNotifications = false;
   bool _emailDigest = true;
-  bool _autoBackup = false;
 
-  String _workspace = 'Reselling Vinted 2025';
   String _fontSize = 'Medium';
   int _accentIndex = 0;
 
-  // Profile section expansion state
-  bool _accountExpanded = true;
+  // Section expansion state
   bool _profileExpanded = true;
+  bool _accountExpanded = false;
+  bool _preferencesExpanded = false;
 
   User? get _user => _authService.currentUser;
   String get _userName => _user?.displayName ?? 'Vault User';
   String get _userEmail => _user?.email ?? 'vault@reselling.pro';
+
+  // ═══════════════════════════════════════════════════
+  //  DIALOGS & SHEETS
+  // ═══════════════════════════════════════════════════
 
   void _showEditDialog({
     required String title,
@@ -1084,6 +1087,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  String _profileTypeDisplayName(ProfileType type) {
+    switch (type) {
+      case ProfileType.generic:
+        return 'Generico';
+      case ProfileType.cards:
+        return 'Carte Pokémon';
+      case ProfileType.sneakers:
+        return 'Sneakers';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  BUILD
+  // ═══════════════════════════════════════════════════
+
   @override
   Widget build(BuildContext context) {
     final provider = ProfileProvider.maybeOf(context);
@@ -1108,258 +1126,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 20),
-
-          // ── Profile switcher chips ──
-          if (profiles.isNotEmpty)
-            StaggeredFadeSlide(
-              index: 1,
-              child: SizedBox(
-                height: 44,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: profiles.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, i) {
-                    final p = profiles[i];
-                    final isActive = p.id == activeProfile?.id;
-                    return ScaleOnPress(
-                      onTap: () => provider?.switchProfile(p.id),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? p.color.withValues(alpha: 0.15)
-                              : AppColors.surface,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: isActive
-                                ? p.color.withValues(alpha: 0.4)
-                                : Colors.white.withValues(alpha: 0.06),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(p.icon, color: p.color, size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              p.name,
-                              style: TextStyle(
-                                color: isActive ? Colors.white : AppColors.textMuted,
-                                fontSize: 13,
-                                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
           const SizedBox(height: 24),
 
-          // ── User profile card ──
-          StaggeredFadeSlide(
-            index: 2,
-            child: GlassCard(
-              padding: const EdgeInsets.all(20),
-              glowColor: AppColors.accentPurple,
-              child: Row(
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.headerGradient,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.accentBlue
-                              .withValues(alpha: 0.3),
-                          blurRadius: 16,
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        _userName.isNotEmpty
-                            ? _userName[0].toUpperCase()
-                            : 'V',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _userName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _userEmail,
-                          style: const TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.accentBlue
-                                .withValues(alpha: 0.12),
-                            borderRadius:
-                                BorderRadius.circular(20),
-                            border: Border.all(
-                              color: AppColors.accentBlue
-                                  .withValues(alpha: 0.25),
-                            ),
-                          ),
-                          child: Text(
-                            AppLocalizations.of(context)!.proPlan,
-                            style: TextStyle(
-                              color: AppColors.accentBlue,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  ScaleOnPress(
-                    onTap: () => _showEditDialog(
-                      title: AppLocalizations.of(context)!.userName,
-                      currentValue: _userName,
-                      onSave: (v) async {
-                        await _authService.updateDisplayName(v);
-                        setState(() {});
-                      },
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.white
-                              .withValues(alpha: 0.06),
-                        ),
-                      ),
-                      child: const Icon(
-                          Icons.edit_outlined,
-                          color: AppColors.textMuted,
-                          size: 20),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 28),
-
           // ══════════════════════════════════════════
-          //  ACCOUNT SECTION (collapsible)
-          // ══════════════════════════════════════════
-          StaggeredFadeSlide(
-            index: 3,
-            child: _buildCollapsibleSection(
-              title: AppLocalizations.of(context)!.account,
-              icon: Icons.person_outline,
-              isExpanded: _accountExpanded,
-              onToggle: () => setState(() => _accountExpanded = !_accountExpanded),
-              children: [
-                _buildSettingsRow(
-                  icon: Icons.email_outlined,
-                  title: AppLocalizations.of(context)!.email,
-                  subtitle: _userEmail,
-                  onTap: () => _showEditDialog(
-                    title: 'Email',
-                    currentValue: _userEmail,
-                    onSave: (v) async {
-                      try {
-                        await _authService.updateEmail(v);
-                        _showSuccessSnackbar(
-                            AppLocalizations.of(context)!.verificationSent);
-                      } catch (e) {
-                        _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
-                      }
-                    },
-                  ),
-                  trailing: _buildChevron(),
-                ),
-                _buildSettingsRow(
-                  icon: Icons.lock_outline,
-                  title: AppLocalizations.of(context)!.password,
-                  subtitle: AppLocalizations.of(context)!.resetViaEmail,
-                  onTap: () async {
-                    try {
-                      await _authService
-                          .resetPassword(_userEmail);
-                      _showSuccessSnackbar(
-                          AppLocalizations.of(context)!.resetEmailSent(_userEmail));
-                    } catch (e) {
-                      _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
-                    }
-                  },
-                  trailing: _buildChevron(),
-                ),
-                _buildSettingsRow(
-                  icon: Icons.security,
-                  title: AppLocalizations.of(context)!.twoFactorAuth,
-                  subtitle: AppLocalizations.of(context)!.notAvailable,
-                  onTap: () => _showInfoSheet(
-                    AppLocalizations.of(context)!.twoFactorTitle,
-                    AppLocalizations.of(context)!.twoFactorDescription,
-                  ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.textMuted
-                          .withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'N/A',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ══════════════════════════════════════════
-          //  PROFILE SECTION (collapsible)
+          //  PROFILO SECTION (expanded by default)
           // ══════════════════════════════════════════
           if (activeProfile != null)
             StaggeredFadeSlide(
-              index: 4,
+              index: 1,
               child: _buildCollapsibleSection(
                 title: 'Profilo',
                 icon: Icons.account_circle_outlined,
@@ -1384,8 +1158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _buildSettingsRow(
                     icon: Icons.category_outlined,
                     title: 'Tipo',
-                    subtitle: activeProfile.type.name[0].toUpperCase() +
-                        activeProfile.type.name.substring(1),
+                    subtitle: _profileTypeDisplayName(activeProfile.type),
                     iconColor: activeProfile.color,
                   ),
                   _buildSettingsRow(
@@ -1428,63 +1201,191 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           const SizedBox(height: 20),
 
-          // ── Workspace section ──
+          // ══════════════════════════════════════════
+          //  ACCOUNT SECTION (collapsed by default)
+          // ══════════════════════════════════════════
           StaggeredFadeSlide(
-            index: 5,
-            child: _buildSection(
-              title: AppLocalizations.of(context)!.workspace,
-              icon: Icons.workspaces_outline,
+            index: 2,
+            child: _buildCollapsibleSection(
+              title: AppLocalizations.of(context)!.account,
+              icon: Icons.person_outline,
+              isExpanded: _accountExpanded,
+              onToggle: () => setState(() => _accountExpanded = !_accountExpanded),
               children: [
-                _buildSettingsRow(
-                  icon: Icons.store,
-                  title: AppLocalizations.of(context)!.workspaceActive,
-                  subtitle: _workspace,
-                  onTap: () => _showSelectDialog(
-                    title: AppLocalizations.of(context)!.selectWorkspace,
-                    options: [
-                      'Reselling Vinted 2025',
-                      'Reselling eBay',
-                      'Reselling Depop',
-                      'Crypto Portfolio'
+                // User card row
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.headerGradient,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.accentBlue.withValues(alpha: 0.3),
+                              blurRadius: 12,
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            _userName.isNotEmpty ? _userName[0].toUpperCase() : 'V',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _userName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _userEmail,
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ScaleOnPress(
+                        onTap: () => _showEditDialog(
+                          title: AppLocalizations.of(context)!.userName,
+                          currentValue: _userName,
+                          onSave: (v) async {
+                            await _authService.updateDisplayName(v);
+                            setState(() {});
+                          },
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.06),
+                            ),
+                          ),
+                          child: const Icon(
+                              Icons.edit_outlined,
+                              color: AppColors.textMuted,
+                              size: 18),
+                        ),
+                      ),
                     ],
-                    currentValue: _workspace,
-                    onSelect: (v) =>
-                        setState(() => _workspace = v),
+                  ),
+                ),
+                _buildSettingsRow(
+                  icon: Icons.email_outlined,
+                  title: AppLocalizations.of(context)!.email,
+                  subtitle: _userEmail,
+                  onTap: () => _showEditDialog(
+                    title: 'Email',
+                    currentValue: _userEmail,
+                    onSave: (v) async {
+                      try {
+                        await _authService.updateEmail(v);
+                        _showSuccessSnackbar(
+                            AppLocalizations.of(context)!.verificationSent);
+                      } catch (e) {
+                        _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
+                      }
+                    },
                   ),
                   trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
-                  icon: Icons.cloud_upload_outlined,
-                  title: AppLocalizations.of(context)!.autoBackup,
-                  subtitle: AppLocalizations.of(context)!.syncDataCloud,
-                  trailing: _buildSwitch(_autoBackup,
-                      (v) => setState(() => _autoBackup = v)),
+                  icon: Icons.lock_outline,
+                  title: AppLocalizations.of(context)!.password,
+                  subtitle: AppLocalizations.of(context)!.resetViaEmail,
+                  onTap: () async {
+                    try {
+                      await _authService.resetPassword(_userEmail);
+                      _showSuccessSnackbar(
+                          AppLocalizations.of(context)!.resetEmailSent(_userEmail));
+                    } catch (e) {
+                      _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
+                    }
+                  },
+                  trailing: _buildChevron(),
                 ),
                 _buildSettingsRow(
-                  icon: Icons.download_outlined,
-                  title: AppLocalizations.of(context)!.exportAllData,
-                  subtitle: AppLocalizations.of(context)!.csvPdfJson,
-                  onTap: _showExportDialog,
+                  icon: Icons.security,
+                  title: AppLocalizations.of(context)!.twoFactorAuth,
+                  subtitle: AppLocalizations.of(context)!.notAvailable,
+                  onTap: () => _showInfoSheet(
+                    AppLocalizations.of(context)!.twoFactorTitle,
+                    AppLocalizations.of(context)!.twoFactorDescription,
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.textMuted
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'N/A',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                // Logout row inside account section
+                _buildSettingsRow(
+                  icon: Icons.logout,
+                  title: 'Logout',
+                  subtitle: 'Esci dal tuo account',
+                  onTap: _showLogoutDialog,
                   trailing: _buildChevron(),
+                  iconColor: AppColors.accentRed,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
-          // ── Notifications section ──
+          // ══════════════════════════════════════════
+          //  PREFERENZE SECTION (collapsed by default)
+          // ══════════════════════════════════════════
           StaggeredFadeSlide(
-            index: 6,
-            child: _buildSection(
-              title: AppLocalizations.of(context)!.notifications,
-              icon: Icons.notifications_outlined,
+            index: 3,
+            child: _buildCollapsibleSection(
+              title: 'Preferenze',
+              icon: Icons.tune_outlined,
+              isExpanded: _preferencesExpanded,
+              onToggle: () => setState(() => _preferencesExpanded = !_preferencesExpanded),
+              accentColor: AppColors.accentOrange,
               children: [
+                // Notifications
                 _buildSettingsRow(
                   icon: Icons.notifications_active_outlined,
                   title: AppLocalizations.of(context)!.notificationsInApp,
                   subtitle: AppLocalizations.of(context)!.salesShipmentAlerts,
                   trailing: _buildSwitch(_notifications,
                       (v) => setState(() => _notifications = v)),
+                  iconColor: AppColors.accentOrange,
                 ),
                 _buildSettingsRow(
                   icon: Icons.phone_android,
@@ -1494,6 +1395,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _pushNotifications,
                       (v) => setState(
                           () => _pushNotifications = v)),
+                  iconColor: AppColors.accentOrange,
                 ),
                 _buildSettingsRow(
                   icon: Icons.mail_outline,
@@ -1501,25 +1403,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: AppLocalizations.of(context)!.weeklyReport,
                   trailing: _buildSwitch(_emailDigest,
                       (v) => setState(() => _emailDigest = v)),
+                  iconColor: AppColors.accentOrange,
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Appearance section ──
-          StaggeredFadeSlide(
-            index: 7,
-            child: _buildSection(
-              title: AppLocalizations.of(context)!.appearance,
-              icon: Icons.palette_outlined,
-              children: [
+                // Appearance
                 _buildSettingsRow(
                   icon: Icons.dark_mode_outlined,
                   title: AppLocalizations.of(context)!.darkMode,
                   subtitle: AppLocalizations.of(context)!.useDarkTheme,
                   trailing: _buildSwitch(_darkMode,
                       (v) => setState(() => _darkMode = v)),
+                  iconColor: AppColors.accentPurple,
                 ),
                 _buildSettingsRow(
                   icon: Icons.text_fields,
@@ -1538,6 +1431,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         setState(() => _fontSize = v),
                   ),
                   trailing: _buildChevron(),
+                  iconColor: AppColors.accentPurple,
                 ),
                 _buildSettingsRow(
                   icon: Icons.color_lens_outlined,
@@ -1571,15 +1465,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _colorDot(AppColors.accentOrange, 2),
                     ],
                   ),
+                  iconColor: AppColors.accentPurple,
+                ),
+                // Export data
+                _buildSettingsRow(
+                  icon: Icons.download_outlined,
+                  title: AppLocalizations.of(context)!.exportAllData,
+                  subtitle: AppLocalizations.of(context)!.csvPdfJson,
+                  onTap: _showExportDialog,
+                  trailing: _buildChevron(),
+                  iconColor: AppColors.accentTeal,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
-          // ── Info section ──
+          // ══════════════════════════════════════════
+          //  INFO SECTION (always visible, outside accordions)
+          // ══════════════════════════════════════════
           StaggeredFadeSlide(
-            index: 8,
+            index: 4,
             child: _buildSection(
               title: AppLocalizations.of(context)!.info,
               icon: Icons.info_outline,
@@ -1619,44 +1525,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: _buildChevron(),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 28),
-
-          // ── Logout button ──
-          StaggeredFadeSlide(
-            index: 9,
-            child: ScaleOnPress(
-              onTap: _showLogoutDialog,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color:
-                      AppColors.accentRed.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: AppColors.accentRed
-                        .withValues(alpha: 0.25),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.logout,
-                        color: AppColors.accentRed, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'Logout',
-                      style: TextStyle(
-                        color: AppColors.accentRed,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ),
           const SizedBox(height: 40),
