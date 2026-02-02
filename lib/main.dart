@@ -97,7 +97,22 @@ class _OnboardingGateState extends State<_OnboardingGate> {
 
   Future<void> _check() async {
     try {
+      final isAnon = FirebaseAuth.instance.currentUser?.isAnonymous ?? false;
       final has = await _fs.hasProfiles();
+
+      if (!has && isAnon) {
+        // Demo mode: auto-create default profiles + sample data
+        await _fs.initDefaultProfiles();
+        await _fs.seedDemoData();
+        if (mounted) {
+          setState(() {
+            _needsOnboarding = false;
+            _checking = false;
+          });
+        }
+        return;
+      }
+
       if (mounted) {
         setState(() {
           _needsOnboarding = !has;

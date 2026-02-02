@@ -309,11 +309,88 @@ class _AuthScreenState extends State<AuthScreen>
                     ),
                   ),
                 ),
+
+                const SizedBox(height: 8),
+
+                // Demo mode button
+                StaggeredFadeSlide(
+                  index: 3,
+                  child: _buildDemoButton(),
+                ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _handleDemoMode() async {
+    setState(() => _loginLoading = true);
+    try {
+      await _authService.signInAnonymously();
+      if (mounted && widget.onBack != null) widget.onBack!();
+    } on FirebaseAuthException catch (e) {
+      _showError(_firebaseErrorMessage(e));
+    } catch (e) {
+      _showError('Errore: $e');
+    } finally {
+      if (mounted) setState(() => _loginLoading = false);
+    }
+  }
+
+  Widget _buildDemoButton() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.08))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'oppure',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.08))),
+          ],
+        ),
+        const SizedBox(height: 16),
+        GestureDetector(
+          onTap: _handleDemoMode,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.1),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.explore_outlined,
+                    color: AppColors.accentTeal, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  'Esplora in modalità demo',
+                  style: TextStyle(
+                    color: AppColors.accentTeal,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

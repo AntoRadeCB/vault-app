@@ -50,4 +50,12 @@ class AuthService {
   Future<void> resetPassword(String email) async {
     await _auth.sendPasswordResetEmail(email: email);
   }
+
+  // Anonymous sign-in (demo mode)
+  Future<UserCredential> signInAnonymously() async {
+    return await _auth.signInAnonymously();
+  }
+
+  // Check if current user is anonymous/demo
+  bool get isAnonymous => _auth.currentUser?.isAnonymous ?? false;
 }

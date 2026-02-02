@@ -408,4 +408,148 @@ class FirestoreService {
     await setActiveProfile(firstId);
     return firstId;
   }
+
+  /// Seed demo data: sample products, purchases, sales for demo mode.
+  Future<void> seedDemoData() async {
+    // Check if already seeded
+    final existingProducts = await _userCollection('products').limit(1).get();
+    if (existingProducts.docs.isNotEmpty) return;
+
+    final now = DateTime.now();
+
+    // Sample products
+    final products = [
+      Product(
+        name: 'Nike Air Max 90',
+        brand: 'NIKE',
+        quantity: 2,
+        price: 89.99,
+        status: ProductStatus.inInventory,
+        createdAt: now.subtract(const Duration(days: 5)),
+      ),
+      Product(
+        name: 'Adidas Yeezy 350',
+        brand: 'ADIDAS',
+        quantity: 1,
+        price: 220,
+        status: ProductStatus.shipped,
+        createdAt: now.subtract(const Duration(days: 3)),
+      ),
+      Product(
+        name: 'New Balance 550',
+        brand: 'NEW BALANCE',
+        quantity: 3,
+        price: 65,
+        status: ProductStatus.inInventory,
+        createdAt: now.subtract(const Duration(days: 7)),
+      ),
+      Product(
+        name: 'Jordan 1 Retro High',
+        brand: 'NIKE',
+        quantity: 1,
+        price: 170,
+        status: ProductStatus.listed,
+        createdAt: now.subtract(const Duration(days: 2)),
+      ),
+      Product(
+        name: 'Charizard VMAX',
+        brand: 'POKÉMON',
+        quantity: 1,
+        price: 45,
+        status: ProductStatus.inInventory,
+        createdAt: now.subtract(const Duration(days: 10)),
+      ),
+      Product(
+        name: 'Pikachu Gold Star',
+        brand: 'POKÉMON',
+        quantity: 1,
+        price: 320,
+        status: ProductStatus.listed,
+        createdAt: now.subtract(const Duration(days: 1)),
+      ),
+    ];
+
+    for (final p in products) {
+      await addProduct(p);
+    }
+
+    // Sample purchases
+    final purchases = [
+      Purchase(
+        productName: 'Nike Air Max 90',
+        price: 89.99,
+        quantity: 2,
+        date: now.subtract(const Duration(days: 5)),
+        workspace: 'demo',
+      ),
+      Purchase(
+        productName: 'Adidas Yeezy 350',
+        price: 220,
+        quantity: 1,
+        date: now.subtract(const Duration(days: 3)),
+        workspace: 'demo',
+      ),
+      Purchase(
+        productName: 'New Balance 550',
+        price: 65,
+        quantity: 3,
+        date: now.subtract(const Duration(days: 7)),
+        workspace: 'demo',
+      ),
+      Purchase(
+        productName: 'Jordan 1 Retro High',
+        price: 170,
+        quantity: 1,
+        date: now.subtract(const Duration(days: 2)),
+        workspace: 'demo',
+      ),
+      Purchase(
+        productName: 'Charizard VMAX',
+        price: 45,
+        quantity: 1,
+        date: now.subtract(const Duration(days: 10)),
+        workspace: 'demo',
+      ),
+      Purchase(
+        productName: 'Pikachu Gold Star',
+        price: 320,
+        quantity: 1,
+        date: now.subtract(const Duration(days: 1)),
+        workspace: 'demo',
+      ),
+    ];
+
+    for (final p in purchases) {
+      await addPurchase(p);
+    }
+
+    // Sample sales
+    final sales = [
+      Sale(
+        productName: 'Nike Dunk Low Panda',
+        salePrice: 155,
+        purchasePrice: 95,
+        fees: 12,
+        date: now.subtract(const Duration(days: 4)),
+      ),
+      Sale(
+        productName: 'Stone Island Hoodie',
+        salePrice: 280,
+        purchasePrice: 120,
+        fees: 22,
+        date: now.subtract(const Duration(days: 6)),
+      ),
+      Sale(
+        productName: 'Umbreon VMAX Alt Art',
+        salePrice: 180,
+        purchasePrice: 85,
+        fees: 14,
+        date: now.subtract(const Duration(days: 8)),
+      ),
+    ];
+
+    for (final s in sales) {
+      await addSale(s);
+    }
+  }
 }
