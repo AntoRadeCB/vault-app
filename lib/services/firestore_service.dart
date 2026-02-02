@@ -5,6 +5,7 @@ import '../models/purchase.dart';
 import '../models/sale.dart';
 import '../models/shipment.dart';
 import '../models/app_notification.dart';
+import '../models/user_profile.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -332,5 +333,79 @@ class FirestoreService {
       if (!doc.exists) return null;
       return doc.data();
     });
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  PROFILES
+  // ═══════════════════════════════════════════════════
+
+  CollectionReference _profilesCollection() {
+    return _db.collection('users').doc(_uid).collection('profiles');
+  }
+
+  /// Stream all profiles for the current user.
+  Stream<List<UserProfile>> getProfiles() {
+    return _profilesCollection()
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => UserProfile.fromFirestore(doc)).toList());
+  }
+
+  /// Add a new profile.
+  Future<DocumentReference> addProfile(UserProfile profile) {
+    return _profilesCollection().add(profile.toFirestore());
+  }
+
+  /// Update an existing profile by id.
+  Future<void> updateProfile(String id, Map<String, dynamic> data) {
+    return _profilesCollection().doc(id).update(data);
+  }
+
+  /// Delete a profile.
+  Future<void> deleteProfile(String id) {
+    return _profilesCollection().doc(id).delete();
+  }
+
+  /// Get the active profile id from the user document.
+  Stream<String?> getActiveProfileId() {
+    return _db.collection('users').doc(_uid).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      final data = doc.data();
+      return data?['activeProfileId'] as String?;
+    });
+  }
+
+  /// Set the active profile id on the user document.
+  Future<void> setActiveProfile(String profileId) {
+    return _db
+        .collection('users')
+        .doc(_uid)
+        .set({'activeProfileId': profileId}, SetOptions(merge: true));
+  }
+
+  /// Check if the user has any profiles.
+  Future<bool> hasProfiles() async {
+    final snap = await _profilesCollection().limit(1).get();
+    return snap.docs.isNotEmpty;
+  }
+
+  /// Create the 3 default preset profiles if the user has none.
+  /// Returns the id of the first (Generico) profile.
+  Future<String> initDefaultProfiles() async {
+    final snap = await _profilesCollection().limit(1).get();
+    if (snap.docs.isNotEmpty) {
+      return snap.docs.first.id;
+    }
+
+    String firstId = '';
+    for (final preset in UserProfile.presets) {
+      final ref = await _profilesCollection().add(preset.toFirestore());
+      if (firstId.isEmpty) firstId = ref.id;
+    }
+
+    // Set the first profile as active
+    await setActiveProfile(firstId);
+    return firstId;
   }
 }
