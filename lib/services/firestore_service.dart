@@ -24,6 +24,7 @@ class _DemoData {
           platforms: ['vinted', 'ebay', 'depop'],
           category: 'generic',
           experienceLevel: 'intermediate',
+          budget: 500,
           createdAt: _now.subtract(const Duration(days: 30)),
         ),
         Profile(
@@ -33,6 +34,7 @@ class _DemoData {
           platforms: ['cardmarket', 'ebay'],
           category: 'cards',
           experienceLevel: 'expert',
+          budget: 200,
           createdAt: _now.subtract(const Duration(days: 20)),
         ),
         Profile(
@@ -42,6 +44,7 @@ class _DemoData {
           platforms: ['stockx', 'goat', 'ebay'],
           category: 'sneakers',
           experienceLevel: 'intermediate',
+          budget: 1000,
           createdAt: _now.subtract(const Duration(days: 15)),
         ),
       ];
@@ -1112,6 +1115,50 @@ class FirestoreService {
   }
 
   // ═══════════════════════════════════════════════════
+  //  BUDGET STATS
+  // ═══════════════════════════════════════════════════
+
+  /// Compute budget stats from profile budget + all purchases/sales chronologically.
+  /// Returns {'budget': currentBudget, 'ricavi': ricavi, 'maxBudget': maxBudget}
+  Stream<Map<String, double>> getBudgetStats(double maxBudget) {
+    if (maxBudget <= 0) {
+      return Stream.value({'budget': 0.0, 'ricavi': 0.0, 'maxBudget': 0.0});
+    }
+
+    return getCombinedSalesPurchases().map((data) {
+      final sales = data['sales'] as List<Sale>;
+      final purchases = data['purchases'] as List<Purchase>;
+
+      // Merge into a single chronological timeline
+      final List<_BudgetEvent> events = [];
+      for (final p in purchases) {
+        events.add(_BudgetEvent(date: p.date, amount: -p.totalCost));
+      }
+      for (final s in sales) {
+        events.add(_BudgetEvent(date: s.date, amount: s.salePrice));
+      }
+      events.sort((a, b) => a.date.compareTo(b.date));
+
+      double currentBudget = maxBudget;
+      double ricavi = 0.0;
+
+      for (final event in events) {
+        currentBudget += event.amount;
+        if (currentBudget > maxBudget) {
+          ricavi += (currentBudget - maxBudget);
+          currentBudget = maxBudget;
+        }
+      }
+
+      return {
+        'budget': currentBudget,
+        'ricavi': ricavi,
+        'maxBudget': maxBudget,
+      };
+    });
+  }
+
+  // ═══════════════════════════════════════════════════
   //  SHIPMENTS
   // ═══════════════════════════════════════════════════
 
@@ -1261,4 +1308,12 @@ class FirestoreService {
       return doc.data();
     });
   }
+}
+
+/// Helper class for budget timeline events
+class _BudgetEvent {
+  final DateTime date;
+  final double amount; // negative for purchases, positive for sales
+
+  const _BudgetEvent({required this.date, required this.amount});
 }

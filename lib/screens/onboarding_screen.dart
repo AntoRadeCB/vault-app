@@ -189,6 +189,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   late final PageController _pageController;
   final _nameController = TextEditingController();
   final _profileNameController = TextEditingController();
+  final _budgetController = TextEditingController();
   final _firestoreService = FirestoreService();
 
   late int _currentPage;
@@ -226,6 +227,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _pageController.dispose();
     _nameController.dispose();
     _profileNameController.dispose();
+    _budgetController.dispose();
     _fadeController.dispose();
     super.dispose();
   }
@@ -280,6 +282,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     try {
       final displayName = _nameController.text.trim();
       final category = _determineCategoryFromSelection();
+      final budgetValue = double.tryParse(_budgetController.text.trim()) ?? 0.0;
 
       if (widget.skipWelcome) {
         // Creating additional profile
@@ -293,6 +296,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           platforms: _selectedCategories.toList(),
           category: category,
           experienceLevel: _selectedExperience ?? 'intermediate',
+          budget: budgetValue,
           createdAt: DateTime.now(),
         );
 
@@ -324,6 +328,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           platforms: _selectedCategories.toList(),
           category: category,
           experienceLevel: _selectedExperience ?? 'intermediate',
+          budget: budgetValue,
           createdAt: DateTime.now(),
         );
 
@@ -529,6 +534,44 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 8),
+                  child: const Text(
+                    'Budget iniziale (opzionale)',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                ),
+                child: TextField(
+                  controller: _budgetController,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    hintText: 'Es. €500 — il tuo capitale di partenza',
+                    hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
+                    prefixIcon: Icon(Icons.account_balance_wallet_outlined,
+                        color: AppColors.textMuted, size: 22),
+                    border: InputBorder.none,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
+                ),
+              ),
               const SizedBox(height: 40),
             ],
           ),
@@ -539,6 +582,65 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // ─── Page 2: Features ──────────────────────────────
   Widget _buildFeaturesPage() {
+    if (widget.skipWelcome) {
+      // When skipping welcome, add budget field below the grid
+      return Column(
+        children: [
+          Expanded(
+            child: _buildGridPage(
+              title: 'Cosa ti interessa?',
+              subtitle: 'Seleziona le funzionalità che usi di più',
+              items: _features,
+              selected: _selectedFeatures,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(left: 4, bottom: 6),
+                  child: Text(
+                    'Budget iniziale (opzionale)',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                  ),
+                  child: TextField(
+                    controller: _budgetController,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      hintText: 'Es. €500 — il tuo capitale di partenza',
+                      hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                      prefixIcon: Icon(Icons.account_balance_wallet_outlined,
+                          color: AppColors.textMuted, size: 18),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      );
+    }
     return _buildGridPage(
       title: 'Cosa ti interessa?',
       subtitle: 'Seleziona le funzionalità che usi di più',

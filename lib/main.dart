@@ -504,6 +504,7 @@ class _MainShellState extends State<MainShell> {
       // Built-in screens
       if (safeIndex == 0) {
         return DashboardScreen(
+          activeProfile: _activeProfile,
           onNewPurchase: _showAddItemScreen,
           onNewSale: _showAddSaleScreen,
         );
@@ -533,6 +534,7 @@ class _MainShellState extends State<MainShell> {
     }
 
     return DashboardScreen(
+      activeProfile: _activeProfile,
       onNewPurchase: _showAddItemScreen,
       onNewSale: _showAddSaleScreen,
     );
@@ -885,7 +887,7 @@ class _MainShellState extends State<MainShell> {
           }),
 
           const Spacer(),
-          // System Online
+          // Status box
           Padding(
             padding: const EdgeInsets.all(20),
             child: Container(
@@ -909,14 +911,30 @@ class _MainShellState extends State<MainShell> {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      _isLoggedIn ? (AppLocalizations.of(context)?.systemOnline ?? 'Online') : 'Demo Mode',
-                      style: TextStyle(
-                        color: _isLoggedIn ? AppColors.accentGreen : AppColors.accentOrange,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isLoggedIn
+                              ? (FirebaseAuth.instance.currentUser?.displayName ?? 'Online')
+                              : 'Demo Mode',
+                          style: TextStyle(
+                            color: _isLoggedIn ? Colors.white : AppColors.accentOrange,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (_isLoggedIn)
+                          Text(
+                            'Online',
+                            style: TextStyle(
+                              color: AppColors.accentGreen,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ],

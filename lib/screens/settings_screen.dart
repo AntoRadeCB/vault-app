@@ -744,6 +744,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     trailing: _buildChevron(),
                   ),
                   _buildSettingsRow(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'Budget',
+                    subtitle: _profile!.budget > 0
+                        ? '€${_profile!.budget.toStringAsFixed(0)}'
+                        : 'Non impostato',
+                    onTap: () => _showEditDialog(
+                      title: 'Budget',
+                      currentValue: _profile!.budget > 0
+                          ? _profile!.budget.toStringAsFixed(0)
+                          : '',
+                      hint: 'Es. 500 — il tuo capitale massimo',
+                      onSave: (v) async {
+                        if (_profile!.id == null) return;
+                        final budgetVal = double.tryParse(v) ?? 0.0;
+                        try {
+                          await _firestoreService.updateProfile(
+                              _profile!.id!, {'budget': budgetVal});
+                          widget.onProfileChanged?.call();
+                        } catch (e) {
+                          _showSuccessSnackbar('Errore: $e');
+                        }
+                      },
+                    ),
+                    trailing: _buildChevron(),
+                  ),
+                  _buildSettingsRow(
                     icon: Icons.category_outlined,
                     title: 'Categoria',
                     subtitle: Profile.categoryLabel(_profile!.category),

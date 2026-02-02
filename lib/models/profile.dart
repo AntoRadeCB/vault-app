@@ -7,6 +7,7 @@ class Profile {
   final List<String> platforms;
   final String category;
   final String experienceLevel;
+  final double budget;
   final DateTime? createdAt;
 
   const Profile({
@@ -16,6 +17,7 @@ class Profile {
     this.platforms = const [],
     required this.category,
     required this.experienceLevel,
+    this.budget = 0.0,
     this.createdAt,
   });
 
@@ -28,6 +30,7 @@ class Profile {
       platforms: List<String>.from(data['platforms'] ?? []),
       category: data['category'] ?? 'generic',
       experienceLevel: data['experienceLevel'] ?? 'beginner',
+      budget: (data['budget'] ?? 0).toDouble(),
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
@@ -41,6 +44,7 @@ class Profile {
       'platforms': platforms,
       'category': category,
       'experienceLevel': experienceLevel,
+      'budget': budget,
       'createdAt': createdAt != null
           ? Timestamp.fromDate(createdAt!)
           : FieldValue.serverTimestamp(),
@@ -54,6 +58,7 @@ class Profile {
     List<String>? platforms,
     String? category,
     String? experienceLevel,
+    double? budget,
     DateTime? createdAt,
   }) {
     return Profile(
@@ -63,6 +68,7 @@ class Profile {
       platforms: platforms ?? this.platforms,
       category: category ?? this.category,
       experienceLevel: experienceLevel ?? this.experienceLevel,
+      budget: budget ?? this.budget,
       createdAt: createdAt ?? this.createdAt,
     );
   }
