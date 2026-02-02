@@ -16,6 +16,8 @@ import 'screens/tracking_detail_screen.dart';
 import 'screens/add_sale_screen.dart';
 import 'screens/edit_product_screen.dart';
 import 'widgets/animated_widgets.dart';
+import 'widgets/tutorial_overlay.dart';
+import 'widgets/coach_mark_overlay.dart';
 import 'models/product.dart';
 import 'models/shipment.dart';
 import 'services/firestore_service.dart';
@@ -83,11 +85,170 @@ class _MainShellState extends State<MainShell> {
   bool _showAddItem = false;
   bool _showAddSale = false;
   bool _showNotifications = false;
+  bool _showTutorial = false;
   Product? _editingProduct;
   Shipment? _trackingShipment;
   final _searchController = TextEditingController();
   bool _searchFocused = false;
   final FirestoreService _firestoreService = FirestoreService();
+
+  // GlobalKeys for interactive coach marks
+  final _keyDashboardNav = GlobalKey();
+  final _keyInventoryNav = GlobalKey();
+  final _keyShipmentsNav = GlobalKey();
+  final _keyReportsNav = GlobalKey();
+  final _keySettingsNav = GlobalKey();
+  final _keyFab = GlobalKey();
+  final _keyNotifications = GlobalKey();
+  // Desktop sidebar keys
+  final _keySidebarDashboard = GlobalKey();
+  final _keySidebarInventory = GlobalKey();
+  final _keySidebarShipments = GlobalKey();
+  final _keySidebarReports = GlobalKey();
+  final _keySidebarSettings = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    _checkFirstLaunch();
+  }
+
+  Future<void> _checkFirstLaunch() async {
+    // Show tutorial on first launch (demo mode = no user logged in yet)
+    // We use a simple in-memory flag; for persistence, use SharedPreferences
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (mounted) {
+      setState(() => _showTutorial = true);
+    }
+  }
+
+  void _dismissTutorial() {
+    setState(() => _showTutorial = false);
+  }
+
+  /// Build interactive coach-mark steps targeting real UI elements.
+  /// Chooses between mobile (bottom nav) and desktop (sidebar) keys.
+  List<CoachStep> _buildCoachSteps(bool isWide) {
+    if (isWide) {
+      return [
+        CoachStep(
+          id: 'dashboard',
+          targetKey: _keySidebarDashboard,
+          title: 'Dashboard',
+          description:
+              'Il tuo centro di controllo. Qui vedi il riepilogo completo: '
+              'budget, acquisti recenti e andamento.',
+          icon: Icons.dashboard,
+          accentColor: AppColors.accentBlue,
+        ),
+        CoachStep(
+          id: 'inventory',
+          targetKey: _keySidebarInventory,
+          title: 'Inventario',
+          description:
+              'Tutti i tuoi articoli in un posto. Aggiungi acquisti, '
+              'gestisci lo stock e tieni traccia dei costi.',
+          icon: Icons.inventory_2,
+          accentColor: AppColors.accentPurple,
+        ),
+        CoachStep(
+          id: 'shipments',
+          targetKey: _keySidebarShipments,
+          title: 'Spedizioni',
+          description:
+              'Traccia ogni pacco automaticamente. Inserisci il tracking '
+              'e Vault monitora corriere, stato e notifiche.',
+          icon: Icons.local_shipping,
+          accentColor: AppColors.accentTeal,
+        ),
+        CoachStep(
+          id: 'reports',
+          targetKey: _keySidebarReports,
+          title: 'Report',
+          description:
+              'Grafici e statistiche su profitti, vendite e andamento. '
+              'Filtra per periodo e vedi come va il business.',
+          icon: Icons.bar_chart,
+          accentColor: AppColors.accentOrange,
+        ),
+        CoachStep(
+          id: 'settings',
+          targetKey: _keySidebarSettings,
+          title: 'Impostazioni',
+          description:
+              'Cambia profilo, lingua, gestisci il tuo account e '
+              'personalizza l\'app come preferisci.',
+          icon: Icons.settings,
+          accentColor: AppColors.textMuted,
+        ),
+      ];
+    } else {
+      return [
+        CoachStep(
+          id: 'dashboard',
+          targetKey: _keyDashboardNav,
+          title: 'Dashboard',
+          description:
+              'Il tuo centro di controllo. Riepilogo completo di '
+              'budget, acquisti recenti e andamento.',
+          icon: Icons.dashboard,
+          accentColor: AppColors.accentBlue,
+        ),
+        CoachStep(
+          id: 'inventory',
+          targetKey: _keyInventoryNav,
+          title: 'Inventario',
+          description:
+              'Tutti i tuoi articoli. Aggiungi acquisti, gestisci '
+              'lo stock e tieni traccia dei costi.',
+          icon: Icons.inventory_2,
+          accentColor: AppColors.accentPurple,
+        ),
+        CoachStep(
+          id: 'fab',
+          targetKey: _keyFab,
+          title: 'Aggiungi Nuovo',
+          description:
+              'Tocca qui per aggiungere un nuovo articolo al tuo '
+              'inventario in modo rapido.',
+          icon: Icons.add_circle,
+          accentColor: AppColors.accentBlue,
+          preferredPosition: TooltipPosition.above,
+        ),
+        CoachStep(
+          id: 'shipments',
+          targetKey: _keyShipmentsNav,
+          title: 'Spedizioni',
+          description:
+              'Traccia ogni pacco automaticamente. Inserisci il '
+              'tracking e Vault fa il resto.',
+          icon: Icons.local_shipping,
+          accentColor: AppColors.accentTeal,
+        ),
+        CoachStep(
+          id: 'notifications',
+          targetKey: _keyNotifications,
+          title: 'Notifiche',
+          description:
+              'Aggiornamenti sulle spedizioni e avvisi importanti. '
+              'Il badge mostra quante ne hai da leggere.',
+          icon: Icons.notifications,
+          accentColor: AppColors.accentOrange,
+          preferredPosition: TooltipPosition.below,
+        ),
+        CoachStep(
+          id: 'settings',
+          targetKey: _keySettingsNav,
+          title: 'Impostazioni',
+          description:
+              'Cambia profilo, lingua, gestisci account e '
+              'personalizza l\'app.',
+          icon: Icons.settings,
+          accentColor: AppColors.textMuted,
+        ),
+      ];
+    }
+  }
 
   void _navigateTo(int index) {
     setState(() {
@@ -227,11 +388,22 @@ class _MainShellState extends State<MainShell> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: isWide ? _buildDesktopLayout() : _buildMobileLayout(),
-      bottomNavigationBar: isWide ? null : _buildBottomNav(),
-      floatingActionButton: isWide
-          ? null
-          : AnimatedFab(onTap: _showAddItemScreen),
+      body: Stack(
+        children: [
+          isWide ? _buildDesktopLayout() : _buildMobileLayout(),
+          // Interactive coach-mark tutorial
+          if (_showTutorial)
+            CoachMarkOverlay(
+              steps: _buildCoachSteps(isWide),
+              onComplete: _dismissTutorial,
+              onSkip: _dismissTutorial,
+            ),
+        ],
+      ),
+      bottomNavigationBar: (!_showTutorial && !isWide) ? _buildBottomNav() : null,
+      floatingActionButton: (!_showTutorial && !isWide)
+          ? AnimatedFab(key: _keyFab, onTap: _showAddItemScreen)
+          : null,
     );
   }
 
@@ -337,6 +509,7 @@ class _MainShellState extends State<MainShell> {
             builder: (context, snap) {
               final count = snap.data ?? 0;
               return GestureDetector(
+                key: _keyNotifications,
                 onTap: _showNotificationsScreen,
                 child: PulsingBadge(
                   count: count,
@@ -425,6 +598,7 @@ class _MainShellState extends State<MainShell> {
           ),
           const SizedBox(height: 32),
           _SidebarItem(
+            key: _keySidebarDashboard,
             icon: Icons.dashboard_outlined,
             selectedIcon: Icons.dashboard,
             label: l.dashboard,
@@ -432,6 +606,7 @@ class _MainShellState extends State<MainShell> {
             onTap: () => _navigateTo(0),
           ),
           _SidebarItem(
+            key: _keySidebarInventory,
             icon: Icons.inventory_2_outlined,
             selectedIcon: Icons.inventory_2,
             label: l.inventory,
@@ -439,6 +614,7 @@ class _MainShellState extends State<MainShell> {
             onTap: () => _navigateTo(1),
           ),
           _SidebarItem(
+            key: _keySidebarShipments,
             icon: Icons.local_shipping_outlined,
             selectedIcon: Icons.local_shipping,
             label: l.shipments,
@@ -446,6 +622,7 @@ class _MainShellState extends State<MainShell> {
             onTap: () => _navigateTo(2),
           ),
           _SidebarItem(
+            key: _keySidebarReports,
             icon: Icons.bar_chart_outlined,
             selectedIcon: Icons.bar_chart,
             label: l.reports,
@@ -453,6 +630,7 @@ class _MainShellState extends State<MainShell> {
             onTap: () => _navigateTo(3),
           ),
           _SidebarItem(
+            key: _keySidebarSettings,
             icon: Icons.settings_outlined,
             selectedIcon: Icons.settings,
             label: l.settings,
@@ -672,11 +850,11 @@ class _MainShellState extends State<MainShell> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, l.home, 0),
-              _buildNavItem(Icons.inventory_2_outlined, Icons.inventory_2, l.inventory, 1),
-              _buildNavItem(Icons.local_shipping_outlined, Icons.local_shipping, l.shipments, 2),
-              _buildNavItem(Icons.bar_chart_outlined, Icons.bar_chart, l.reports, 3),
-              _buildNavItem(Icons.settings_outlined, Icons.settings, l.settings, 4),
+              _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, l.home, 0, key: _keyDashboardNav),
+              _buildNavItem(Icons.inventory_2_outlined, Icons.inventory_2, l.inventory, 1, key: _keyInventoryNav),
+              _buildNavItem(Icons.local_shipping_outlined, Icons.local_shipping, l.shipments, 2, key: _keyShipmentsNav),
+              _buildNavItem(Icons.bar_chart_outlined, Icons.bar_chart, l.reports, 3, key: _keyReportsNav),
+              _buildNavItem(Icons.settings_outlined, Icons.settings, l.settings, 4, key: _keySettingsNav),
             ],
           ),
         ),
@@ -684,9 +862,10 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, IconData selectedIcon, String label, int index) {
+  Widget _buildNavItem(IconData icon, IconData selectedIcon, String label, int index, {GlobalKey? key}) {
     final isSelected = _currentIndex == index && !_showAddItem;
     return GestureDetector(
+      key: key,
       onTap: () => _navigateTo(index),
       behavior: HitTestBehavior.opaque,
       child: Padding(
@@ -736,6 +915,7 @@ class _SidebarItem extends StatefulWidget {
   final VoidCallback onTap;
 
   const _SidebarItem({
+    super.key,
     required this.icon,
     required this.selectedIcon,
     required this.label,

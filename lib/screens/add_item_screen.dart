@@ -3,9 +3,11 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../widgets/barcode_scanner_dialog.dart';
 import '../widgets/tracking_input.dart';
+import '../widgets/card_search_field.dart';
 import '../models/product.dart';
 import '../models/purchase.dart';
 import '../models/shipment.dart';
+import '../models/card_blueprint.dart';
 import '../services/firestore_service.dart';
 import '../services/tracking_service.dart';
 import '../l10n/app_localizations.dart';
@@ -28,6 +30,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _barcodeController = TextEditingController();
   final _trackingController = TextEditingController();
   CarrierInfo? _detectedCarrier;
+  CardBlueprint? _selectedCard;
   String _selectedWorkspace = 'Reselling Vinted 2025';
   String _selectedStatus = 'inInventory';
   bool _saving = false;
@@ -115,6 +118,124 @@ class _AddItemScreenState extends State<AddItemScreen> {
     if (mounted) setState(() => _barcodeLoading = false);
   }
 
+  Widget _buildSelectedCardPreview() {
+    final card = _selectedCard!;
+    return GlassCard(
+      padding: const EdgeInsets.all(12),
+      glowColor: card.rarityColor,
+      child: Row(
+        children: [
+          // Card image
+          Container(
+            width: 56,
+            height: 78,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: card.rarityColor.withValues(alpha: 0.4),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: card.rarityColor.withValues(alpha: 0.2),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: card.imageUrl != null
+                  ? Image.network(card.imageUrl!, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: card.rarityColor.withValues(alpha: 0.1),
+                        child: Icon(Icons.style, color: card.rarityColor, size: 24),
+                      ),
+                    )
+                  : Container(
+                      color: card.rarityColor.withValues(alpha: 0.1),
+                      child: Icon(Icons.style, color: card.rarityColor, size: 24),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  card.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    if (card.expansionName != null) ...[
+                      Flexible(
+                        child: Text(
+                          card.expansionName!,
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 11,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    if (card.rarity != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: card.rarityColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          card.rarity!,
+                          style: TextStyle(
+                            color: card.rarityColor,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (card.marketPrice != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Market: ${card.formattedPrice}',
+                    style: const TextStyle(
+                      color: AppColors.accentGreen,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Remove button
+          ScaleOnPress(
+            onTap: () => setState(() => _selectedCard = null),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.accentRed.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.close, color: AppColors.accentRed, size: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
@@ -135,6 +256,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
             ? _barcodeController.text.trim()
             : null,
         createdAt: DateTime.now(),
+        cardBlueprintId: _selectedCard?.id,
+        cardImageUrl: _selectedCard?.imageUrl,
+        cardExpansion: _selectedCard?.expansionName,
+        cardRarity: _selectedCard?.rarity,
+        marketPrice: _selectedCard?.marketPrice != null
+            ? _selectedCard!.marketPrice!.cents / 100
+            : null,
       );
 
       final productRef = await _firestoreService.addProduct(product);
@@ -281,7 +409,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
               index: 1,
               child: _buildField(
                 label: l.itemName,
-                child: _GlowTextField(
+                child: CardSearchField(
                   controller: _nameController,
                   hintText: l.itemNameHint,
                   validator: (v) =>
@@ -318,9 +446,27 @@ class _AddItemScreenState extends State<AddItemScreen> {
                             ),
                     ),
                   ),
+                  onCardSelected: (card) {
+                    setState(() {
+                      _selectedCard = card;
+                      _brandController.text = card.expansionName ?? 'RIFTBOUND';
+                      if (card.marketPrice != null) {
+                        _priceController.text =
+                            (card.marketPrice!.cents / 100).toStringAsFixed(2);
+                      }
+                    });
+                  },
                 ),
               ),
             ),
+            // Selected card preview
+            if (_selectedCard != null) ...[
+              const SizedBox(height: 12),
+              StaggeredFadeSlide(
+                index: 1,
+                child: _buildSelectedCardPreview(),
+              ),
+            ],
             // Barcode field (shown when scanned)
             if (_barcodeController.text.isNotEmpty) ...[
               const SizedBox(height: 16),

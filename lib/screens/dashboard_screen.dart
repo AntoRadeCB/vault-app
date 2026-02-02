@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
+import '../services/card_catalog_service.dart';
 import '../models/product.dart';
+import '../models/card_blueprint.dart';
 import '../models/sale.dart';
 import '../models/purchase.dart';
 import '../l10n/app_localizations.dart';
@@ -26,6 +28,8 @@ class DashboardScreen extends StatelessWidget {
             StaggeredFadeSlide(index: 0, child: _buildHeader(context)),
             const SizedBox(height: 24),
             _buildMainStatCards(context),
+            const SizedBox(height: 12),
+            StaggeredFadeSlide(index: 5, child: _buildMarketValueCard(context)),
             const SizedBox(height: 16),
             _buildQuickStats(context),
             const SizedBox(height: 24),
@@ -214,6 +218,216 @@ class DashboardScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  // ════════════════════════════════════════════════════
+  //  MARKET VALUE CARD — live card market prices
+  // ════════════════════════════════════════════════════
+
+  Widget _buildMarketValueCard(BuildContext context) {
+    final catalogService = CardCatalogService();
+
+    return StreamBuilder<List<Product>>(
+      stream: _firestoreService.getProducts(),
+      builder: (context, productSnap) {
+        final products = productSnap.data ?? [];
+        final cardProducts = products.where((p) => p.isCard).toList();
+
+        if (cardProducts.isEmpty) return const SizedBox.shrink();
+
+        // Calculate totals
+        final totalPaidCost = cardProducts.fold<double>(
+            0, (sum, p) => sum + (p.price * p.quantity));
+        final totalMarketValue = cardProducts.fold<double>(
+            0, (sum, p) => sum + ((p.marketPrice ?? p.price) * p.quantity));
+        final pnl = totalMarketValue - totalPaidCost;
+        final pnlPercent = totalPaidCost > 0 ? (pnl / totalPaidCost) * 100 : 0;
+        final isPositive = pnl >= 0;
+
+        return FutureBuilder<List<CardBlueprint>>(
+          future: _getUpdatedPrices(catalogService, cardProducts),
+          builder: (context, priceSnap) {
+            // If fresh prices loaded, recalculate
+            double liveMarketValue = totalMarketValue;
+            if (priceSnap.hasData && priceSnap.data!.isNotEmpty) {
+              final priceMap = <String, double>{};
+              for (final card in priceSnap.data!) {
+                if (card.marketPrice != null) {
+                  priceMap[card.id] = card.marketPrice!.cents / 100;
+                }
+              }
+              liveMarketValue = cardProducts.fold<double>(0, (sum, p) {
+                final livePrice = priceMap[p.cardBlueprintId] ?? p.marketPrice ?? p.price;
+                return sum + (livePrice * p.quantity);
+              });
+            }
+
+            final livePnl = liveMarketValue - totalPaidCost;
+            final livePnlPercent = totalPaidCost > 0
+                ? (livePnl / totalPaidCost) * 100 : 0;
+            final liveIsPositive = livePnl >= 0;
+
+            return GlassCard(
+              padding: const EdgeInsets.all(16),
+              glowColor: liveIsPositive ? AppColors.accentGreen : AppColors.accentRed,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFD700).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.trending_up, color: Color(0xFFFFD700), size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'VALORE DI MERCATO CARTE',
+                              style: TextStyle(
+                                color: Color(0xFFFFD700),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${cardProducts.length} carte in inventario',
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // P&L badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (liveIsPositive ? AppColors.accentGreen : AppColors.accentRed)
+                              .withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: (liveIsPositive ? AppColors.accentGreen : AppColors.accentRed)
+                                .withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              liveIsPositive ? Icons.arrow_upward : Icons.arrow_downward,
+                              color: liveIsPositive ? AppColors.accentGreen : AppColors.accentRed,
+                              size: 12,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${livePnlPercent.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                color: liveIsPositive ? AppColors.accentGreen : AppColors.accentRed,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Valore Mercato',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '€${liveMarketValue.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: 1,
+                        height: 40,
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Costo Acquisto',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '€${totalPaidCost.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Text('P&L',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${liveIsPositive ? "+" : ""}€${livePnl.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                color: liveIsPositive ? AppColors.accentGreen : AppColors.accentRed,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<List<CardBlueprint>> _getUpdatedPrices(
+      CardCatalogService catalog, List<Product> cardProducts) async {
+    try {
+      final cards = await catalog.getAllCards();
+      final ids = cardProducts
+          .where((p) => p.cardBlueprintId != null)
+          .map((p) => p.cardBlueprintId!)
+          .toSet();
+      return cards.where((c) => ids.contains(c.id)).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   // ════════════════════════════════════════════════════

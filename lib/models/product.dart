@@ -12,6 +12,12 @@ class Product {
   final String? imageUrl;
   final String? barcode;
   final DateTime? createdAt;
+  // CardTrader integration
+  final String? cardBlueprintId;
+  final String? cardImageUrl;
+  final String? cardExpansion;
+  final String? cardRarity;
+  final double? marketPrice;
 
   const Product({
     this.id,
@@ -23,6 +29,11 @@ class Product {
     this.imageUrl,
     this.barcode,
     this.createdAt,
+    this.cardBlueprintId,
+    this.cardImageUrl,
+    this.cardExpansion,
+    this.cardRarity,
+    this.marketPrice,
   });
 
   String get statusLabel {
@@ -73,6 +84,16 @@ class Product {
     }
   }
 
+  bool get isCard => cardBlueprintId != null;
+
+  String get displayImageUrl => cardImageUrl ?? imageUrl ?? '';
+
+  String get formattedMarketPrice {
+    if (marketPrice == null) return '';
+    if (marketPrice! >= 1000) return '€${marketPrice!.toStringAsFixed(0)}';
+    return '€${marketPrice!.toStringAsFixed(2)}';
+  }
+
   factory Product.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return Product(
@@ -87,6 +108,11 @@ class Product {
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : null,
+      cardBlueprintId: data['cardBlueprintId'],
+      cardImageUrl: data['cardImageUrl'],
+      cardExpansion: data['cardExpansion'],
+      cardRarity: data['cardRarity'],
+      marketPrice: (data['marketPrice'] as num?)?.toDouble(),
     );
   }
 
@@ -102,6 +128,11 @@ class Product {
       'createdAt': createdAt != null
           ? Timestamp.fromDate(createdAt!)
           : FieldValue.serverTimestamp(),
+      if (cardBlueprintId != null) 'cardBlueprintId': cardBlueprintId,
+      if (cardImageUrl != null) 'cardImageUrl': cardImageUrl,
+      if (cardExpansion != null) 'cardExpansion': cardExpansion,
+      if (cardRarity != null) 'cardRarity': cardRarity,
+      if (marketPrice != null) 'marketPrice': marketPrice,
     };
   }
 
@@ -115,6 +146,11 @@ class Product {
     String? imageUrl,
     String? barcode,
     DateTime? createdAt,
+    String? cardBlueprintId,
+    String? cardImageUrl,
+    String? cardExpansion,
+    String? cardRarity,
+    double? marketPrice,
   }) {
     return Product(
       id: id ?? this.id,
@@ -126,6 +162,11 @@ class Product {
       imageUrl: imageUrl ?? this.imageUrl,
       barcode: barcode ?? this.barcode,
       createdAt: createdAt ?? this.createdAt,
+      cardBlueprintId: cardBlueprintId ?? this.cardBlueprintId,
+      cardImageUrl: cardImageUrl ?? this.cardImageUrl,
+      cardExpansion: cardExpansion ?? this.cardExpansion,
+      cardRarity: cardRarity ?? this.cardRarity,
+      marketPrice: marketPrice ?? this.marketPrice,
     );
   }
 

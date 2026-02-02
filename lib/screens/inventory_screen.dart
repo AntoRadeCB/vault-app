@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/product.dart';
+import '../models/card_blueprint.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
+import '../services/card_catalog_service.dart';
 import '../l10n/app_localizations.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -20,6 +22,8 @@ class _InventoryScreenState extends State<InventoryScreen>
   String _searchQuery = '';
   bool _searchFocused = false;
   final FirestoreService _firestoreService = FirestoreService();
+  final CardCatalogService _catalogService = CardCatalogService();
+  Map<String, double> _livePrices = {};
 
   @override
   void initState() {
@@ -28,6 +32,20 @@ class _InventoryScreenState extends State<InventoryScreen>
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) setState(() {});
     });
+    _loadLivePrices();
+  }
+
+  Future<void> _loadLivePrices() async {
+    try {
+      final cards = await _catalogService.getAllCards();
+      final prices = <String, double>{};
+      for (final card in cards) {
+        if (card.marketPrice != null) {
+          prices[card.id] = card.marketPrice!.cents / 100;
+        }
+      }
+      if (mounted) setState(() => _livePrices = prices);
+    } catch (_) {}
   }
 
   @override
@@ -404,6 +422,11 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   Widget _buildProductCard(Product product) {
+    // Use card-specific display if it's a linked card
+    if (product.isCard) {
+      return _buildCardProductCard(product);
+    }
+
     return GlassCard(
       padding: const EdgeInsets.all(14),
       glowColor: _getProductColor(product.brand),
@@ -491,6 +514,204 @@ class _InventoryScreenState extends State<InventoryScreen>
                 ),
               ),
               const SizedBox(height: 6),
+              _buildStatusBadge(product.status, product.statusLabel),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getRarityColor(String? rarity) {
+    switch (rarity?.toLowerCase()) {
+      case 'common': return const Color(0xFF9E9E9E);
+      case 'uncommon': return const Color(0xFF4CAF50);
+      case 'rare': return const Color(0xFF2196F3);
+      case 'epic': return const Color(0xFFAB47BC);
+      case 'alternate art': return const Color(0xFFFFD700);
+      case 'promo': return const Color(0xFFFF6B35);
+      case 'showcase': return const Color(0xFFE91E63);
+      default: return AppColors.accentBlue;
+    }
+  }
+
+  Widget _buildCardProductCard(Product product) {
+    final rarityColor = _getRarityColor(product.cardRarity);
+    // Use live price from catalog if available, fallback to stored price
+    final livePrice = (product.cardBlueprintId != null)
+        ? _livePrices[product.cardBlueprintId!]
+        : null;
+    final displayMarketPrice = livePrice ?? product.marketPrice;
+    final hasMarketPrice = displayMarketPrice != null;
+
+    String formatMktPrice(double p) {
+      if (p >= 1000) return '€${p.toStringAsFixed(0)}';
+      return '€${p.toStringAsFixed(2)}';
+    }
+
+    return GlassCard(
+      padding: const EdgeInsets.all(10),
+      glowColor: rarityColor,
+      child: Row(
+        children: [
+          // Card image
+          Container(
+            width: 52,
+            height: 72,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: rarityColor.withValues(alpha: 0.4),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: rarityColor.withValues(alpha: 0.15),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: product.cardImageUrl != null
+                  ? Image.network(
+                      product.cardImageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: rarityColor.withValues(alpha: 0.1),
+                        child: Icon(Icons.style, color: rarityColor, size: 22),
+                      ),
+                    )
+                  : Container(
+                      color: rarityColor.withValues(alpha: 0.1),
+                      child: Icon(Icons.style, color: rarityColor, size: 22),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    if (product.cardExpansion != null) ...[
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            product.cardExpansion!,
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    if (product.cardRarity != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: rarityColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          product.cardRarity!,
+                          style: TextStyle(
+                            color: rarityColor,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Qta: ${product.formattedQuantity}',
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Purchase price
+              Text(
+                product.formattedPrice,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              if (hasMarketPrice) ...[
+                const SizedBox(height: 2),
+                // Live market price (prominent)
+                Text(
+                  formatMktPrice(displayMarketPrice),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                // P&L indicator
+                Builder(builder: (context) {
+                  final pnl = displayMarketPrice - product.price;
+                  final isUp = pnl >= 0;
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isUp ? Icons.arrow_upward : Icons.arrow_downward,
+                        color: isUp ? AppColors.accentGreen : AppColors.accentRed,
+                        size: 10,
+                      ),
+                      Text(
+                        '${isUp ? "+" : ""}€${pnl.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: isUp ? AppColors.accentGreen : AppColors.accentRed,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ] else ...[
+                Text(
+                  product.formattedPrice,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
               _buildStatusBadge(product.status, product.statusLabel),
             ],
           ),
