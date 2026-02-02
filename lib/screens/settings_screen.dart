@@ -3,6 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
+import '../services/profile_provider.dart';
+import '../models/user_profile.dart';
 import '../l10n/app_localizations.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -14,6 +17,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final AuthService _authService = AuthService();
+  final FirestoreService _firestoreService = FirestoreService();
 
   bool _darkMode = true;
   bool _notifications = true;
@@ -24,6 +28,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _workspace = 'Reselling Vinted 2025';
   String _fontSize = 'Medium';
   int _accentIndex = 0;
+
+  // Profile section expansion state
+  bool _accountExpanded = true;
+  bool _profileExpanded = true;
 
   User? get _user => _authService.currentUser;
   String get _userName => _user?.displayName ?? 'Vault User';
@@ -558,8 +566,530 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showDeleteProfileDialog(UserProfile profile) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: const Text('Elimina Profilo',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+          'Sei sicuro di voler eliminare il profilo "${profile.name}"?',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(AppLocalizations.of(context)!.cancel,
+                style: const TextStyle(color: AppColors.textMuted)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _firestoreService.deleteProfile(profile.id);
+              _showSuccessSnackbar('Profilo "${profile.name}" eliminato');
+            },
+            child: const Text('Elimina',
+                style: TextStyle(
+                    color: AppColors.accentRed,
+                    fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreateProfileDialog() {
+    final nameController = TextEditingController();
+    ProfileType selectedType = ProfileType.generic;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Nuovo Profilo',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  decoration: InputDecoration(
+                    hintText: 'Nome profilo',
+                    hintStyle: const TextStyle(color: AppColors.textMuted),
+                    filled: true,
+                    fillColor: AppColors.cardDark,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.accentBlue, width: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'TIPO',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: ProfileType.values.map((type) {
+                    final isSelected = type == selectedType;
+                    final preset = UserProfile.presets.firstWhere(
+                      (p) => p.type == type,
+                      orElse: () => UserProfile.presetGenerico,
+                    );
+                    return Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          right: type != ProfileType.values.last ? 8 : 0,
+                        ),
+                        child: GestureDetector(
+                          onTap: () => setSheetState(() => selectedType = type),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? preset.color.withValues(alpha: 0.15)
+                                  : AppColors.cardDark,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected
+                                    ? preset.color.withValues(alpha: 0.4)
+                                    : Colors.white.withValues(alpha: 0.06),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(preset.icon, color: preset.color, size: 20),
+                                const SizedBox(height: 4),
+                                Text(
+                                  type.name[0].toUpperCase() + type.name.substring(1),
+                                  style: TextStyle(
+                                    color: isSelected ? Colors.white : AppColors.textMuted,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ScaleOnPress(
+                        onTap: () => Navigator.pop(ctx),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: Text(
+                              AppLocalizations.of(context)!.cancel,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ScaleOnPress(
+                        onTap: () async {
+                          if (nameController.text.trim().isEmpty) return;
+                          final preset = UserProfile.presets.firstWhere(
+                            (p) => p.type == selectedType,
+                            orElse: () => UserProfile.presetGenerico,
+                          );
+                          final newProfile = preset.copyWith(
+                            name: nameController.text.trim(),
+                            type: selectedType,
+                          );
+                          await _firestoreService.addProfile(newProfile);
+                          Navigator.pop(ctx);
+                          _showSuccessSnackbar('Profilo "${nameController.text.trim()}" creato!');
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.blueButtonGradient,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.accentBlue.withValues(alpha: 0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'Crea',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showBudgetEditor(UserProfile profile) {
+    final budgetController = TextEditingController(
+      text: profile.budgetMonthly?.toStringAsFixed(0) ?? '',
+    );
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Budget Mensile',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Imposta un budget mensile. Lascia vuoto per disabilitare.',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: budgetController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  hintText: '€0',
+                  hintStyle: const TextStyle(color: AppColors.textMuted),
+                  prefixText: '€ ',
+                  prefixStyle: const TextStyle(
+                    color: AppColors.accentGreen,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  filled: true,
+                  fillColor: AppColors.cardDark,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.accentGreen, width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: ScaleOnPress(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            AppLocalizations.of(context)!.cancel,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ScaleOnPress(
+                      onTap: () {
+                        final value = double.tryParse(budgetController.text.trim());
+                        _firestoreService.updateProfile(profile.id, {
+                          'budgetMonthly': value,
+                        });
+                        Navigator.pop(ctx);
+                        _showSuccessSnackbar(
+                          value != null ? 'Budget aggiornato a €${value.toStringAsFixed(0)}' : 'Budget rimosso',
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.accentGreen.withValues(alpha: 0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            AppLocalizations.of(context)!.save,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showTabToggles(UserProfile profile) {
+    final allTabs = ['dashboard', 'inventory', 'shipments', 'reports', 'settings'];
+    final enabledTabs = List<String>.from(profile.enabledTabs);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Tab Attive',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Scegli quali tab visualizzare per questo profilo.',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              ...allTabs.map((tab) {
+                final isEnabled = enabledTabs.contains(tab);
+                final isDashboard = tab == 'dashboard';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                    title: Text(
+                      _tabDisplayName(tab),
+                      style: TextStyle(
+                        color: isDashboard ? AppColors.textMuted : Colors.white,
+                        fontSize: 15,
+                      ),
+                    ),
+                    value: isEnabled,
+                    onChanged: isDashboard
+                        ? null
+                        : (v) {
+                            setSheetState(() {
+                              if (v) {
+                                enabledTabs.add(tab);
+                              } else {
+                                enabledTabs.remove(tab);
+                              }
+                            });
+                          },
+                    activeColor: AppColors.accentBlue,
+                    activeTrackColor: AppColors.accentBlue.withValues(alpha: 0.3),
+                    inactiveThumbColor: AppColors.textMuted,
+                    inactiveTrackColor: AppColors.surface,
+                  ),
+                );
+              }),
+              const SizedBox(height: 16),
+              ScaleOnPress(
+                onTap: () {
+                  _firestoreService.updateProfile(profile.id, {
+                    'enabledTabs': enabledTabs,
+                  });
+                  Navigator.pop(ctx);
+                  _showSuccessSnackbar('Tab aggiornate');
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.blueButtonGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      AppLocalizations.of(context)!.save,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _tabDisplayName(String id) {
+    switch (id) {
+      case 'dashboard':
+        return 'Dashboard';
+      case 'inventory':
+        return 'Inventario';
+      case 'shipments':
+        return 'Spedizioni';
+      case 'reports':
+        return 'Report';
+      case 'settings':
+        return 'Impostazioni';
+      default:
+        return id;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final provider = ProfileProvider.maybeOf(context);
+    final profiles = provider?.profiles ?? [];
+    final activeProfile = provider?.profile;
+
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(24),
@@ -578,11 +1108,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 20),
+
+          // ── Profile switcher chips ──
+          if (profiles.isNotEmpty)
+            StaggeredFadeSlide(
+              index: 1,
+              child: SizedBox(
+                height: 44,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: profiles.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, i) {
+                    final p = profiles[i];
+                    final isActive = p.id == activeProfile?.id;
+                    return ScaleOnPress(
+                      onTap: () => provider?.switchProfile(p.id),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? p.color.withValues(alpha: 0.15)
+                              : AppColors.surface,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: isActive
+                                ? p.color.withValues(alpha: 0.4)
+                                : Colors.white.withValues(alpha: 0.06),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(p.icon, color: p.color, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              p.name,
+                              style: TextStyle(
+                                color: isActive ? Colors.white : AppColors.textMuted,
+                                fontSize: 13,
+                                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
           const SizedBox(height: 24),
 
-          // ── Profile card ──
+          // ── User profile card ──
           StaggeredFadeSlide(
-            index: 1,
+            index: 2,
             child: GlassCard(
               padding: const EdgeInsets.all(20),
               glowColor: AppColors.accentPurple,
@@ -695,12 +1277,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 28),
 
-          // ── Account section ──
+          // ══════════════════════════════════════════
+          //  ACCOUNT SECTION (collapsible)
+          // ══════════════════════════════════════════
           StaggeredFadeSlide(
-            index: 2,
-            child: _buildSection(
+            index: 3,
+            child: _buildCollapsibleSection(
               title: AppLocalizations.of(context)!.account,
               icon: Icons.person_outline,
+              isExpanded: _accountExpanded,
+              onToggle: () => setState(() => _accountExpanded = !_accountExpanded),
               children: [
                 _buildSettingsRow(
                   icon: Icons.email_outlined,
@@ -768,9 +1354,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 20),
 
+          // ══════════════════════════════════════════
+          //  PROFILE SECTION (collapsible)
+          // ══════════════════════════════════════════
+          if (activeProfile != null)
+            StaggeredFadeSlide(
+              index: 4,
+              child: _buildCollapsibleSection(
+                title: 'Profilo',
+                icon: Icons.account_circle_outlined,
+                isExpanded: _profileExpanded,
+                onToggle: () => setState(() => _profileExpanded = !_profileExpanded),
+                accentColor: activeProfile.color,
+                children: [
+                  _buildSettingsRow(
+                    icon: activeProfile.icon,
+                    title: 'Nome Profilo',
+                    subtitle: activeProfile.name,
+                    onTap: () => _showEditDialog(
+                      title: 'Nome Profilo',
+                      currentValue: activeProfile.name,
+                      onSave: (v) {
+                        _firestoreService.updateProfile(activeProfile.id, {'name': v});
+                      },
+                    ),
+                    trailing: _buildChevron(),
+                    iconColor: activeProfile.color,
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.category_outlined,
+                    title: 'Tipo',
+                    subtitle: activeProfile.type.name[0].toUpperCase() +
+                        activeProfile.type.name.substring(1),
+                    iconColor: activeProfile.color,
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.tab_outlined,
+                    title: 'Tab Attive',
+                    subtitle: '${activeProfile.enabledTabs.length} tab visibili',
+                    onTap: () => _showTabToggles(activeProfile),
+                    trailing: _buildChevron(),
+                    iconColor: activeProfile.color,
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.savings_outlined,
+                    title: 'Budget Mensile',
+                    subtitle: activeProfile.hasBudget
+                        ? '€${activeProfile.budgetMonthly!.toStringAsFixed(0)}/mese'
+                        : 'Non impostato',
+                    onTap: () => _showBudgetEditor(activeProfile),
+                    trailing: _buildChevron(),
+                    iconColor: AppColors.accentGreen,
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.add_circle_outline,
+                    title: 'Nuovo Profilo',
+                    subtitle: 'Crea un profilo personalizzato',
+                    onTap: _showCreateProfileDialog,
+                    trailing: _buildChevron(),
+                    iconColor: AppColors.accentBlue,
+                  ),
+                  if (profiles.length > 1)
+                    _buildSettingsRow(
+                      icon: Icons.delete_outline,
+                      title: 'Elimina Profilo',
+                      subtitle: 'Elimina "${activeProfile.name}"',
+                      onTap: () => _showDeleteProfileDialog(activeProfile),
+                      trailing: _buildChevron(),
+                      iconColor: AppColors.accentRed,
+                    ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 20),
+
           // ── Workspace section ──
           StaggeredFadeSlide(
-            index: 3,
+            index: 5,
             child: _buildSection(
               title: AppLocalizations.of(context)!.workspace,
               icon: Icons.workspaces_outline,
@@ -814,7 +1474,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Notifications section ──
           StaggeredFadeSlide(
-            index: 4,
+            index: 6,
             child: _buildSection(
               title: AppLocalizations.of(context)!.notifications,
               icon: Icons.notifications_outlined,
@@ -849,7 +1509,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Appearance section ──
           StaggeredFadeSlide(
-            index: 5,
+            index: 7,
             child: _buildSection(
               title: AppLocalizations.of(context)!.appearance,
               icon: Icons.palette_outlined,
@@ -919,7 +1579,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Info section ──
           StaggeredFadeSlide(
-            index: 6,
+            index: 8,
             child: _buildSection(
               title: AppLocalizations.of(context)!.info,
               icon: Icons.info_outline,
@@ -965,7 +1625,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Logout button ──
           StaggeredFadeSlide(
-            index: 7,
+            index: 9,
             child: ScaleOnPress(
               onTap: _showLogoutDialog,
               child: Container(
@@ -1002,6 +1662,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 40),
         ],
       ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  COLLAPSIBLE SECTION (glassmorphism styled)
+  // ═══════════════════════════════════════════════════
+
+  Widget _buildCollapsibleSection({
+    required String title,
+    required IconData icon,
+    required bool isExpanded,
+    required VoidCallback onToggle,
+    required List<Widget> children,
+    Color? accentColor,
+  }) {
+    final color = accentColor ?? AppColors.textMuted;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: onToggle,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                title.toUpperCase(),
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                ),
+              ),
+              const Spacer(),
+              AnimatedRotation(
+                turns: isExpanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 250),
+                child: Icon(
+                  Icons.keyboard_arrow_down,
+                  color: color.withValues(alpha: 0.6),
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
+        ),
+        AnimatedCrossFade(
+          firstChild: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: GlassCard(
+              padding: EdgeInsets.zero,
+              glowColor: accentColor,
+              child: Column(
+                children: List.generate(children.length, (i) {
+                  return Column(
+                    children: [
+                      if (i > 0)
+                        Divider(
+                          height: 1,
+                          color: Colors.white.withValues(alpha: 0.04),
+                          indent: 52,
+                        ),
+                      children[i],
+                    ],
+                  );
+                }),
+              ),
+            ),
+          ),
+          secondChild: const SizedBox.shrink(),
+          crossFadeState:
+              isExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+          duration: const Duration(milliseconds: 300),
+        ),
+      ],
     );
   }
 
@@ -1058,7 +1795,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String? subtitle,
     Widget? trailing,
     VoidCallback? onTap,
+    Color? iconColor,
   }) {
+    final color = iconColor ?? AppColors.accentBlue;
     return ScaleOnPress(
       onTap: onTap,
       child: Padding(
@@ -1069,12 +1808,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.accentBlue
-                    .withValues(alpha: 0.08),
+                color: color.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(icon,
-                  color: AppColors.accentBlue, size: 18),
+              child: Icon(icon, color: color, size: 18),
             ),
             const SizedBox(width: 14),
             Expanded(
