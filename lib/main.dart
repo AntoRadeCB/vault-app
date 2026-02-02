@@ -15,12 +15,15 @@ import 'screens/shipments_screen.dart';
 import 'screens/tracking_detail_screen.dart';
 import 'screens/add_sale_screen.dart';
 import 'screens/edit_product_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'widgets/animated_widgets.dart';
 import 'widgets/tutorial_overlay.dart';
 import 'widgets/coach_mark_overlay.dart';
 import 'models/product.dart';
 import 'models/shipment.dart';
+import 'models/user_profile.dart';
 import 'services/firestore_service.dart';
+import 'services/profile_provider.dart';
 import 'screens/notifications_screen.dart';
 
 void main() async {
@@ -47,7 +50,7 @@ class VaultApp extends StatelessWidget {
   }
 }
 
-/// AuthGate: shows AuthScreen if not logged in, MainShell if logged in
+/// AuthGate: shows AuthScreen if not logged in, checks onboarding, then MainShell
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -65,10 +68,66 @@ class AuthGate extends StatelessWidget {
           );
         }
         if (snapshot.hasData) {
-          return const MainShell();
+          return const _OnboardingGate();
         }
         return const AuthScreen();
       },
+    );
+  }
+}
+
+/// Checks if the user has profiles. If not → onboarding. Else → MainShell.
+class _OnboardingGate extends StatefulWidget {
+  const _OnboardingGate();
+
+  @override
+  State<_OnboardingGate> createState() => _OnboardingGateState();
+}
+
+class _OnboardingGateState extends State<_OnboardingGate> {
+  final FirestoreService _fs = FirestoreService();
+  bool _checking = true;
+  bool _needsOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    try {
+      final has = await _fs.hasProfiles();
+      if (mounted) {
+        setState(() {
+          _needsOnboarding = !has;
+          _checking = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  void _onOnboardingComplete() {
+    setState(() => _needsOnboarding = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_checking) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.accentBlue),
+        ),
+      );
+    }
+    if (_needsOnboarding) {
+      return OnboardingScreen(onComplete: _onOnboardingComplete);
+    }
+    return ProfileProviderWrapper(
+      child: const MainShell(),
     );
   }
 }
@@ -114,8 +173,6 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _checkFirstLaunch() async {
-    // Show tutorial on first launch (demo mode = no user logged in yet)
-    // We use a simple in-memory flag; for persistence, use SharedPreferences
     await Future.delayed(const Duration(milliseconds: 800));
     if (mounted) {
       setState(() => _showTutorial = true);
@@ -126,85 +183,138 @@ class _MainShellState extends State<MainShell> {
     setState(() => _showTutorial = false);
   }
 
+  // ─── Tab definition with identifiers ────────────
+  static const _allTabDefs = <_TabDef>[
+    _TabDef(id: 'dashboard', icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard),
+    _TabDef(id: 'inventory', icon: Icons.inventory_2_outlined, selectedIcon: Icons.inventory_2),
+    _TabDef(id: 'shipments', icon: Icons.local_shipping_outlined, selectedIcon: Icons.local_shipping),
+    _TabDef(id: 'reports', icon: Icons.bar_chart_outlined, selectedIcon: Icons.bar_chart),
+    _TabDef(id: 'settings', icon: Icons.settings_outlined, selectedIcon: Icons.settings),
+  ];
+
+  /// Returns the filtered list of tab definitions based on active profile.
+  List<_TabDef> _visibleTabs(BuildContext context) {
+    final provider = ProfileProvider.maybeOf(context);
+    if (provider == null || provider.profile == null) return _allTabDefs;
+    final enabled = provider.enabledTabs;
+    return _allTabDefs.where((t) => enabled.contains(t.id)).toList();
+  }
+
+  /// Returns the label for a tab id.
+  String _tabLabel(BuildContext context, String id) {
+    final l = AppLocalizations.of(context)!;
+    switch (id) {
+      case 'dashboard':
+        return l.home;
+      case 'inventory':
+        return l.inventory;
+      case 'shipments':
+        return l.shipments;
+      case 'reports':
+        return l.reports;
+      case 'settings':
+        return l.settings;
+      default:
+        return id;
+    }
+  }
+
+  /// Map tab id to its GlobalKey for mobile nav coach marks.
+  GlobalKey _mobileNavKey(String id) {
+    switch (id) {
+      case 'dashboard':
+        return _keyDashboardNav;
+      case 'inventory':
+        return _keyInventoryNav;
+      case 'shipments':
+        return _keyShipmentsNav;
+      case 'reports':
+        return _keyReportsNav;
+      case 'settings':
+        return _keySettingsNav;
+      default:
+        return GlobalKey();
+    }
+  }
+
+  /// Map tab id to its GlobalKey for sidebar coach marks.
+  GlobalKey _sidebarKey(String id) {
+    switch (id) {
+      case 'dashboard':
+        return _keySidebarDashboard;
+      case 'inventory':
+        return _keySidebarInventory;
+      case 'shipments':
+        return _keySidebarShipments;
+      case 'reports':
+        return _keySidebarReports;
+      case 'settings':
+        return _keySidebarSettings;
+      default:
+        return GlobalKey();
+    }
+  }
+
+  /// Coach-mark accent color per tab id.
+  Color _tabAccent(String id) {
+    switch (id) {
+      case 'dashboard':
+        return AppColors.accentBlue;
+      case 'inventory':
+        return AppColors.accentPurple;
+      case 'shipments':
+        return AppColors.accentTeal;
+      case 'reports':
+        return AppColors.accentOrange;
+      case 'settings':
+        return AppColors.textMuted;
+      default:
+        return AppColors.accentBlue;
+    }
+  }
+
+  /// Coach step descriptions (Italian).
+  String _tabCoachDesc(String id) {
+    switch (id) {
+      case 'dashboard':
+        return 'Il tuo centro di controllo. Qui vedi il riepilogo completo: '
+            'budget, acquisti recenti e andamento.';
+      case 'inventory':
+        return 'Tutti i tuoi articoli in un posto. Aggiungi acquisti, '
+            'gestisci lo stock e tieni traccia dei costi.';
+      case 'shipments':
+        return 'Traccia ogni pacco automaticamente. Inserisci il tracking '
+            'e Vault monitora corriere, stato e notifiche.';
+      case 'reports':
+        return 'Grafici e statistiche su profitti, vendite e andamento. '
+            'Filtra per periodo e vedi come va il business.';
+      case 'settings':
+        return 'Cambia profilo, lingua, gestisci il tuo account e '
+            "personalizza l'app come preferisci.";
+      default:
+        return '';
+    }
+  }
+
   /// Build interactive coach-mark steps targeting real UI elements.
-  /// Chooses between mobile (bottom nav) and desktop (sidebar) keys.
+  /// Only includes steps for visible tabs.
   List<CoachStep> _buildCoachSteps(bool isWide) {
-    if (isWide) {
-      return [
-        CoachStep(
-          id: 'dashboard',
-          targetKey: _keySidebarDashboard,
-          title: 'Dashboard',
-          description:
-              'Il tuo centro di controllo. Qui vedi il riepilogo completo: '
-              'budget, acquisti recenti e andamento.',
-          icon: Icons.dashboard,
-          accentColor: AppColors.accentBlue,
-        ),
-        CoachStep(
-          id: 'inventory',
-          targetKey: _keySidebarInventory,
-          title: 'Inventario',
-          description:
-              'Tutti i tuoi articoli in un posto. Aggiungi acquisti, '
-              'gestisci lo stock e tieni traccia dei costi.',
-          icon: Icons.inventory_2,
-          accentColor: AppColors.accentPurple,
-        ),
-        CoachStep(
-          id: 'shipments',
-          targetKey: _keySidebarShipments,
-          title: 'Spedizioni',
-          description:
-              'Traccia ogni pacco automaticamente. Inserisci il tracking '
-              'e Vault monitora corriere, stato e notifiche.',
-          icon: Icons.local_shipping,
-          accentColor: AppColors.accentTeal,
-        ),
-        CoachStep(
-          id: 'reports',
-          targetKey: _keySidebarReports,
-          title: 'Report',
-          description:
-              'Grafici e statistiche su profitti, vendite e andamento. '
-              'Filtra per periodo e vedi come va il business.',
-          icon: Icons.bar_chart,
-          accentColor: AppColors.accentOrange,
-        ),
-        CoachStep(
-          id: 'settings',
-          targetKey: _keySidebarSettings,
-          title: 'Impostazioni',
-          description:
-              'Cambia profilo, lingua, gestisci il tuo account e '
-              'personalizza l\'app come preferisci.',
-          icon: Icons.settings,
-          accentColor: AppColors.textMuted,
-        ),
-      ];
-    } else {
-      return [
-        CoachStep(
-          id: 'dashboard',
-          targetKey: _keyDashboardNav,
-          title: 'Dashboard',
-          description:
-              'Il tuo centro di controllo. Riepilogo completo di '
-              'budget, acquisti recenti e andamento.',
-          icon: Icons.dashboard,
-          accentColor: AppColors.accentBlue,
-        ),
-        CoachStep(
-          id: 'inventory',
-          targetKey: _keyInventoryNav,
-          title: 'Inventario',
-          description:
-              'Tutti i tuoi articoli. Aggiungi acquisti, gestisci '
-              'lo stock e tieni traccia dei costi.',
-          icon: Icons.inventory_2,
-          accentColor: AppColors.accentPurple,
-        ),
-        CoachStep(
+    final tabs = _visibleTabs(context);
+    final steps = <CoachStep>[];
+
+    for (final tab in tabs) {
+      steps.add(CoachStep(
+        id: tab.id,
+        targetKey: isWide ? _sidebarKey(tab.id) : _mobileNavKey(tab.id),
+        title: _tabLabel(context, tab.id),
+        description: _tabCoachDesc(tab.id),
+        icon: tab.selectedIcon,
+        accentColor: _tabAccent(tab.id),
+      ));
+
+      // Insert FAB + Notifications steps after inventory in mobile
+      if (!isWide && tab.id == 'inventory') {
+        steps.add(CoachStep(
           id: 'fab',
           targetKey: _keyFab,
           title: 'Aggiungi Nuovo',
@@ -214,40 +324,26 @@ class _MainShellState extends State<MainShell> {
           icon: Icons.add_circle,
           accentColor: AppColors.accentBlue,
           preferredPosition: TooltipPosition.above,
-        ),
-        CoachStep(
-          id: 'shipments',
-          targetKey: _keyShipmentsNav,
-          title: 'Spedizioni',
-          description:
-              'Traccia ogni pacco automaticamente. Inserisci il '
-              'tracking e Vault fa il resto.',
-          icon: Icons.local_shipping,
-          accentColor: AppColors.accentTeal,
-        ),
-        CoachStep(
-          id: 'notifications',
-          targetKey: _keyNotifications,
-          title: 'Notifiche',
-          description:
-              'Aggiornamenti sulle spedizioni e avvisi importanti. '
-              'Il badge mostra quante ne hai da leggere.',
-          icon: Icons.notifications,
-          accentColor: AppColors.accentOrange,
-          preferredPosition: TooltipPosition.below,
-        ),
-        CoachStep(
-          id: 'settings',
-          targetKey: _keySettingsNav,
-          title: 'Impostazioni',
-          description:
-              'Cambia profilo, lingua, gestisci account e '
-              'personalizza l\'app.',
-          icon: Icons.settings,
-          accentColor: AppColors.textMuted,
-        ),
-      ];
+        ));
+      }
     }
+
+    // Add notifications step for mobile (after shipments or at end)
+    if (!isWide) {
+      steps.add(CoachStep(
+        id: 'notifications',
+        targetKey: _keyNotifications,
+        title: 'Notifiche',
+        description:
+            'Aggiornamenti sulle spedizioni e avvisi importanti. '
+            'Il badge mostra quante ne hai da leggere.',
+        icon: Icons.notifications,
+        accentColor: AppColors.accentOrange,
+        preferredPosition: TooltipPosition.below,
+      ));
+    }
+
+    return steps;
   }
 
   void _navigateTo(int index) {
@@ -321,21 +417,15 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
-  Widget _getCurrentScreen() {
+  Widget _getCurrentScreen(BuildContext context) {
     if (_showNotifications) {
-      return NotificationsScreen(
-        onBack: _closeOverlay,
-      );
+      return NotificationsScreen(onBack: _closeOverlay);
     }
     if (_showAddItem) {
-      return AddItemScreen(
-        onBack: _closeOverlay,
-      );
+      return AddItemScreen(onBack: _closeOverlay);
     }
     if (_showAddSale) {
-      return AddSaleScreen(
-        onBack: _closeOverlay,
-      );
+      return AddSaleScreen(onBack: _closeOverlay);
     }
     if (_editingProduct != null) {
       return EditProductScreen(
@@ -350,23 +440,24 @@ class _MainShellState extends State<MainShell> {
         onBack: _closeOverlay,
       );
     }
-    switch (_currentIndex) {
-      case 0:
+
+    final tabs = _visibleTabs(context);
+    final safeIndex = _currentIndex < tabs.length ? _currentIndex : 0;
+    final tabId = tabs[safeIndex].id;
+
+    switch (tabId) {
+      case 'dashboard':
         return DashboardScreen(
           onNewPurchase: _showAddItemScreen,
           onNewSale: _showAddSaleScreen,
         );
-      case 1:
-        return InventoryScreen(
-          onEditProduct: _showEditProductScreen,
-        );
-      case 2:
-        return ShipmentsScreen(
-          onTrackShipment: _showTrackingDetail,
-        );
-      case 3:
+      case 'inventory':
+        return InventoryScreen(onEditProduct: _showEditProductScreen);
+      case 'shipments':
+        return ShipmentsScreen(onTrackShipment: _showTrackingDetail);
+      case 'reports':
         return const ReportsScreen();
-      case 4:
+      case 'settings':
         return const SettingsScreen();
       default:
         return DashboardScreen(
@@ -380,6 +471,96 @@ class _MainShellState extends State<MainShell> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Show profile switcher bottom sheet.
+  void _showProfileSwitcher(BuildContext context) {
+    final provider = ProfileProvider.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Seleziona Profilo',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...provider.profiles.map((p) {
+              final isActive = p.id == provider.profile?.id;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: ScaleOnPress(
+                  onTap: () {
+                    provider.switchProfile(p.id);
+                    Navigator.pop(ctx);
+                    setState(() => _currentIndex = 0);
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? p.color.withValues(alpha: 0.15)
+                          : AppColors.cardDark,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isActive
+                            ? p.color.withValues(alpha: 0.4)
+                            : Colors.white.withValues(alpha: 0.06),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(p.icon, color: p.color, size: 22),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            p.name,
+                            style: TextStyle(
+                              color: isActive ? Colors.white : AppColors.textSecondary,
+                              fontSize: 15,
+                              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                        if (isActive)
+                          Icon(Icons.check_circle, color: p.color, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -434,7 +615,7 @@ class _MainShellState extends State<MainShell> {
                   },
                   child: KeyedSubtree(
                     key: ValueKey<String>(_screenKey),
-                    child: _getCurrentScreen(),
+                    child: _getCurrentScreen(context),
                   ),
                 ),
               ),
@@ -467,7 +648,7 @@ class _MainShellState extends State<MainShell> {
               },
               child: KeyedSubtree(
                 key: ValueKey<String>(_screenKey),
-                child: _getCurrentScreen(),
+                child: _getCurrentScreen(context),
               ),
             ),
           ),
@@ -477,30 +658,47 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildMobileTopBar() {
+    final provider = ProfileProvider.maybeOf(context);
+    final profile = provider?.profile;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              gradient: AppColors.headerGradient,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.view_in_ar,
-              color: Colors.white,
-              size: 18,
+          // Profile icon (tappable to switch)
+          GestureDetector(
+            onTap: () => _showProfileSwitcher(context),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                gradient: profile != null
+                    ? LinearGradient(
+                        colors: [
+                          profile.color,
+                          profile.color.withValues(alpha: 0.6),
+                        ],
+                      )
+                    : AppColors.headerGradient,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                profile?.icon ?? Icons.view_in_ar,
+                color: Colors.white,
+                size: 18,
+              ),
             ),
           ),
           const SizedBox(width: 10),
-          const Text(
-            'Vault',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
+          GestureDetector(
+            onTap: () => _showProfileSwitcher(context),
+            child: Text(
+              profile?.name ?? 'Vault',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
+              ),
             ),
           ),
           const Spacer(),
@@ -546,7 +744,10 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildSidebar() {
-    final l = AppLocalizations.of(context)!;
+    final tabs = _visibleTabs(context);
+    final provider = ProfileProvider.maybeOf(context);
+    final profile = provider?.profile;
+
     return Container(
       width: 240,
       decoration: BoxDecoration(
@@ -596,47 +797,63 @@ class _MainShellState extends State<MainShell> {
               ],
             ),
           ),
-          const SizedBox(height: 32),
-          _SidebarItem(
-            key: _keySidebarDashboard,
-            icon: Icons.dashboard_outlined,
-            selectedIcon: Icons.dashboard,
-            label: l.dashboard,
-            isSelected: _currentIndex == 0 && !_showAddItem,
-            onTap: () => _navigateTo(0),
-          ),
-          _SidebarItem(
-            key: _keySidebarInventory,
-            icon: Icons.inventory_2_outlined,
-            selectedIcon: Icons.inventory_2,
-            label: l.inventory,
-            isSelected: _currentIndex == 1 && !_showAddItem,
-            onTap: () => _navigateTo(1),
-          ),
-          _SidebarItem(
-            key: _keySidebarShipments,
-            icon: Icons.local_shipping_outlined,
-            selectedIcon: Icons.local_shipping,
-            label: l.shipments,
-            isSelected: _currentIndex == 2 && !_showAddItem,
-            onTap: () => _navigateTo(2),
-          ),
-          _SidebarItem(
-            key: _keySidebarReports,
-            icon: Icons.bar_chart_outlined,
-            selectedIcon: Icons.bar_chart,
-            label: l.reports,
-            isSelected: _currentIndex == 3 && !_showAddItem,
-            onTap: () => _navigateTo(3),
-          ),
-          _SidebarItem(
-            key: _keySidebarSettings,
-            icon: Icons.settings_outlined,
-            selectedIcon: Icons.settings,
-            label: l.settings,
-            isSelected: _currentIndex == 4 && !_showAddItem,
-            onTap: () => _navigateTo(4),
-          ),
+          const SizedBox(height: 20),
+
+          // ── Profile selector in sidebar ──
+          if (profile != null && provider != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: GestureDetector(
+                onTap: () => _showProfileSwitcher(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: profile.color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: profile.color.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(profile.icon, color: profile.color, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          profile.name,
+                          style: TextStyle(
+                            color: profile.color,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Icon(
+                        Icons.unfold_more,
+                        color: profile.color.withValues(alpha: 0.6),
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          // ── Tab items filtered by profile ──
+          ...List.generate(tabs.length, (i) {
+            final tab = tabs[i];
+            return _SidebarItem(
+              key: _sidebarKey(tab.id),
+              icon: tab.icon,
+              selectedIcon: tab.selectedIcon,
+              label: _tabLabel(context, tab.id),
+              isSelected: _currentIndex == i && !_showAddItem,
+              onTap: () => _navigateTo(i),
+            );
+          }),
+
           const Spacer(),
           // System Online
           Padding(
@@ -655,7 +872,7 @@ class _MainShellState extends State<MainShell> {
                   const PulsingDot(color: AppColors.accentGreen, size: 8),
                   const SizedBox(width: 10),
                   Text(
-                    l.systemOnline,
+                    AppLocalizations.of(context)!.systemOnline,
                     style: const TextStyle(
                       color: AppColors.accentGreen,
                       fontSize: 13,
@@ -827,7 +1044,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildBottomNav() {
-    final l = AppLocalizations.of(context)!;
+    final tabs = _visibleTabs(context);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.navBar,
@@ -849,13 +1066,16 @@ class _MainShellState extends State<MainShell> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, l.home, 0, key: _keyDashboardNav),
-              _buildNavItem(Icons.inventory_2_outlined, Icons.inventory_2, l.inventory, 1, key: _keyInventoryNav),
-              _buildNavItem(Icons.local_shipping_outlined, Icons.local_shipping, l.shipments, 2, key: _keyShipmentsNav),
-              _buildNavItem(Icons.bar_chart_outlined, Icons.bar_chart, l.reports, 3, key: _keyReportsNav),
-              _buildNavItem(Icons.settings_outlined, Icons.settings, l.settings, 4, key: _keySettingsNav),
-            ],
+            children: List.generate(tabs.length, (i) {
+              final tab = tabs[i];
+              return _buildNavItem(
+                tab.icon,
+                tab.selectedIcon,
+                _tabLabel(context, tab.id),
+                i,
+                key: _mobileNavKey(tab.id),
+              );
+            }),
           ),
         ),
       ),
@@ -902,6 +1122,17 @@ class _MainShellState extends State<MainShell> {
       ),
     );
   }
+}
+
+// ──────────────────────────────────────────────────
+// Tab definition helper
+// ──────────────────────────────────────────────────
+class _TabDef {
+  final String id;
+  final IconData icon;
+  final IconData selectedIcon;
+
+  const _TabDef({required this.id, required this.icon, required this.selectedIcon});
 }
 
 // ──────────────────────────────────────────────────
