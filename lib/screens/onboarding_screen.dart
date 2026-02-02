@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
@@ -25,6 +24,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _selectedPresetIndex = 0;
   final TextEditingController _budgetController = TextEditingController();
   bool _saving = false;
+
+  /// Descriptions per profile type for the picker cards.
+  static const _presetDescriptions = <int, String>{
+    0: 'Per qualsiasi tipo di reselling',
+    1: 'Catalogo carte con prezzi live',
+    2: 'Tracking specifico per sneaker reselling',
+  };
 
   @override
   void dispose() {
@@ -134,53 +140,67 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // ─── Page 1: Welcome ────────────────────────────
   Widget _buildWelcomePage() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              gradient: AppColors.headerGradient,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.accentBlue.withValues(alpha: 0.4),
-                  blurRadius: 30,
-                  spreadRadius: 2,
-                ),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Adapt spacing for small screens
+        final isCompact = constraints.maxHeight < 600;
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(height: isCompact ? 24 : 48),
+                  Container(
+                    width: isCompact ? 80 : 100,
+                    height: isCompact ? 80 : 100,
+                    decoration: BoxDecoration(
+                      gradient: AppColors.headerGradient,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.accentBlue.withValues(alpha: 0.4),
+                          blurRadius: 30,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: Icon(Icons.view_in_ar, color: Colors.white, size: isCompact ? 40 : 50),
+                  ),
+                  SizedBox(height: isCompact ? 28 : 40),
+                  const Text(
+                    'Benvenuto in Vault!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Il tuo tracker professionale per il reselling.\n'
+                    'Gestisci inventario, spedizioni e profitti\nin un unico posto.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 16,
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: isCompact ? 32 : 48),
+                  _buildNextButton('Iniziamo', onTap: _nextPage),
+                  SizedBox(height: isCompact ? 24 : 48),
+                ],
+              ),
             ),
-            child: const Icon(Icons.view_in_ar, color: Colors.white, size: 50),
           ),
-          const SizedBox(height: 40),
-          const Text(
-            'Benvenuto in Vault!',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Il tuo tracker professionale per il reselling.\n'
-            'Gestisci inventario, spedizioni e profitti\nin un unico posto.',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 16,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          _buildNextButton('Iniziamo', onTap: _nextPage),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -268,12 +288,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '${p.enabledTabs.length} tab attive',
+                                  _presetDescriptions[i] ?? '${p.enabledTabs.length} tab attive',
                                   style: TextStyle(
                                     color: isSelected
                                         ? p.color
                                         : AppColors.textMuted,
-                                    fontSize: 12,
+                                    fontSize: 13,
+                                    height: 1.3,
                                   ),
                                 ),
                               ],
@@ -383,101 +404,142 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final budgetText = _budgetController.text.trim();
     final hasBudget = budgetText.isNotEmpty && (double.tryParse(budgetText) ?? 0) > 0;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: preset.color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: preset.color.withValues(alpha: 0.3)),
+    // Build a human-readable tab list
+    final tabNames = preset.enabledTabs.map((id) {
+      switch (id) {
+        case 'dashboard': return 'Dashboard';
+        case 'inventory': return 'Inventario';
+        case 'shipments': return 'Spedizioni';
+        case 'reports': return 'Report';
+        case 'settings': return 'Impostazioni';
+        default: return id;
+      }
+    }).join(', ');
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(height: 40),
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: preset.color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: preset.color.withValues(alpha: 0.3)),
+              ),
+              child: Icon(preset.icon, color: preset.color, size: 40),
             ),
-            child: Icon(preset.icon, color: preset.color, size: 40),
-          ),
-          const SizedBox(height: 28),
-          const Text(
-            'Tutto Pronto!',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
+            const SizedBox(height: 24),
+            const Text(
+              'Pronto! 🚀',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          GlassCard(
-            padding: const EdgeInsets.all(20),
-            glowColor: preset.color,
-            child: Column(
-              children: [
-                _summaryRow('Profilo', preset.name, preset.icon, preset.color),
-                const SizedBox(height: 12),
-                _summaryRow(
-                  'Tab attive',
-                  '${preset.enabledTabs.length} tab',
-                  Icons.tab,
-                  AppColors.accentBlue,
-                ),
-                if (hasBudget) ...[
-                  const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            Text(
+              'Ecco il riepilogo del tuo profilo',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 24),
+            GlassCard(
+              padding: const EdgeInsets.all(20),
+              glowColor: preset.color,
+              child: Column(
+                children: [
+                  _summaryRow('Profilo', preset.name, preset.icon, preset.color),
+                  const SizedBox(height: 14),
                   _summaryRow(
-                    'Budget',
-                    '€$budgetText/mese',
-                    Icons.savings,
-                    AppColors.accentGreen,
+                    'Tipo',
+                    _presetDescriptions[_selectedPresetIndex] ?? '',
+                    Icons.category_outlined,
+                    preset.color,
                   ),
+                  const SizedBox(height: 14),
+                  _summaryRow(
+                    'Tab attive',
+                    tabNames,
+                    Icons.tab,
+                    AppColors.accentBlue,
+                  ),
+                  if (hasBudget) ...[
+                    const SizedBox(height: 14),
+                    _summaryRow(
+                      'Budget',
+                      '€$budgetText/mese',
+                      Icons.savings_outlined,
+                      AppColors.accentGreen,
+                    ),
+                  ],
+                  if (!hasBudget) ...[
+                    const SizedBox(height: 14),
+                    _summaryRow(
+                      'Budget',
+                      'Non impostato',
+                      Icons.savings_outlined,
+                      AppColors.textMuted,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 40),
-          Row(
-            children: [
-              _buildBackButton(onTap: _prevPage),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ShimmerButton(
-                  baseGradient: LinearGradient(
-                    colors: [preset.color, preset.color.withValues(alpha: 0.7)],
-                  ),
-                  onTap: _saving ? null : _finish,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (_saving)
-                          const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+            const SizedBox(height: 36),
+            Row(
+              children: [
+                _buildBackButton(onTap: _prevPage),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ShimmerButton(
+                    baseGradient: LinearGradient(
+                      colors: [preset.color, preset.color.withValues(alpha: 0.7)],
+                    ),
+                    onTap: _saving ? null : _finish,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_saving)
+                            const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          else ...[
+                            const Icon(Icons.rocket_launch, color: Colors.white, size: 20),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Inizia!',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
-                          )
-                        else ...[
-                          const Icon(Icons.rocket_launch, color: Colors.white, size: 20),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Inizia!',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 40),
+          ],
+        ),
       ),
     );
   }
