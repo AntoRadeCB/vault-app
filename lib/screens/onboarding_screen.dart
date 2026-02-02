@@ -60,18 +60,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final budgetText = _budgetController.text.trim();
       final budget = budgetText.isNotEmpty ? double.tryParse(budgetText) : null;
 
-      // Create all 3 presets
-      String activeId = '';
-      for (int i = 0; i < UserProfile.presets.length; i++) {
-        final p = UserProfile.presets[i];
-        final profileToSave = i == _selectedPresetIndex && budget != null
-            ? p.copyWith(budgetMonthly: budget)
-            : p;
-        final ref = await _fs.addProfile(profileToSave);
-        if (i == _selectedPresetIndex) activeId = ref.id;
-      }
+      // Only create the selected profile
+      final profileToSave = budget != null
+          ? preset.copyWith(budgetMonthly: budget)
+          : preset;
+      final ref = await _fs.addProfile(profileToSave);
+      await _fs.setActiveProfile(ref.id);
 
-      await _fs.setActiveProfile(activeId);
       widget.onComplete();
     } catch (e) {
       if (mounted) {
