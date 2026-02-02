@@ -5,16 +5,17 @@ import '../services/firestore_service.dart';
 
 // ═══════════════════════════════════════════════════
 //  ONBOARDING — Post-registration profile setup
+//  4 steps: Welcome → Features → Platforms → Level
 // ═══════════════════════════════════════════════════
 
-class _Interest {
+class _SelectableItem {
   final String id;
   final String label;
   final String emoji;
   final String description;
   final Color color;
 
-  const _Interest({
+  const _SelectableItem({
     required this.id,
     required this.label,
     required this.emoji,
@@ -39,65 +40,162 @@ class _ExperienceLevel {
   });
 }
 
-const _interests = [
-  _Interest(
+// ── Features (Step 2) ─────────────────────────────
+const _features = [
+  _SelectableItem(
     id: 'reselling',
     label: 'Rivendita',
     emoji: '💰',
     description: 'Compra e rivendi per profitto',
     color: AppColors.accentGreen,
   ),
-  _Interest(
+  _SelectableItem(
     id: 'collecting',
     label: 'Collezionismo',
     emoji: '📦',
     description: 'Tieni traccia della tua collezione',
     color: AppColors.accentPurple,
   ),
-  _Interest(
+  _SelectableItem(
     id: 'analytics',
     label: 'Report & Analisi',
     emoji: '📊',
     description: 'Statistiche e insight sui tuoi affari',
     color: AppColors.accentBlue,
   ),
-  _Interest(
+  _SelectableItem(
     id: 'shipping',
     label: 'Tracking Spedizioni',
     emoji: '🚚',
     description: 'Monitora pacchi in entrata e uscita',
     color: AppColors.accentOrange,
   ),
-  _Interest(
-    id: 'sneakers',
-    label: 'Sneakers & Streetwear',
-    emoji: '👟',
-    description: 'Nike, Jordan, Adidas, Supreme...',
-    color: Color(0xFFE91E63),
-  ),
-  _Interest(
-    id: 'luxury',
-    label: 'Luxury & Designer',
-    emoji: '💎',
-    description: 'Gucci, LV, Balenciaga, Prada...',
-    color: Color(0xFFFFD700),
-  ),
-  _Interest(
-    id: 'tech',
-    label: 'Tech & Elettronica',
-    emoji: '🎮',
-    description: 'Console, smartphone, gadget...',
+  _SelectableItem(
+    id: 'inventory',
+    label: 'Gestione Inventario',
+    emoji: '🗂️',
+    description: 'Organizza il tuo magazzino',
     color: AppColors.accentTeal,
   ),
-  _Interest(
-    id: 'vintage',
-    label: 'Vintage & Second-hand',
-    emoji: '🏷️',
-    description: 'Pezzi unici e occasioni vintage',
-    color: Color(0xFF8D6E63),
+  _SelectableItem(
+    id: 'pricing',
+    label: 'Calcolo Profitti',
+    emoji: '🧮',
+    description: 'Margini, commissioni e guadagni netti',
+    color: Color(0xFFE91E63),
   ),
 ];
 
+// ── Platforms (Step 3) ────────────────────────────
+const _platforms = [
+  _SelectableItem(
+    id: 'vinted',
+    label: 'Vinted',
+    emoji: '👗',
+    description: 'Moda second-hand',
+    color: Color(0xFF09B1BA),
+  ),
+  _SelectableItem(
+    id: 'ebay',
+    label: 'eBay',
+    emoji: '🛒',
+    description: 'Aste e compra subito',
+    color: Color(0xFFE53238),
+  ),
+  _SelectableItem(
+    id: 'cardmarket',
+    label: 'Cardmarket',
+    emoji: '🃏',
+    description: 'TCG: Pokémon, Magic, Yu-Gi-Oh!',
+    color: Color(0xFF1E3A5F),
+  ),
+  _SelectableItem(
+    id: 'stockx',
+    label: 'StockX',
+    emoji: '📈',
+    description: 'Sneakers, streetwear, elettronica',
+    color: Color(0xFF006340),
+  ),
+  _SelectableItem(
+    id: 'depop',
+    label: 'Depop',
+    emoji: '🔴',
+    description: 'Moda vintage e streetwear',
+    color: Color(0xFFFF2300),
+  ),
+  _SelectableItem(
+    id: 'wallapop',
+    label: 'Wallapop',
+    emoji: '💬',
+    description: 'Compravendita locale',
+    color: Color(0xFF13C1AC),
+  ),
+  _SelectableItem(
+    id: 'subito',
+    label: 'Subito.it',
+    emoji: '🇮🇹',
+    description: 'Annunci in Italia',
+    color: Color(0xFFFA4B00),
+  ),
+  _SelectableItem(
+    id: 'grailed',
+    label: 'Grailed',
+    emoji: '🖤',
+    description: 'Menswear & designer',
+    color: Color(0xFF000000),
+  ),
+  _SelectableItem(
+    id: 'goat',
+    label: 'GOAT',
+    emoji: '🐐',
+    description: 'Sneakers autenticate',
+    color: Color(0xFF121212),
+  ),
+  _SelectableItem(
+    id: 'vestiaire',
+    label: 'Vestiaire Collective',
+    emoji: '💎',
+    description: 'Luxury second-hand',
+    color: Color(0xFF2D5F2D),
+  ),
+  _SelectableItem(
+    id: 'facebook_mp',
+    label: 'Facebook Marketplace',
+    emoji: '🏪',
+    description: 'Vendita locale e spedita',
+    color: Color(0xFF1877F2),
+  ),
+  _SelectableItem(
+    id: 'etsy',
+    label: 'Etsy',
+    emoji: '🎨',
+    description: 'Artigianato e vintage',
+    color: Color(0xFFF1641E),
+  ),
+  _SelectableItem(
+    id: 'amazon',
+    label: 'Amazon',
+    emoji: '📦',
+    description: 'FBA e reselling',
+    color: Color(0xFFFF9900),
+  ),
+  _SelectableItem(
+    id: 'zalando',
+    label: 'Zalando Pre-owned',
+    emoji: '🧡',
+    description: 'Moda e scarpe',
+    color: Color(0xFFFF6900),
+  ),
+  _SelectableItem(
+    id: 'other',
+    label: 'Altro',
+    emoji: '➕',
+    description: 'Piattaforma non in lista',
+    color: AppColors.textMuted,
+  ),
+];
+
+// ── Experience Levels (Step 4) ────────────────────
 const _experienceLevels = [
   _ExperienceLevel(
     id: 'beginner',
@@ -122,6 +220,10 @@ const _experienceLevels = [
   ),
 ];
 
+// ═══════════════════════════════════════════════════
+//  MAIN WIDGET
+// ═══════════════════════════════════════════════════
+
 class OnboardingScreen extends StatefulWidget {
   final VoidCallback onComplete;
 
@@ -138,8 +240,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   final _firestoreService = FirestoreService();
 
   int _currentPage = 0;
-  final int _totalPages = 3;
-  final Set<String> _selectedInterests = {};
+  final int _totalPages = 4;
+  final Set<String> _selectedFeatures = {};
+  final Set<String> _selectedPlatforms = {};
   String? _selectedExperience;
   bool _saving = false;
 
@@ -193,8 +296,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       case 0:
         return true; // name is optional
       case 1:
-        return _selectedInterests.isNotEmpty;
+        return _selectedFeatures.isNotEmpty;
       case 2:
+        return _selectedPlatforms.isNotEmpty;
+      case 3:
         return _selectedExperience != null;
       default:
         return false;
@@ -210,7 +315,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         'displayName': _nameController.text.trim().isEmpty
             ? null
             : _nameController.text.trim(),
-        'interests': _selectedInterests.toList(),
+        'interests': _selectedFeatures.toList(),
+        'platforms': _selectedPlatforms.toList(),
         'experienceLevel': _selectedExperience,
         'onboardingComplete': true,
         'onboardingCompletedAt': DateTime.now().toIso8601String(),
@@ -250,7 +356,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   onPageChanged: (i) => setState(() => _currentPage = i),
                   children: [
                     _buildWelcomePage(),
-                    _buildInterestsPage(),
+                    _buildGridPage(
+                      title: 'Cosa ti interessa?',
+                      subtitle: 'Seleziona le funzionalità che usi di più',
+                      items: _features,
+                      selected: _selectedFeatures,
+                    ),
+                    _buildGridPage(
+                      title: 'Dove compri e vendi?',
+                      subtitle: 'Seleziona le piattaforme che usi',
+                      items: _platforms,
+                      selected: _selectedPlatforms,
+                    ),
                     _buildExperiencePage(),
                   ],
                 ),
@@ -269,7 +386,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
       child: Column(
         children: [
-          // Progress dots
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(_totalPages, (i) {
@@ -304,10 +420,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             }),
           ),
           const SizedBox(height: 8),
-          // Step counter
           Text(
             '${_currentPage + 1} di $_totalPages',
-            style: TextStyle(
+            style: const TextStyle(
               color: AppColors.textMuted,
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -322,120 +437,121 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildWelcomePage() {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 480,
-          minHeight: MediaQuery.of(context).size.height * 0.6,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 40),
-            // Animated logo
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.8, end: 1.0),
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.elasticOut,
-              builder: (context, value, child) {
-                return Transform.scale(scale: value, child: child);
-              },
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: AppColors.headerGradient,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.accentBlue.withValues(alpha: 0.4),
-                      blurRadius: 32,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.view_in_ar,
-                  color: Colors.white,
-                  size: 56,
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            const Text(
-              'Benvenuto in Vault! 🎉',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Personalizziamo la tua esperienza.\nCi vorranno solo 30 secondi.',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 16,
-                height: 1.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 40),
-            // Name field
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 8),
-                child: Text(
-                  'Come ti chiami?',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 40),
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.8, end: 1.0),
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.elasticOut,
+                builder: (context, value, child) =>
+                    Transform.scale(scale: value, child: child),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.headerGradient,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.accentBlue.withValues(alpha: 0.4),
+                        blurRadius: 32,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.view_in_ar,
+                    color: Colors.white,
+                    size: 56,
                   ),
                 ),
               ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.06),
+              const SizedBox(height: 32),
+              const Text(
+                'Benvenuto in Vault! 🎉',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Personalizziamo la tua esperienza.\nCi vorranno solo 30 secondi.',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 40),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 8),
+                  child: const Text(
+                    'Come ti chiami?',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
-              child: TextField(
-                controller: _nameController,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-                textCapitalization: TextCapitalization.words,
-                decoration: InputDecoration(
-                  hintText: 'Il tuo nome o nickname (opzionale)',
-                  hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
-                  prefixIcon: Icon(Icons.person_outline,
-                      color: AppColors.textMuted, size: 22),
-                  border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                ),
+                child: TextField(
+                  controller: _nameController,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    hintText: 'Il tuo nome o nickname (opzionale)',
+                    hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 15),
+                    prefixIcon: Icon(Icons.person_outline,
+                        color: AppColors.textMuted, size: 22),
+                    border: InputBorder.none,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 40),
-          ],
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ─── Page 2: Interests ─────────────────────────────
-  Widget _buildInterestsPage() {
+  // ─── Reusable grid page (features / platforms) ─────
+  Widget _buildGridPage({
+    required String title,
+    required String subtitle,
+    required List<_SelectableItem> items,
+    required Set<String> selected,
+  }) {
     return Column(
       children: [
         const SizedBox(height: 24),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Text(
-            'Cosa ti interessa?',
-            style: TextStyle(
+            title,
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 26,
               fontWeight: FontWeight.bold,
@@ -446,18 +562,30 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          'Seleziona tutto ciò che fa per te',
-          style: TextStyle(
+          subtitle,
+          style: const TextStyle(
             color: AppColors.textSecondary,
             fontSize: 15,
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 24),
+        if (selected.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(
+              '${selected.length} selezionat${selected.length == 1 ? 'o' : 'i'}',
+              style: TextStyle(
+                color: AppColors.accentBlue.withValues(alpha: 0.8),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        const SizedBox(height: 16),
         Expanded(
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
+              constraints: const BoxConstraints(maxWidth: 600),
               child: GridView.builder(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
@@ -466,11 +594,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       MediaQuery.of(context).size.width > 500 ? 3 : 2,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  childAspectRatio: 1.1,
+                  childAspectRatio: MediaQuery.of(context).size.width > 500
+                      ? 1.15
+                      : 1.05,
                 ),
-                itemCount: _interests.length,
+                itemCount: items.length,
                 itemBuilder: (context, index) {
-                  return _buildInterestCard(_interests[index]);
+                  return _buildSelectableCard(items[index], selected);
                 },
               ),
             ),
@@ -480,15 +610,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  Widget _buildInterestCard(_Interest interest) {
-    final isSelected = _selectedInterests.contains(interest.id);
+  Widget _buildSelectableCard(
+      _SelectableItem item, Set<String> selected) {
+    final isSelected = selected.contains(item.id);
     return GestureDetector(
       onTap: () {
         setState(() {
           if (isSelected) {
-            _selectedInterests.remove(interest.id);
+            selected.remove(item.id);
           } else {
-            _selectedInterests.add(interest.id);
+            selected.add(item.id);
           }
         });
       },
@@ -497,28 +628,26 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
           color: isSelected
-              ? interest.color.withValues(alpha: 0.12)
+              ? item.color.withValues(alpha: 0.12)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
-                ? interest.color.withValues(alpha: 0.5)
+                ? item.color.withValues(alpha: 0.5)
                 : Colors.white.withValues(alpha: 0.06),
             width: isSelected ? 2 : 1,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: interest.color.withValues(alpha: 0.2),
+                    color: item.color.withValues(alpha: 0.2),
                     blurRadius: 16,
-                    spreadRadius: 0,
                   ),
                 ]
               : [],
         ),
         child: Stack(
           children: [
-            // Checkmark
             if (isSelected)
               Positioned(
                 top: 8,
@@ -526,30 +655,22 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: interest.color,
+                    color: item.color,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.check,
-                    color: Colors.white,
-                    size: 14,
-                  ),
+                  child: const Icon(Icons.check, color: Colors.white, size: 14),
                 ),
               ),
-            // Content
             Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    interest.emoji,
-                    style: const TextStyle(fontSize: 28),
-                  ),
+                  Text(item.emoji, style: const TextStyle(fontSize: 28)),
                   const SizedBox(height: 8),
                   Text(
-                    interest.label,
+                    item.label,
                     style: TextStyle(
                       color: isSelected ? Colors.white : AppColors.textSecondary,
                       fontSize: 14,
@@ -561,7 +682,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   const SizedBox(height: 4),
                   Flexible(
                     child: Text(
-                      interest.description,
+                      item.description,
                       style: TextStyle(
                         color: isSelected
                             ? AppColors.textSecondary
@@ -582,94 +703,125 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // ─── Page 3: Experience ────────────────────────────
+  // ─── Page 4: Experience ────────────────────────────
   Widget _buildExperiencePage() {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
-        child: Column(
-          children: [
-            const SizedBox(height: 24),
-            const Text(
-              'Qual è il tuo livello?',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Così possiamo adattare i suggerimenti',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 15,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            ...List.generate(_experienceLevels.length, (index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: _buildExperienceCard(_experienceLevels[index]),
-              );
-            }),
-            const SizedBox(height: 32),
-            // Summary of selections
-            if (_selectedInterests.isNotEmpty) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'I tuoi interessi',
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Column(
+            children: [
+              const SizedBox(height: 24),
+              const Text(
+                'Qual è il tuo livello?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
                 ),
+                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _selectedInterests.map((id) {
-                  final interest = _interests.firstWhere((i) => i.id == id);
-                  return Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: interest.color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: interest.color.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(interest.emoji, style: const TextStyle(fontSize: 14)),
-                        const SizedBox(width: 6),
-                        Text(
-                          interest.label,
-                          style: TextStyle(
-                            color: interest.color,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
+              const SizedBox(height: 8),
+              const Text(
+                'Così possiamo adattare i suggerimenti',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 15,
+                ),
+                textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 32),
+              ...List.generate(_experienceLevels.length, (index) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _buildExperienceCard(_experienceLevels[index]),
+                );
+              }),
+              const SizedBox(height: 32),
+              // Summary chips
+              if (_selectedFeatures.isNotEmpty || _selectedPlatforms.isNotEmpty)
+                _buildSummary(),
+              const SizedBox(height: 40),
             ],
-            const SizedBox(height: 40),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSummary() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_selectedFeatures.isNotEmpty) ...[
+          const Text(
+            'FUNZIONALITÀ',
+            style: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _selectedFeatures.map((id) {
+              final item = _features.firstWhere((i) => i.id == id);
+              return _buildChip(item);
+            }).toList(),
+          ),
+          const SizedBox(height: 18),
+        ],
+        if (_selectedPlatforms.isNotEmpty) ...[
+          const Text(
+            'PIATTAFORME',
+            style: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _selectedPlatforms.map((id) {
+              final item = _platforms.firstWhere((i) => i.id == id);
+              return _buildChip(item);
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildChip(_SelectableItem item) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: item.color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: item.color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(item.emoji, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 6),
+          Text(
+            item.label,
+            style: TextStyle(
+              color: item.color,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -704,10 +856,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         ),
         child: Row(
           children: [
-            Text(
-              level.emoji,
-              style: const TextStyle(fontSize: 32),
-            ),
+            Text(level.emoji, style: const TextStyle(fontSize: 32)),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -716,7 +865,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   Text(
                     level.label,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                      color:
+                          isSelected ? Colors.white : AppColors.textSecondary,
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
                     ),
@@ -734,7 +884,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 ],
               ),
             ),
-            // Radio indicator
             AnimatedContainer(
               duration: const Duration(milliseconds: 250),
               width: 24,
@@ -782,7 +931,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       ),
       child: Row(
         children: [
-          // Back button
           if (_currentPage > 0)
             GestureDetector(
               onTap: _prevPage,
@@ -804,9 +952,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               ),
             )
           else
-            const SizedBox(width: 60), // placeholder to keep layout balanced
+            const SizedBox(width: 60),
           const Spacer(),
-          // Next / Finish button
           GestureDetector(
             onTap: _canProceed ? _nextPage : null,
             child: AnimatedContainer(
@@ -814,15 +961,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               padding:
                   const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
               decoration: BoxDecoration(
-                gradient: _canProceed
-                    ? AppColors.blueButtonGradient
-                    : null,
+                gradient:
+                    _canProceed ? AppColors.blueButtonGradient : null,
                 color: _canProceed ? null : AppColors.surface,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: _canProceed
                     ? [
                         BoxShadow(
-                          color: AppColors.accentBlue.withValues(alpha: 0.3),
+                          color:
+                              AppColors.accentBlue.withValues(alpha: 0.3),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
