@@ -73,7 +73,10 @@ class DashboardScreen extends StatelessWidget {
       builder: (context, budgetSnap) {
         final spent = budgetSnap.data ?? 0;
         final monthly = profile!.budgetMonthly!;
-        final progress = (spent / monthly).clamp(0.0, 1.5);
+        final remaining = (monthly - spent).clamp(0.0, monthly);
+        // Inverted: 1.0 = full budget available, 0.0 = all spent
+        final remainingRatio = (remaining / monthly).clamp(0.0, 1.0);
+        final spentRatio = (spent / monthly).clamp(0.0, 1.5);
 
         return GlassCard(
           padding: const EdgeInsets.all(20),
@@ -83,22 +86,22 @@ class DashboardScreen extends StatelessWidget {
               Row(
                 children: [
                   _buildProfileHeader(context, profile, profileColor),
-                  // Budget circular indicator
+                  // Budget circular indicator (shows remaining %)
                   SizedBox(
                     width: 52,
                     height: 52,
                     child: CustomPaint(
                       painter: _BudgetCirclePainter(
-                        progress: progress.clamp(0.0, 1.0),
-                        color: _budgetColor(progress),
+                        progress: remainingRatio,
+                        color: _budgetColor(spentRatio),
                         trackColor: Colors.white.withValues(alpha: 0.06),
                       ),
                       child: Center(
                         child: Text(
-                          '${(progress * 100).toInt()}%',
+                          '€${remaining.toStringAsFixed(0)}',
                           style: TextStyle(
-                            color: _budgetColor(progress),
-                            fontSize: 12,
+                            color: _budgetColor(spentRatio),
+                            fontSize: 11,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -108,12 +111,13 @@ class DashboardScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
+              // Bar: full = all budget available, empties as you spend
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
-                  value: progress.clamp(0.0, 1.0),
+                  value: remainingRatio,
                   backgroundColor: Colors.white.withValues(alpha: 0.06),
-                  color: _budgetColor(progress),
+                  color: _budgetColor(spentRatio),
                   minHeight: 4,
                 ),
               ),
@@ -122,7 +126,7 @@ class DashboardScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '€${spent.toStringAsFixed(0)} / €${monthly.toStringAsFixed(0)}',
+                    'Disponibile: €${remaining.toStringAsFixed(0)} / €${monthly.toStringAsFixed(0)}',
                     style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 12,
@@ -130,11 +134,11 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    progress >= 1.0
-                        ? 'Budget superato!'
-                        : 'Restano €${(monthly - spent).toStringAsFixed(0)}',
+                    spentRatio >= 1.0
+                        ? 'Budget esaurito!'
+                        : 'Spesi €${spent.toStringAsFixed(0)}',
                     style: TextStyle(
-                      color: progress >= 1.0
+                      color: spentRatio >= 1.0
                           ? AppColors.accentRed
                           : AppColors.textMuted,
                       fontSize: 11,
