@@ -3,6 +3,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../widgets/barcode_scanner_dialog.dart';
 import '../widgets/tracking_input.dart';
+import '../widgets/glow_text_field.dart';
 import '../models/product.dart';
 import '../models/sale.dart';
 import '../models/shipment.dart';
@@ -468,7 +469,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
               index: 3,
               child: _buildField(
                 label: l.salePrice,
-                child: _GlowTextField(
+                child: GlowTextField(
                   controller: _salePriceController,
                   hintText: '0.00',
                   keyboardType: TextInputType.number,
@@ -489,7 +490,7 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
               index: 4,
               child: _buildField(
                 label: l.feesShipping,
-                child: _GlowTextField(
+                child: GlowTextField(
                   controller: _feesController,
                   hintText: '0.00',
                   keyboardType: TextInputType.number,
@@ -708,95 +709,6 @@ class _AddSaleScreenState extends State<AddSaleScreen> {
         const SizedBox(height: 8),
         child,
       ],
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────
-// Reusable glow text field (same pattern as add_item)
-// ──────────────────────────────────────────────────
-class _GlowTextField extends StatefulWidget {
-  final TextEditingController controller;
-  final String hintText;
-  final TextInputType? keyboardType;
-  final String? prefixText;
-  final String? Function(String?)? validator;
-  final ValueChanged<String>? onChanged;
-
-  const _GlowTextField({
-    required this.controller,
-    required this.hintText,
-    this.keyboardType,
-    this.prefixText,
-    this.validator,
-    this.onChanged,
-  });
-
-  @override
-  State<_GlowTextField> createState() => _GlowTextFieldState();
-}
-
-class _GlowTextFieldState extends State<_GlowTextField> {
-  bool _focused = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      onFocusChange: (f) => setState(() => _focused = f),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: _focused
-              ? [
-                  BoxShadow(
-                    color: AppColors.accentBlue.withValues(alpha: 0.15),
-                    blurRadius: 16,
-                  ),
-                ]
-              : [],
-        ),
-        child: TextFormField(
-          controller: widget.controller,
-          keyboardType: widget.keyboardType,
-          validator: widget.validator,
-          onChanged: widget.onChanged,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
-          decoration: InputDecoration(
-            hintText: widget.hintText,
-            prefixText: widget.prefixText,
-            prefixStyle: const TextStyle(
-              color: AppColors.accentBlue,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.accentBlue, width: 1.5),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.accentRed, width: 1.5),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.accentRed, width: 1.5),
-            ),
-            errorStyle: const TextStyle(color: AppColors.accentRed, fontSize: 12),
-          ),
-        ),
-      ),
     );
   }
 }
