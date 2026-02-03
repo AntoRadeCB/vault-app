@@ -5,11 +5,32 @@ import '../services/firestore_service.dart';
 
 /// Inherited widget that provides the active [UserProfile] to the widget tree.
 ///
-/// Usage:
-///   final profile = ProfileProvider.of(context);
+/// ## Why InheritedWidget instead of ChangeNotifier + Provider?
 ///
-/// Wraps a [StatefulWidget] that listens to Firestore streams for profiles
-/// and the active profile id.
+/// [ProfileProvider] uses the InheritedWidget pattern deliberately:
+///
+/// 1. **Stream-driven updates** — Profile data comes from two Firestore
+///    streams (`getProfiles()` and `getActiveProfileId()`).  The wrapper
+///    [ProfileProviderWrapper] is a [StatefulWidget] that listens to those
+///    streams and calls `setState`, which rebuilds the [ProfileProvider]
+///    InheritedWidget.  Consumers that call `ProfileProvider.of(context)`
+///    automatically re-render when `updateShouldNotify` returns `true`.
+///
+/// 2. **Granular rebuild control** — `updateShouldNotify` checks only the
+///    fields that matter (profile id, name, budget, tab count), avoiding
+///    unnecessary rebuilds for unchanged data.
+///
+/// 3. **No external dependency** — Unlike `package:provider`, the
+///    InheritedWidget approach requires zero additional packages and
+///    integrates naturally with the existing widget tree.
+///
+/// If the app later adopts `package:provider` or `package:riverpod`,
+/// this can be converted to a `ChangeNotifierProvider` with minimal
+/// effort — the public API (`of`, `maybeOf`, fields) stays the same.
+///
+/// Usage:
+///   final profile = ProfileProvider.of(context).profile;
+///   final provider = ProfileProvider.maybeOf(context);
 class ProfileProvider extends InheritedWidget {
   final UserProfile? profile;
   final List<UserProfile> profiles;
