@@ -59,129 +59,152 @@ class DashboardScreen extends StatelessWidget {
     final profileColor = profile?.color ?? AppColors.accentBlue;
     final hasBudget = profile?.hasBudget ?? false;
 
-    return GlassCard(
-      padding: const EdgeInsets.all(20),
-      glowColor: profileColor,
-      child: Column(
-        children: [
-          Row(
+    if (!hasBudget) {
+      return GlassCard(
+        padding: const EdgeInsets.all(20),
+        glowColor: profileColor,
+        child: _buildProfileHeader(context, profile, profileColor),
+      );
+    }
+
+    // With budget: use StreamBuilder for real-time budget spent
+    return StreamBuilder<double>(
+      stream: _firestoreService.getBudgetSpentThisMonth(),
+      builder: (context, budgetSnap) {
+        final spent = budgetSnap.data ?? 0;
+        final monthly = profile!.budgetMonthly!;
+        final progress = (spent / monthly).clamp(0.0, 1.5);
+
+        return GlassCard(
+          padding: const EdgeInsets.all(20),
+          glowColor: profileColor,
+          child: Column(
             children: [
-              // Profile icon
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: profileColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: profileColor.withValues(alpha: 0.3)),
-                ),
-                child: Icon(
-                  profile?.icon ?? Icons.inventory_2,
-                  color: profileColor,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 14),
-              // Profile name + item count
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      profile?.name ?? 'Vault',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.3,
+              Row(
+                children: [
+                  _buildProfileHeader(context, profile, profileColor),
+                  // Budget circular indicator
+                  SizedBox(
+                    width: 52,
+                    height: 52,
+                    child: CustomPaint(
+                      painter: _BudgetCirclePainter(
+                        progress: progress.clamp(0.0, 1.0),
+                        color: _budgetColor(progress),
+                        trackColor: Colors.white.withValues(alpha: 0.06),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    StreamBuilder<int>(
-                      stream: _firestoreService.getInventoryItemCount(),
-                      builder: (context, snap) {
-                        final count = snap.data ?? 0;
-                        return Row(
-                          children: [
-                            const PulsingDot(color: AppColors.accentGreen, size: 8),
-                            const SizedBox(width: 8),
-                            Text(
-                              '$count articoli in inventario',
-                              style: const TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              // Budget circular indicator (if budget exists)
-              if (hasBudget)
-                SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: CustomPaint(
-                    painter: _BudgetCirclePainter(
-                      progress: profile!.budgetProgress.clamp(0.0, 1.0),
-                      color: _budgetColor(profile.budgetProgress),
-                      trackColor: Colors.white.withValues(alpha: 0.06),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${(profile.budgetProgress * 100).toInt()}%',
-                        style: TextStyle(
-                          color: _budgetColor(profile.budgetProgress),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                      child: Center(
+                        child: Text(
+                          '${(progress * 100).toInt()}%',
+                          style: TextStyle(
+                            color: _budgetColor(progress),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress.clamp(0.0, 1.0),
+                  backgroundColor: Colors.white.withValues(alpha: 0.06),
+                  color: _budgetColor(progress),
+                  minHeight: 4,
                 ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '€${spent.toStringAsFixed(0)} / €${monthly.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    progress >= 1.0
+                        ? 'Budget superato!'
+                        : 'Restano €${(monthly - spent).toStringAsFixed(0)}',
+                    style: TextStyle(
+                      color: progress >= 1.0
+                          ? AppColors.accentRed
+                          : AppColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-          // Budget progress bar (if budget exists)
-          if (hasBudget) ...[
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: profile!.budgetProgress.clamp(0.0, 1.0),
-                backgroundColor: Colors.white.withValues(alpha: 0.06),
-                color: _budgetColor(profile.budgetProgress),
-                minHeight: 4,
-              ),
+        );
+      },
+    );
+  }
+
+  /// Profile icon + name + item count (reusable in both budget/no-budget layouts)
+  Widget _buildProfileHeader(BuildContext context, dynamic profile, Color profileColor) {
+    return Expanded(
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: profileColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: profileColor.withValues(alpha: 0.3)),
             ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Icon(
+              profile?.icon ?? Icons.inventory_2,
+              color: profileColor,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '€${(profile.budgetSpent ?? 0).toStringAsFixed(0)} / €${profile.budgetMonthly!.toStringAsFixed(0)}',
+                  profile?.name ?? 'Vault',
                   style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.3,
                   ),
                 ),
-                Text(
-                  profile.budgetProgress >= 1.0
-                      ? 'Budget superato!'
-                      : 'Restano €${(profile.budgetMonthly! - (profile.budgetSpent ?? 0)).toStringAsFixed(0)}',
-                  style: TextStyle(
-                    color: profile.budgetProgress >= 1.0
-                        ? AppColors.accentRed
-                        : AppColors.textMuted,
-                    fontSize: 11,
-                  ),
+                const SizedBox(height: 4),
+                StreamBuilder<int>(
+                  stream: _firestoreService.getInventoryItemCount(),
+                  builder: (context, snap) {
+                    final count = snap.data ?? 0;
+                    return Row(
+                      children: [
+                        const PulsingDot(color: AppColors.accentGreen, size: 8),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$count articoli in inventario',
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
-          ],
+          ),
         ],
       ),
     );

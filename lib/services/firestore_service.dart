@@ -165,6 +165,18 @@ class FirestoreService {
     });
   }
 
+  /// Budget spent this month = sum of purchases in the current calendar month.
+  /// This is computed in real-time from purchases data, not from a static field.
+  Stream<double> getBudgetSpentThisMonth() {
+    return getPurchases().map((purchases) {
+      final now = DateTime.now();
+      final monthStart = DateTime(now.year, now.month, 1);
+      return purchases
+          .where((p) => p.date.isAfter(monthStart) || p.date.isAtSameMomentAs(monthStart))
+          .fold<double>(0, (acc, p) => acc + p.totalCost);
+    });
+  }
+
   /// Items count in inventory
   Stream<int> getInventoryItemCount() {
     return getProducts().map((products) => products.length);
