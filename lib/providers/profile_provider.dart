@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/user_profile.dart';
-import 'firestore_service.dart';
+import '../services/firestore_service.dart';
 
 /// Inherited widget that provides the active [UserProfile] to the widget tree.
 ///

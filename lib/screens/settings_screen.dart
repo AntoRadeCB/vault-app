@@ -4,7 +4,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import '../services/profile_provider.dart';
+import '../providers/profile_provider.dart';
 import '../models/user_profile.dart';
 import '../l10n/app_localizations.dart';
 

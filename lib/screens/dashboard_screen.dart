@@ -4,7 +4,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
 import '../services/card_catalog_service.dart';
-import '../services/profile_provider.dart';
+import '../providers/profile_provider.dart';
 import '../models/product.dart';
 import '../models/card_blueprint.dart';
 import '../models/sale.dart';
