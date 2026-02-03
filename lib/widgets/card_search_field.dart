@@ -85,17 +85,15 @@ class _CardSearchFieldState extends State<CardSearchField> {
       return;
     }
 
-    print('[CardSearch] Searching for: "$query"');
     try {
       final results = await _catalogService.searchCards(query);
-      print('[CardSearch] Got ${results.length} results');
       if (!mounted) return;
       setState(() {
         _suggestions = results;
         _showSuggestions = results.isNotEmpty;
       });
-    } catch (e) {
-      print('[CardSearch] ERROR: $e');
+    } catch (_) {
+      // Search failed silently — user can retry
     }
   }
 

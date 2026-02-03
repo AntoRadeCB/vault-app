@@ -43,8 +43,7 @@ class CardCatalogService {
           .map((doc) {
             try {
               return CardBlueprint.fromFirestore(doc);
-            } catch (e) {
-              print('[CardCatalog] Parse error for ${doc.id}: $e');
+            } catch (_) {
               return null;
             }
           })
@@ -55,11 +54,9 @@ class CardCatalogService {
       _cachedCards!.sort((a, b) => a.name.compareTo(b.name));
 
       _cacheTime = DateTime.now();
-      print('[CardCatalog] Loaded ${_cachedCards!.length} cards');
       return _cachedCards!;
     } catch (e) {
-      print('[CardCatalog] ERROR loading cards: $e');
-      rethrow; // Let it bubble up so we can see in console
+      rethrow;
     } finally {
       _loading = false;
     }
@@ -70,18 +67,13 @@ class CardCatalogService {
     if (query.trim().isEmpty) return [];
 
     final cards = await getAllCards();
-    if (cards.isEmpty) {
-      print('[CardCatalog] No cards in cache to search');
-      return [];
-    }
+    if (cards.isEmpty) return [];
 
     final q = query.toLowerCase();
-    final results = cards
+    return cards
         .where((c) => c.name.toLowerCase().contains(q))
         .take(20)
         .toList();
-    print('[CardCatalog] Search "$query" → ${results.length} results');
-    return results;
   }
 
   /// Get a single card by blueprintId
