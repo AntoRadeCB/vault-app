@@ -78,10 +78,12 @@ class _CardSearchFieldState extends State<CardSearchField> {
 
   Future<void> _searchCards(String query) async {
     if (query.length < 2) {
-      if (mounted) setState(() {
-        _suggestions = [];
-        _showSuggestions = false;
-      });
+      if (mounted) {
+        setState(() {
+          _suggestions = [];
+          _showSuggestions = false;
+        });
+      }
       return;
     }
 
