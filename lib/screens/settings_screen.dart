@@ -955,6 +955,165 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showTcgSelector(UserProfile profile) {
+    final allGames = UserProfile.allSupportedGames;
+    final selected = Set<String>.from(profile.trackedGames);
+    // If empty, treat as "all selected"
+    if (selected.isEmpty) selected.addAll(allGames);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.style, color: AppColors.accentPurple, size: 22),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'TCG Tracciati',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () {
+                          setSheetState(() {
+                            if (selected.length == allGames.length) {
+                              selected.clear();
+                              selected.add(allGames.first); // at least one
+                            } else {
+                              selected.addAll(allGames);
+                            }
+                          });
+                        },
+                        child: Text(
+                          selected.length == allGames.length ? 'Min' : 'Tutti',
+                          style: const TextStyle(
+                            color: AppColors.accentBlue,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ...allGames.map((gameId) {
+                    final isOn = selected.contains(gameId);
+                    final color = UserProfile.gameColor(gameId);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: GestureDetector(
+                        onTap: () {
+                          setSheetState(() {
+                            if (isOn && selected.length > 1) {
+                              selected.remove(gameId);
+                            } else if (!isOn) {
+                              selected.add(gameId);
+                            }
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isOn
+                                ? color.withValues(alpha: 0.1)
+                                : Colors.white.withValues(alpha: 0.03),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isOn
+                                  ? color.withValues(alpha: 0.4)
+                                  : Colors.white.withValues(alpha: 0.06),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(UserProfile.gameIcon(gameId), color: color, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  UserProfile.gameLabel(gameId),
+                                  style: TextStyle(
+                                    color: isOn ? Colors.white : AppColors.textMuted,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: isOn ? color : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(5),
+                                  border: Border.all(
+                                    color: isOn ? color : Colors.white.withValues(alpha: 0.2),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: isOn
+                                    ? const Icon(Icons.check, color: Colors.white, size: 14)
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        _firestoreService.updateProfile(
+                          profile.id,
+                          {'trackedGames': selected.toList()},
+                        );
+                        Navigator.pop(context);
+                        _showSuccessSnackbar('TCG aggiornati');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accentPurple,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Salva',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showTabToggles(UserProfile profile) {
     final allTabs = ['dashboard', 'inventory', 'shipments', 'reports', 'settings'];
     final enabledTabs = List<String>.from(profile.enabledTabs);
@@ -1248,6 +1407,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () => _showTabToggles(activeProfile),
                     trailing: _buildChevron(),
                     iconColor: activeProfile.color,
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.style,
+                    title: 'TCG Tracciati',
+                    subtitle: activeProfile.trackedGames.isEmpty
+                        ? 'Tutti i giochi'
+                        : activeProfile.trackedGames
+                            .map((g) => UserProfile.gameLabel(g))
+                            .join(', '),
+                    onTap: () => _showTcgSelector(activeProfile),
+                    trailing: _buildChevron(),
+                    iconColor: AppColors.accentPurple,
                   ),
                   _buildSettingsRow(
                     icon: Icons.savings_outlined,

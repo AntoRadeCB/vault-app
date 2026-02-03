@@ -60,6 +60,9 @@ class ProfileProvider extends InheritedWidget {
   /// Returns the list of enabled tab identifiers for the active profile.
   List<String> get enabledTabs => profile?.enabledTabs ?? UserProfile.presetOther.enabledTabs;
 
+  /// Returns the list of tracked game ids (empty = all games).
+  List<String> get trackedGames => profile?.trackedGames ?? [];
+
   @override
   bool updateShouldNotify(ProfileProvider oldWidget) {
     return profile?.id != oldWidget.profile?.id ||

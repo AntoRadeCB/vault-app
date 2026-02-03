@@ -22,6 +22,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // Onboarding state
   int _selectedPresetIndex = 0;
+  final Set<String> _selectedGames = {}; // multi-select TCGs
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _budgetController = TextEditingController();
   bool _saving = false;
@@ -67,8 +68,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ? customName
           : UserProfile.categoryLabel(preset.type);
 
+      final trackedGames = _selectedGames.isNotEmpty
+          ? _selectedGames.toList()
+          : UserProfile.allSupportedGames;
+
       final profileToSave = preset.copyWith(
         name: profileName,
+        trackedGames: trackedGames,
         budgetMonthly: budget,
       );
       final ref = await _fs.addProfile(profileToSave);
@@ -205,10 +211,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ─── Page 2: Profile Name + Category ─────────────
+  // ─── Page 2: Profile Name + TCG Multi-Select ─────
   Widget _buildProfilePickerPage() {
-    final presets = UserProfile.presets;
-    final selectedPreset = presets[_selectedPresetIndex];
+    final games = UserProfile.allSupportedGames;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -216,7 +221,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         children: [
           const SizedBox(height: 20),
           const Text(
-            'Crea il tuo Profilo',
+            'Configura CardVault',
             style: TextStyle(
               color: Colors.white,
               fontSize: 24,
@@ -225,7 +230,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Scegli un nome e una categoria.\nPotrai modificarli in qualsiasi momento.',
+            'Scegli un nome per il tuo profilo e\nseleziona i giochi che vuoi tracciare.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
             textAlign: TextAlign.center,
           ),
@@ -242,7 +247,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 fontWeight: FontWeight.w600,
               ),
               decoration: InputDecoration(
-                hintText: UserProfile.categoryLabel(selectedPreset.type),
+                hintText: 'La mia collezione',
                 hintStyle: TextStyle(
                   color: AppColors.textMuted.withValues(alpha: 0.5),
                   fontSize: 17,
@@ -251,7 +256,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 border: InputBorder.none,
                 prefixIcon: Icon(
                   Icons.edit_outlined,
-                  color: selectedPreset.color.withValues(alpha: 0.7),
+                  color: AppColors.accentBlue.withValues(alpha: 0.7),
                   size: 20,
                 ),
                 prefixIconConstraints: const BoxConstraints(minWidth: 40),
@@ -262,106 +267,146 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
           const SizedBox(height: 20),
 
-          // ─── Category label ───
+          // ─── TCG selection label ───
           Align(
             alignment: Alignment.centerLeft,
             child: Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 10),
-              child: Text(
-                'Categoria',
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                ),
+              child: Row(
+                children: [
+                  Text(
+                    'Giochi da tracciare',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        if (_selectedGames.length == games.length) {
+                          _selectedGames.clear();
+                        } else {
+                          _selectedGames.addAll(games);
+                        }
+                      });
+                    },
+                    child: Text(
+                      _selectedGames.length == games.length ? 'Deseleziona tutti' : 'Seleziona tutti',
+                      style: TextStyle(
+                        color: AppColors.accentBlue,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
-          // ─── Category cards ───
+          // ─── TCG cards (multi-select) ───
           Expanded(
             child: ListView.builder(
               physics: const BouncingScrollPhysics(),
-              itemCount: presets.length,
+              itemCount: games.length,
               itemBuilder: (context, i) {
-                final p = presets[i];
-                final isSelected = _selectedPresetIndex == i;
-                final categoryLabel = UserProfile.categoryLabel(p.type);
-                final categoryHint = UserProfile.categoryHint(p.type);
+                final gameId = games[i];
+                final isSelected = _selectedGames.contains(gameId);
+                final color = UserProfile.gameColor(gameId);
+                final label = UserProfile.gameLabel(gameId);
+                final icon = UserProfile.gameIcon(gameId);
+                final hint = UserProfile.categoryHint(
+                  ProfileType.values.firstWhere(
+                    (t) => t.name == gameId,
+                    orElse: () => ProfileType.other,
+                  ),
+                );
 
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.only(bottom: 10),
                   child: ScaleOnPress(
-                    onTap: () => setState(() => _selectedPresetIndex = i),
+                    onTap: () {
+                      setState(() {
+                        if (isSelected) {
+                          _selectedGames.remove(gameId);
+                        } else {
+                          _selectedGames.add(gameId);
+                        }
+                      });
+                    },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? p.color.withValues(alpha: 0.12)
+                            ? color.withValues(alpha: 0.12)
                             : Colors.white.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: isSelected
-                              ? p.color.withValues(alpha: 0.5)
+                              ? color.withValues(alpha: 0.5)
                               : Colors.white.withValues(alpha: 0.06),
                           width: isSelected ? 2 : 1,
                         ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: p.color.withValues(alpha: 0.2),
-                                  blurRadius: 20,
-                                  spreadRadius: -2,
-                                ),
-                              ]
-                            : [],
                       ),
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            width: 44,
-                            height: 44,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
-                              color: p.color.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
+                              color: color.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Icon(p.icon, color: p.color, size: 24),
+                            child: Icon(icon, color: color, size: 22),
                           ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  categoryLabel,
+                                  label,
                                   style: TextStyle(
                                     color: isSelected ? Colors.white : AppColors.textSecondary,
-                                    fontSize: 16,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 2),
                                 Text(
-                                  categoryHint,
+                                  hint,
                                   style: TextStyle(
-                                    color: isSelected
-                                        ? p.color.withValues(alpha: 0.8)
-                                        : AppColors.textMuted,
-                                    fontSize: 12,
-                                    height: 1.4,
+                                    color: isSelected ? color.withValues(alpha: 0.8) : AppColors.textMuted,
+                                    fontSize: 11,
+                                    height: 1.3,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
                           ),
-                          if (isSelected)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 10),
-                              child: Icon(Icons.check_circle, color: p.color, size: 22),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: isSelected ? color : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isSelected ? color : Colors.white.withValues(alpha: 0.2),
+                                width: 2,
+                              ),
                             ),
+                            child: isSelected
+                                ? const Icon(Icons.check, color: Colors.white, size: 16)
+                                : null,
+                          ),
                         ],
                       ),
                     ),
@@ -376,7 +421,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 _buildBackButton(onTap: _prevPage),
                 const SizedBox(width: 12),
-                Expanded(child: _buildNextButton('Continua', onTap: _nextPage)),
+                Expanded(
+                  child: _buildNextButton(
+                    _selectedGames.isEmpty ? 'Salta (tutti)' : 'Continua (${_selectedGames.length})',
+                    onTap: _nextPage,
+                  ),
+                ),
               ],
             ),
           ),
@@ -465,10 +515,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final hasBudget = budgetText.isNotEmpty && (double.tryParse(budgetText) ?? 0) > 0;
 
     final customName = _nameController.text.trim();
-    final profileName = customName.isNotEmpty
-        ? customName
-        : UserProfile.categoryLabel(preset.type);
-    final categoryLabel = UserProfile.categoryLabel(preset.type);
+    final profileName = customName.isNotEmpty ? customName : 'La mia collezione';
+    final trackedGames = _selectedGames.isNotEmpty
+        ? _selectedGames.map((g) => UserProfile.gameLabel(g)).join(', ')
+        : 'Tutti';
 
     // Build a human-readable tab list
     final tabNames = preset.enabledTabs.map((id) {
@@ -523,20 +573,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               glowColor: preset.color,
               child: Column(
                 children: [
-                  _summaryRow('Nome', profileName, preset.icon, preset.color),
+                  _summaryRow('Nome', profileName, Icons.badge_outlined, AppColors.accentBlue),
                   const SizedBox(height: 14),
                   _summaryRow(
-                    'Categoria',
-                    categoryLabel,
-                    Icons.category_outlined,
-                    preset.color,
-                  ),
-                  const SizedBox(height: 14),
-                  _summaryRow(
-                    'Tab attive',
-                    tabNames,
-                    Icons.tab,
-                    AppColors.accentBlue,
+                    'TCG tracciati',
+                    trackedGames,
+                    Icons.style,
+                    AppColors.accentPurple,
                   ),
                   if (hasBudget) ...[
                     const SizedBox(height: 14),

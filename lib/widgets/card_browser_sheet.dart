@@ -6,14 +6,17 @@ import '../theme/app_theme.dart';
 /// Full-screen bottom sheet to browse and pick a card visually.
 /// Structure: Game tabs → Expansion filter → Card grid.
 class CardBrowserSheet extends StatefulWidget {
-  const CardBrowserSheet({super.key});
+  /// Optional: filter by tracked games (empty = show all)
+  final List<String> trackedGames;
 
-  static Future<CardBlueprint?> show(BuildContext context) {
+  const CardBrowserSheet({super.key, this.trackedGames = const []});
+
+  static Future<CardBlueprint?> show(BuildContext context, {List<String> trackedGames = const []}) {
     return showModalBottomSheet<CardBlueprint>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const CardBrowserSheet(),
+      builder: (_) => CardBrowserSheet(trackedGames: trackedGames),
     );
   }
 
@@ -61,10 +64,22 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
       _expansions = results[0] as List<Map<String, dynamic>>;
       _allCards = results[1] as List<CardBlueprint>;
 
-      // Discover games from card data
+      // Discover games from card data, filtered by tracked games
+      final tracked = widget.trackedGames;
       final gameSet = <String>{};
       for (final c in _allCards) {
-        gameSet.add(c.game ?? 'riftbound');
+        final g = c.game ?? 'riftbound';
+        if (tracked.isEmpty || tracked.contains(g)) {
+          gameSet.add(g);
+        }
+      }
+
+      // Filter cards to only tracked games
+      if (tracked.isNotEmpty) {
+        _allCards = _allCards.where((c) {
+          final g = c.game ?? 'riftbound';
+          return tracked.contains(g);
+        }).toList();
       }
 
       _games = gameSet.map((g) => _GameInfo.fromId(g)).toList()

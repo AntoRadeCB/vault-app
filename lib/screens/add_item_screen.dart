@@ -13,6 +13,7 @@ import '../models/card_blueprint.dart';
 import '../services/firestore_service.dart';
 import '../services/tracking_service.dart';
 import '../l10n/app_localizations.dart';
+import '../providers/profile_provider.dart';
 
 class AddItemScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -133,7 +134,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Future<void> _openCardBrowser() async {
-    final card = await CardBrowserSheet.show(context);
+    final provider = ProfileProvider.maybeOf(context);
+    final tracked = provider?.trackedGames ?? [];
+    final card = await CardBrowserSheet.show(context, trackedGames: tracked);
     if (card != null && mounted) {
       _applyCardSelection(card);
     }

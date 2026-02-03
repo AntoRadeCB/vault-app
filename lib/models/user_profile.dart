@@ -12,6 +12,7 @@ class UserProfile {
   final String name;
   final ProfileType type;
   final List<String> enabledTabs;
+  final List<String> trackedGames; // TCG ids the user wants to see
   final double? budgetMonthly;
   final double? budgetSpent;
   final DateTime createdAt;
@@ -21,6 +22,7 @@ class UserProfile {
     required this.name,
     required this.type,
     required this.enabledTabs,
+    this.trackedGames = const [],
     this.budgetMonthly,
     this.budgetSpent,
     required this.createdAt,
@@ -76,6 +78,7 @@ class UserProfile {
       'name': name,
       'type': type.name,
       'enabledTabs': enabledTabs,
+      'trackedGames': trackedGames,
       'budgetMonthly': budgetMonthly,
       'budgetSpent': budgetSpent,
       'createdAt': Timestamp.fromDate(createdAt),
@@ -92,6 +95,7 @@ class UserProfile {
         orElse: () => ProfileType.other,
       ),
       enabledTabs: List<String>.from(data['enabledTabs'] ?? _allTabs),
+      trackedGames: List<String>.from(data['trackedGames'] ?? []),
       budgetMonthly: (data['budgetMonthly'] as num?)?.toDouble(),
       budgetSpent: (data['budgetSpent'] as num?)?.toDouble(),
       createdAt: data['createdAt'] != null
@@ -105,6 +109,7 @@ class UserProfile {
     String? name,
     ProfileType? type,
     List<String>? enabledTabs,
+    List<String>? trackedGames,
     double? budgetMonthly,
     double? budgetSpent,
     DateTime? createdAt,
@@ -114,6 +119,7 @@ class UserProfile {
       name: name ?? this.name,
       type: type ?? this.type,
       enabledTabs: enabledTabs ?? this.enabledTabs,
+      trackedGames: trackedGames ?? this.trackedGames,
       budgetMonthly: budgetMonthly ?? this.budgetMonthly,
       budgetSpent: budgetSpent ?? this.budgetSpent,
       createdAt: createdAt ?? this.createdAt,
@@ -137,6 +143,7 @@ class UserProfile {
         id: '',
         name: 'Riftbound',
         type: ProfileType.riftbound,
+        trackedGames: const ['riftbound'],
         enabledTabs: _allTabs,
         createdAt: DateTime.now(),
       );
@@ -145,6 +152,7 @@ class UserProfile {
         id: '',
         name: 'Pokémon TCG',
         type: ProfileType.pokemon,
+        trackedGames: const ['pokemon'],
         enabledTabs: _allTabs,
         createdAt: DateTime.now(),
       );
@@ -153,6 +161,7 @@ class UserProfile {
         id: '',
         name: 'Magic: The Gathering',
         type: ProfileType.mtg,
+        trackedGames: const ['mtg'],
         enabledTabs: _allTabs,
         createdAt: DateTime.now(),
       );
@@ -161,6 +170,7 @@ class UserProfile {
         id: '',
         name: 'Yu-Gi-Oh!',
         type: ProfileType.yugioh,
+        trackedGames: const ['yugioh'],
         enabledTabs: _allTabs,
         createdAt: DateTime.now(),
       );
@@ -169,6 +179,7 @@ class UserProfile {
         id: '',
         name: 'One Piece TCG',
         type: ProfileType.onepiece,
+        trackedGames: const ['onepiece'],
         enabledTabs: _allTabs,
         createdAt: DateTime.now(),
       );
@@ -177,6 +188,7 @@ class UserProfile {
         id: '',
         name: 'Altro',
         type: ProfileType.other,
+        trackedGames: const ['riftbound', 'pokemon', 'mtg', 'yugioh', 'onepiece'],
         enabledTabs: _allTabs,
         createdAt: DateTime.now(),
       );
@@ -189,6 +201,45 @@ class UserProfile {
         presetOnePiece,
         presetOther,
       ];
+
+  /// All supported TCG game ids
+  static const List<String> allSupportedGames = [
+    'riftbound', 'pokemon', 'mtg', 'yugioh', 'onepiece',
+  ];
+
+  /// Game display info
+  static String gameLabel(String gameId) {
+    switch (gameId) {
+      case 'riftbound': return 'Riftbound';
+      case 'pokemon': return 'Pokémon TCG';
+      case 'mtg': return 'Magic: The Gathering';
+      case 'yugioh': return 'Yu-Gi-Oh!';
+      case 'onepiece': return 'One Piece TCG';
+      default: return gameId;
+    }
+  }
+
+  static IconData gameIcon(String gameId) {
+    switch (gameId) {
+      case 'riftbound': return Icons.auto_awesome;
+      case 'pokemon': return Icons.catching_pokemon;
+      case 'mtg': return Icons.auto_fix_high;
+      case 'yugioh': return Icons.style;
+      case 'onepiece': return Icons.sailing;
+      default: return Icons.collections_bookmark;
+    }
+  }
+
+  static Color gameColor(String gameId) {
+    switch (gameId) {
+      case 'riftbound': return const Color(0xFF667eea);
+      case 'pokemon': return const Color(0xFFFFCB05);
+      case 'mtg': return const Color(0xFF764ba2);
+      case 'yugioh': return const Color(0xFFE53935);
+      case 'onepiece': return const Color(0xFFFF7043);
+      default: return const Color(0xFF26C6DA);
+    }
+  }
 
   /// Category display label (used in onboarding picker)
   static String categoryLabel(ProfileType type) {
