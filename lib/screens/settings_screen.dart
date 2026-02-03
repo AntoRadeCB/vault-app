@@ -28,8 +28,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _accentIndex = 0;
 
   // Section expansion state
-  bool _profileExpanded = true;
-  bool _accountExpanded = false;
+  bool _accountExpanded = true;
+  bool _profileExpanded = false;
   bool _preferencesExpanded = false;
 
   User? get _user => _authService.currentUser;
@@ -1129,11 +1129,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ══════════════════════════════════════════
-          //  PROFILO SECTION (expanded by default)
+          //  USER CARD (always visible, top)
+          // ══════════════════════════════════════════
+          StaggeredFadeSlide(
+            index: 1,
+            child: _buildUserCard(),
+          ),
+          const SizedBox(height: 20),
+
+          // ══════════════════════════════════════════
+          //  ACCOUNT SECTION
+          // ══════════════════════════════════════════
+          StaggeredFadeSlide(
+            index: 2,
+            child: _buildCollapsibleSection(
+              title: AppLocalizations.of(context)!.account,
+              icon: Icons.person_outline,
+              isExpanded: _accountExpanded,
+              onToggle: () => setState(() => _accountExpanded = !_accountExpanded),
+              children: [
+                _buildSettingsRow(
+                  icon: Icons.email_outlined,
+                  title: AppLocalizations.of(context)!.email,
+                  subtitle: _userEmail,
+                  onTap: () => _showEditDialog(
+                    title: 'Email',
+                    currentValue: _userEmail,
+                    onSave: (v) async {
+                      try {
+                        await _authService.updateEmail(v);
+                        _showSuccessSnackbar(
+                            AppLocalizations.of(context)!.verificationSent);
+                      } catch (e) {
+                        _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
+                      }
+                    },
+                  ),
+                  trailing: _buildChevron(),
+                ),
+                _buildSettingsRow(
+                  icon: Icons.lock_outline,
+                  title: AppLocalizations.of(context)!.password,
+                  subtitle: AppLocalizations.of(context)!.resetViaEmail,
+                  onTap: () async {
+                    try {
+                      await _authService.resetPassword(_userEmail);
+                      _showSuccessSnackbar(
+                          AppLocalizations.of(context)!.resetEmailSent(_userEmail));
+                    } catch (e) {
+                      _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
+                    }
+                  },
+                  trailing: _buildChevron(),
+                ),
+                _buildSettingsRow(
+                  icon: Icons.security,
+                  title: AppLocalizations.of(context)!.twoFactorAuth,
+                  subtitle: AppLocalizations.of(context)!.notAvailable,
+                  onTap: () => _showInfoSheet(
+                    AppLocalizations.of(context)!.twoFactorTitle,
+                    AppLocalizations.of(context)!.twoFactorDescription,
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.textMuted.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'N/A',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                _buildSettingsRow(
+                  icon: Icons.logout,
+                  title: 'Logout',
+                  subtitle: 'Esci dal tuo account',
+                  onTap: _showLogoutDialog,
+                  trailing: _buildChevron(),
+                  iconColor: AppColors.accentRed,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // ══════════════════════════════════════════
+          //  PROFILO SECTION
           // ══════════════════════════════════════════
           if (activeProfile != null)
             StaggeredFadeSlide(
-              index: 1,
+              index: 3,
               child: _buildCollapsibleSection(
                 title: 'Profilo',
                 icon: Icons.account_circle_outlined,
@@ -1202,175 +1293,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 20),
 
           // ══════════════════════════════════════════
-          //  ACCOUNT SECTION (collapsed by default)
+          //  PREFERENZE SECTION
           // ══════════════════════════════════════════
           StaggeredFadeSlide(
-            index: 2,
-            child: _buildCollapsibleSection(
-              title: AppLocalizations.of(context)!.account,
-              icon: Icons.person_outline,
-              isExpanded: _accountExpanded,
-              onToggle: () => setState(() => _accountExpanded = !_accountExpanded),
-              children: [
-                // User card row
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: AppColors.headerGradient,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.accentBlue.withValues(alpha: 0.3),
-                              blurRadius: 12,
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Text(
-                            _userName.isNotEmpty ? _userName[0].toUpperCase() : 'V',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _userName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _userEmail,
-                              style: const TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      ScaleOnPress(
-                        onTap: () => _showEditDialog(
-                          title: AppLocalizations.of(context)!.userName,
-                          currentValue: _userName,
-                          onSave: (v) async {
-                            await _authService.updateDisplayName(v);
-                            setState(() {});
-                          },
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.06),
-                            ),
-                          ),
-                          child: const Icon(
-                              Icons.edit_outlined,
-                              color: AppColors.textMuted,
-                              size: 18),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                _buildSettingsRow(
-                  icon: Icons.email_outlined,
-                  title: AppLocalizations.of(context)!.email,
-                  subtitle: _userEmail,
-                  onTap: () => _showEditDialog(
-                    title: 'Email',
-                    currentValue: _userEmail,
-                    onSave: (v) async {
-                      try {
-                        await _authService.updateEmail(v);
-                        _showSuccessSnackbar(
-                            AppLocalizations.of(context)!.verificationSent);
-                      } catch (e) {
-                        _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
-                      }
-                    },
-                  ),
-                  trailing: _buildChevron(),
-                ),
-                _buildSettingsRow(
-                  icon: Icons.lock_outline,
-                  title: AppLocalizations.of(context)!.password,
-                  subtitle: AppLocalizations.of(context)!.resetViaEmail,
-                  onTap: () async {
-                    try {
-                      await _authService.resetPassword(_userEmail);
-                      _showSuccessSnackbar(
-                          AppLocalizations.of(context)!.resetEmailSent(_userEmail));
-                    } catch (e) {
-                      _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
-                    }
-                  },
-                  trailing: _buildChevron(),
-                ),
-                _buildSettingsRow(
-                  icon: Icons.security,
-                  title: AppLocalizations.of(context)!.twoFactorAuth,
-                  subtitle: AppLocalizations.of(context)!.notAvailable,
-                  onTap: () => _showInfoSheet(
-                    AppLocalizations.of(context)!.twoFactorTitle,
-                    AppLocalizations.of(context)!.twoFactorDescription,
-                  ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.textMuted
-                          .withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'N/A',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                // Logout row inside account section
-                _buildSettingsRow(
-                  icon: Icons.logout,
-                  title: 'Logout',
-                  subtitle: 'Esci dal tuo account',
-                  onTap: _showLogoutDialog,
-                  trailing: _buildChevron(),
-                  iconColor: AppColors.accentRed,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ══════════════════════════════════════════
-          //  PREFERENZE SECTION (collapsed by default)
-          // ══════════════════════════════════════════
-          StaggeredFadeSlide(
-            index: 3,
+            index: 4,
             child: _buildCollapsibleSection(
               title: 'Preferenze',
               icon: Icons.tune_outlined,
@@ -1485,7 +1411,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           //  INFO SECTION (always visible, outside accordions)
           // ══════════════════════════════════════════
           StaggeredFadeSlide(
-            index: 4,
+            index: 5,
             child: _buildSection(
               title: AppLocalizations.of(context)!.info,
               icon: Icons.info_outline,
@@ -1534,6 +1460,95 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ═══════════════════════════════════════════════════
+  //  USER CARD (top of settings)
+  // ═══════════════════════════════════════════════════
+
+  Widget _buildUserCard() {
+    return GlassCard(
+      padding: const EdgeInsets.all(20),
+      glowColor: AppColors.accentBlue,
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              gradient: AppColors.headerGradient,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.accentBlue.withValues(alpha: 0.35),
+                  blurRadius: 16,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                _userName.isNotEmpty ? _userName[0].toUpperCase() : 'V',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _userName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _userEmail,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ScaleOnPress(
+            onTap: () => _showEditDialog(
+              title: 'Nome',
+              currentValue: _userName,
+              onSave: (v) async {
+                await _authService.updateDisplayName(v);
+                setState(() {});
+                _showSuccessSnackbar('Nome aggiornato');
+              },
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.accentBlue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.accentBlue.withValues(alpha: 0.2),
+                ),
+              ),
+              child: const Icon(
+                Icons.edit_outlined,
+                color: AppColors.accentBlue,
+                size: 18,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
   //  COLLAPSIBLE SECTION (glassmorphism styled)
   // ═══════════════════════════════════════════════════
 
@@ -1545,60 +1560,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required List<Widget> children,
     Color? accentColor,
   }) {
-    final color = accentColor ?? AppColors.textMuted;
+    final color = accentColor ?? AppColors.accentBlue;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Header — looks like a tappable card
         GestureDetector(
           onTap: onToggle,
           behavior: HitTestBehavior.opaque,
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                title.toUpperCase(),
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
-                ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: isExpanded
+                  ? color.withValues(alpha: 0.08)
+                  : Colors.white.withValues(alpha: 0.03),
+              borderRadius: isExpanded
+                  ? const BorderRadius.vertical(top: Radius.circular(14))
+                  : BorderRadius.circular(14),
+              border: Border.all(
+                color: isExpanded
+                    ? color.withValues(alpha: 0.2)
+                    : Colors.white.withValues(alpha: 0.06),
               ),
-              const Spacer(),
-              AnimatedRotation(
-                turns: isExpanded ? 0.5 : 0,
-                duration: const Duration(milliseconds: 250),
-                child: Icon(
-                  Icons.keyboard_arrow_down,
-                  color: color.withValues(alpha: 0.6),
-                  size: 20,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 18),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: isExpanded ? Colors.white : AppColors.textSecondary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                AnimatedRotation(
+                  turns: isExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 250),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.keyboard_arrow_down,
+                      color: isExpanded ? color : AppColors.textMuted,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
+        // Content
         AnimatedCrossFade(
-          firstChild: Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: GlassCard(
-              padding: EdgeInsets.zero,
-              glowColor: accentColor,
-              child: Column(
-                children: List.generate(children.length, (i) {
-                  return Column(
-                    children: [
-                      if (i > 0)
-                        Divider(
-                          height: 1,
-                          color: Colors.white.withValues(alpha: 0.04),
-                          indent: 52,
-                        ),
-                      children[i],
-                    ],
-                  );
-                }),
+          firstChild: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface.withValues(alpha: 0.5),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
+              border: Border(
+                left: BorderSide(color: color.withValues(alpha: 0.15)),
+                right: BorderSide(color: color.withValues(alpha: 0.15)),
+                bottom: BorderSide(color: color.withValues(alpha: 0.15)),
               ),
+            ),
+            child: Column(
+              children: List.generate(children.length, (i) {
+                return Column(
+                  children: [
+                    if (i > 0)
+                      Divider(
+                        height: 1,
+                        color: Colors.white.withValues(alpha: 0.04),
+                        indent: 52,
+                      ),
+                    children[i],
+                  ],
+                );
+              }),
             ),
           ),
           secondChild: const SizedBox.shrink(),
