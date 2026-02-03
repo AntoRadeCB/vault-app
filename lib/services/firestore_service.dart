@@ -165,15 +165,36 @@ class FirestoreService {
     });
   }
 
-  /// Budget spent this month = sum of purchases in the current calendar month.
-  /// This is computed in real-time from purchases data, not from a static field.
+  /// Budget spent this month (net of sale refills).
+  ///
+  /// Logic:
+  /// 1. Sum all purchases this month → gross spent
+  /// 2. Sum sale revenue this month → refill amount
+  /// 3. Net spent = max(0, gross spent - refill)
+  ///
+  /// Sales first refill the budget (recover what was spent), then any
+  /// surplus counts as pure profit.
   Stream<double> getBudgetSpentThisMonth() {
-    return getPurchases().map((purchases) {
-      final now = DateTime.now();
-      final monthStart = DateTime(now.year, now.month, 1);
-      return purchases
-          .where((p) => p.date.isAfter(monthStart) || p.date.isAtSameMomentAs(monthStart))
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+
+    return getPurchases().asyncExpand((purchases) {
+      final grossSpent = purchases
+          .where((p) =>
+              p.date.isAfter(monthStart) ||
+              p.date.isAtSameMomentAs(monthStart))
           .fold<double>(0, (acc, p) => acc + p.totalCost);
+
+      return getSales().map((sales) {
+        final saleRefill = sales
+            .where((s) =>
+                s.date.isAfter(monthStart) ||
+                s.date.isAtSameMomentAs(monthStart))
+            .fold<double>(0, (acc, s) => acc + s.salePrice);
+
+        // Sales refill the budget first; can't go below 0
+        return (grossSpent - saleRefill).clamp(0.0, double.infinity);
+      });
     });
   }
 
