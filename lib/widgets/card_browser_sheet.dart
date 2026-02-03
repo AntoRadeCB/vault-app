@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/card_blueprint.dart';
+import '../models/product.dart';
 import '../services/card_catalog_service.dart';
 import '../theme/app_theme.dart';
 
@@ -9,14 +10,28 @@ class CardBrowserSheet extends StatefulWidget {
   /// Optional: filter by tracked games (empty = show all)
   final List<String> trackedGames;
 
-  const CardBrowserSheet({super.key, this.trackedGames = const []});
+  /// Product kind — determines whether to show cards or expansions
+  final ProductKind productKind;
 
-  static Future<CardBlueprint?> show(BuildContext context, {List<String> trackedGames = const []}) {
+  const CardBrowserSheet({
+    super.key,
+    this.trackedGames = const [],
+    this.productKind = ProductKind.singleCard,
+  });
+
+  static Future<CardBlueprint?> show(
+    BuildContext context, {
+    List<String> trackedGames = const [],
+    ProductKind productKind = ProductKind.singleCard,
+  }) {
     return showModalBottomSheet<CardBlueprint>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => CardBrowserSheet(trackedGames: trackedGames),
+      builder: (_) => CardBrowserSheet(
+        trackedGames: trackedGames,
+        productKind: productKind,
+      ),
     );
   }
 
@@ -33,12 +48,19 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
   List<CardBlueprint> _allCards = [];
   List<CardBlueprint> _displayedCards = [];
 
+  // Expansion mode state (for sealed products)
+  List<Map<String, dynamic>> _displayedExpansions = [];
+  final Map<int, String?> _expansionImages = {};
+  final Map<int, int> _expansionCardCounts = {};
+
   // Game tabs — discovered from data, with fallback
   List<_GameInfo> _games = [];
   String? _selectedGame;
   int? _selectedExpansionId;
   bool _loading = true;
   String _searchQuery = '';
+
+  bool get _isSealed => widget.productKind != ProductKind.singleCard;
 
   @override
   void initState() {
@@ -91,8 +113,22 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
       // Sort expansions: highest id first (newest)
       _expansions.sort((a, b) => (b['id'] as int? ?? 0).compareTo(a['id'] as int? ?? 0));
 
+      // Pre-compute expansion card counts
+      for (final c in _allCards) {
+        if (c.expansionId != null) {
+          _expansionCardCounts[c.expansionId!] =
+              (_expansionCardCounts[c.expansionId!] ?? 0) + 1;
+        }
+      }
+
       setState(() => _loading = false);
-      _filterCards();
+
+      if (_isSealed) {
+        _filterExpansions();
+        _loadExpansionImages();
+      } else {
+        _filterCards();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -106,10 +142,14 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
     final filtered = _allCards.where((card) {
       final cardGame = card.game ?? 'riftbound';
       // Game filter (skip if searching across all)
-      if (query.isEmpty && game != null && cardGame != game) return false;
+      if (query.isEmpty && game != null && cardGame != game) {
+        return false;
+      }
       // Expansion filter
       if (_selectedExpansionId != null &&
-          card.expansionId != _selectedExpansionId) return false;
+          card.expansionId != _selectedExpansionId) {
+        return false;
+      }
       // Search
       if (query.isNotEmpty && !card.name.toLowerCase().contains(query)) {
         return false;
@@ -143,7 +183,11 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
   void _selectGame(String gameId) {
     _selectedGame = gameId;
     _selectedExpansionId = null; // Reset expansion filter
-    _filterCards();
+    if (_isSealed) {
+      _filterExpansions();
+    } else {
+      _filterCards();
+    }
   }
 
   void _selectExpansion(int? expansionId) {
@@ -153,7 +197,75 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
 
   void _onSearchChanged(String value) {
     _searchQuery = value;
-    _filterCards();
+    if (_isSealed) {
+      _filterExpansions();
+    } else {
+      _filterCards();
+    }
+  }
+
+  void _filterExpansions() {
+    final query = _searchQuery.toLowerCase();
+    final game = _selectedGame;
+
+    // Get expansion IDs for the selected game
+    final gameExpIds = <int>{};
+    if (game != null) {
+      for (final c in _allCards) {
+        if ((c.game ?? 'riftbound') == game && c.expansionId != null) {
+          gameExpIds.add(c.expansionId!);
+        }
+      }
+    }
+
+    final filtered = _expansions.where((exp) {
+      final id = exp['id'] as int?;
+      // Game filter
+      if (game != null && id != null && !gameExpIds.contains(id)) return false;
+      // Search filter
+      if (query.isNotEmpty) {
+        final name = (exp['name'] as String? ?? '').toLowerCase();
+        if (!name.contains(query)) return false;
+      }
+      return true;
+    }).toList();
+
+    // Sort newest first
+    filtered.sort((a, b) => (b['id'] as int? ?? 0).compareTo(a['id'] as int? ?? 0));
+
+    setState(() => _displayedExpansions = filtered);
+
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(0,
+          duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+    }
+  }
+
+  Future<void> _loadExpansionImages() async {
+    for (final exp in _expansions) {
+      final id = exp['id'] as int?;
+      if (id != null && !_expansionImages.containsKey(id)) {
+        final img = await _catalog.getExpansionImage(id);
+        if (mounted) {
+          setState(() => _expansionImages[id] = img);
+        }
+      }
+    }
+  }
+
+  String _kindLabel(ProductKind kind) {
+    switch (kind) {
+      case ProductKind.boosterPack:
+        return 'Busta';
+      case ProductKind.boosterBox:
+        return 'Box';
+      case ProductKind.display:
+        return 'Display';
+      case ProductKind.bundle:
+        return 'Bundle';
+      default:
+        return '';
+    }
   }
 
   /// Expansions filtered for the currently selected game
@@ -187,8 +299,8 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
           _buildSearchBar(),
           // Game tabs (only if >1 game)
           if (_games.length > 1) _buildGameTabs(),
-          // Expansion chips
-          if (_filteredExpansions.isNotEmpty && _searchQuery.isEmpty)
+          // Expansion chips (only for card mode, not sealed)
+          if (!_isSealed && _filteredExpansions.isNotEmpty && _searchQuery.isEmpty)
             _buildExpansionChips(),
           // Results count
           Padding(
@@ -196,8 +308,10 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '${_displayedCards.length} carte',
-                style: TextStyle(
+                _isSealed
+                    ? '${_displayedExpansions.length} espansioni'
+                    : '${_displayedCards.length} carte',
+                style: const TextStyle(
                   color: AppColors.textMuted,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -210,9 +324,13 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
                 ? const Center(
                     child:
                         CircularProgressIndicator(color: AppColors.accentBlue))
-                : _displayedCards.isEmpty
-                    ? _buildEmptyState()
-                    : _buildCardGrid(),
+                : _isSealed
+                    ? (_displayedExpansions.isEmpty
+                        ? _buildEmptyState()
+                        : _buildExpansionGrid())
+                    : (_displayedCards.isEmpty
+                        ? _buildEmptyState()
+                        : _buildCardGrid()),
           ),
           SizedBox(height: bottomPadding),
         ],
@@ -242,28 +360,33 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
                   color: AppColors.accentPurple.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.style,
-                    color: AppColors.accentPurple, size: 22),
+                child: Icon(
+                  _isSealed ? Icons.inventory_2 : Icons.style,
+                  color: AppColors.accentPurple,
+                  size: 22,
+                ),
               ),
               const SizedBox(width: 14),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Catalogo Carte',
-                      style: TextStyle(
+                      _isSealed ? 'Catalogo Espansioni' : 'Catalogo Carte',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         letterSpacing: -0.3,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
-                      'Sfoglia per gioco ed espansione',
-                      style:
-                          TextStyle(color: AppColors.textMuted, fontSize: 13),
+                      _isSealed
+                          ? 'Sfoglia espansioni per prodotti sigillati'
+                          : 'Sfoglia per gioco ed espansione',
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontSize: 13),
                     ),
                   ],
                 ),
@@ -295,7 +418,7 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
         onChanged: _onSearchChanged,
         style: const TextStyle(color: Colors.white, fontSize: 15),
         decoration: InputDecoration(
-          hintText: 'Cerca carta...',
+          hintText: _isSealed ? 'Cerca espansione...' : 'Cerca carta...',
           hintStyle:
               TextStyle(color: AppColors.textMuted.withValues(alpha: 0.6)),
           filled: true,
@@ -450,7 +573,7 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
           const SizedBox(height: 12),
           Text(
             _searchQuery.isNotEmpty
-                ? 'Nessuna carta trovata'
+                ? (_isSealed ? 'Nessuna espansione trovata' : 'Nessuna carta trovata')
                 : 'Catalogo vuoto',
             style: const TextStyle(
               color: AppColors.textSecondary,
@@ -467,6 +590,42 @@ class _CardBrowserSheetState extends State<CardBrowserSheet> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildExpansionGrid() {
+    return GridView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 200,
+        childAspectRatio: 0.75,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: _displayedExpansions.length,
+      itemBuilder: (context, index) {
+        final exp = _displayedExpansions[index];
+        final id = exp['id'] as int? ?? 0;
+        final cardCount = _expansionCardCounts[id] ?? 0;
+        return _ExpansionGridTile(
+          expansion: exp,
+          imageUrl: _expansionImages[id],
+          cardCount: cardCount,
+          kindLabel: _kindLabel(widget.productKind),
+          onTap: () {
+            final card = CardBlueprint(
+              id: 'exp_$id',
+              blueprintId: -id,
+              name: '${exp['name'] ?? 'Expansion'} ${_kindLabel(widget.productKind)}',
+              game: _selectedGame,
+              expansionId: id,
+              expansionName: exp['name'] as String?,
+            );
+            Navigator.pop(context, card);
+          },
+        );
+      },
     );
   }
 }
@@ -700,6 +859,140 @@ class _CardGridTile extends StatelessWidget {
               style: TextStyle(
                 color: card.rarityColor.withValues(alpha: 0.4),
                 fontSize: 9,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Expansion grid tile (for sealed products) ───
+class _ExpansionGridTile extends StatelessWidget {
+  final Map<String, dynamic> expansion;
+  final String? imageUrl;
+  final int cardCount;
+  final String kindLabel;
+  final VoidCallback onTap;
+
+  const _ExpansionGridTile({
+    required this.expansion,
+    required this.imageUrl,
+    required this.cardCount,
+    required this.kindLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = expansion['name'] as String? ?? 'Expansion';
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.accentPurple.withValues(alpha: 0.15),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.accentPurple.withValues(alpha: 0.08),
+              blurRadius: 12,
+              spreadRadius: -2,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Representative card image
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+                child: imageUrl != null
+                    ? Image.network(
+                        imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _expPlaceholder(),
+                      )
+                    : _expPlaceholder(),
+              ),
+            ),
+            // Info area
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      // Kind badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentPurple.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          kindLabel,
+                          style: const TextStyle(
+                            color: AppColors.accentPurple,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      // Card count
+                      Text(
+                        '$cardCount carte',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _expPlaceholder() {
+    return Container(
+      color: AppColors.accentPurple.withValues(alpha: 0.06),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.inventory_2,
+                color: AppColors.accentPurple.withValues(alpha: 0.3), size: 32),
+            const SizedBox(height: 4),
+            Text(
+              kindLabel,
+              style: TextStyle(
+                color: AppColors.accentPurple.withValues(alpha: 0.4),
+                fontSize: 10,
               ),
             ),
           ],

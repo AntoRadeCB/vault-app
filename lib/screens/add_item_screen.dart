@@ -123,12 +123,21 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   void _applyCardSelection(CardBlueprint card) {
     setState(() {
-      _selectedCard = card;
-      _nameController.text = card.name;
-      _brandController.text = card.expansionName ?? 'RIFTBOUND';
-      if (card.marketPrice != null) {
-        _priceController.text =
-            (card.marketPrice!.cents / 100).toStringAsFixed(2);
+      // Check if this is an expansion-based selection (sealed product)
+      if (card.blueprintId < 0) {
+        // Expansion selection for sealed products
+        _selectedCard = null; // No card preview for sealed
+        _nameController.text = card.name;
+        _brandController.text = (card.game ?? 'RIFTBOUND').toUpperCase();
+      } else {
+        // Individual card selection
+        _selectedCard = card;
+        _nameController.text = card.name;
+        _brandController.text = card.expansionName ?? 'RIFTBOUND';
+        if (card.marketPrice != null) {
+          _priceController.text =
+              (card.marketPrice!.cents / 100).toStringAsFixed(2);
+        }
       }
     });
   }
@@ -136,7 +145,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
   Future<void> _openCardBrowser() async {
     final provider = ProfileProvider.maybeOf(context);
     final tracked = provider?.trackedGames ?? [];
-    final card = await CardBrowserSheet.show(context, trackedGames: tracked);
+    final card = await CardBrowserSheet.show(
+      context,
+      trackedGames: tracked,
+      productKind: _selectedKind,
+    );
     if (card != null && mounted) {
       _applyCardSelection(card);
     }
@@ -386,8 +399,6 @@ class _AddItemScreenState extends State<AddItemScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final isSingleCard = _selectedKind == ProductKind.singleCard;
-
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(24),
@@ -497,84 +508,80 @@ class _AddItemScreenState extends State<AddItemScreen> {
               index: 1,
               child: _buildField(
                 label: l.itemName,
-                child: isSingleCard
-                    ? CardSearchField(
-                        controller: _nameController,
-                        hintText: isSingleCard ? 'Cerca carta...' : l.itemNameHint,
-                        validator: (v) =>
-                            (v == null || v.isEmpty) ? l.requiredField : null,
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Browse catalog button (only for single cards)
-                            ScaleOnPress(
-                              onTap: _openCardBrowser,
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 8),
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF764ba2), Color(0xFF667eea)],
+                child: CardSearchField(
+                  controller: _nameController,
+                  hintText: _kindPlaceholder(_selectedKind),
+                  productKind: _selectedKind,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? l.requiredField : null,
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Browse catalog button (always visible)
+                      ScaleOnPress(
+                        onTap: _openCardBrowser,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF764ba2), Color(0xFF667eea)],
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.accentPurple.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            _selectedKind == ProductKind.singleCard
+                                ? Icons.style
+                                : Icons.inventory_2,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Barcode scanner button
+                      ScaleOnPress(
+                        onTap: _barcodeLoading ? null : _scanBarcode,
+                        child: Container(
+                          margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.blueButtonGradient,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    AppColors.accentBlue.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: _barcodeLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
                                   ),
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.accentPurple.withValues(alpha: 0.3),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.style,
+                                )
+                              : const Icon(
+                                  Icons.qr_code_scanner,
                                   color: Colors.white,
                                   size: 20,
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            // Barcode scanner button
-                            ScaleOnPress(
-                              onTap: _barcodeLoading ? null : _scanBarcode,
-                              child: Container(
-                                margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  gradient: AppColors.blueButtonGradient,
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color:
-                                          AppColors.accentBlue.withValues(alpha: 0.3),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                                child: _barcodeLoading
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.qr_code_scanner,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                              ),
-                            ),
-                          ],
                         ),
-                        onCardSelected: _applyCardSelection,
-                      )
-                    : GlowTextField(
-                        controller: _nameController,
-                        hintText: _kindPlaceholder(_selectedKind),
-                        validator: (v) =>
-                            (v == null || v.isEmpty) ? l.requiredField : null,
                       ),
+                    ],
+                  ),
+                  onCardSelected: _applyCardSelection,
+                ),
               ),
             ),
             // Selected card preview

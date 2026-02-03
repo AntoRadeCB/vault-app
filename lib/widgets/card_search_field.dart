@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/card_blueprint.dart';
+import '../models/product.dart';
 import '../services/card_catalog_service.dart';
 import '../theme/app_theme.dart';
 
@@ -12,6 +13,7 @@ class CardSearchField extends StatefulWidget {
   final String? Function(String?)? validator;
   final Widget? suffixIcon;
   final void Function(CardBlueprint card)? onCardSelected;
+  final ProductKind? productKind;
 
   const CardSearchField({
     super.key,
@@ -20,6 +22,7 @@ class CardSearchField extends StatefulWidget {
     this.validator,
     this.suffixIcon,
     this.onCardSelected,
+    this.productKind,
   });
 
   @override
@@ -30,10 +33,15 @@ class _CardSearchFieldState extends State<CardSearchField> {
   final CardCatalogService _catalogService = CardCatalogService();
   final FocusNode _focusNode = FocusNode();
   List<CardBlueprint> _suggestions = [];
+  List<Map<String, dynamic>> _expansionSuggestions = [];
   bool _focused = false;
   bool _showSuggestions = false;
   Timer? _debounce;
   bool _suppressSuggestions = false;
+
+  bool get _isSealed =>
+      widget.productKind != null &&
+      widget.productKind != ProductKind.singleCard;
 
   @override
   void initState() {
@@ -72,15 +80,16 @@ class _CardSearchFieldState extends State<CardSearchField> {
 
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      _searchCards(widget.controller.text);
+      _search(widget.controller.text);
     });
   }
 
-  Future<void> _searchCards(String query) async {
+  Future<void> _search(String query) async {
     if (query.length < 2) {
       if (mounted) {
         setState(() {
           _suggestions = [];
+          _expansionSuggestions = [];
           _showSuggestions = false;
         });
       }
@@ -88,12 +97,23 @@ class _CardSearchFieldState extends State<CardSearchField> {
     }
 
     try {
-      final results = await _catalogService.searchCards(query);
-      if (!mounted) return;
-      setState(() {
-        _suggestions = results;
-        _showSuggestions = results.isNotEmpty;
-      });
+      if (_isSealed) {
+        final results = await _catalogService.searchExpansions(query);
+        if (!mounted) return;
+        setState(() {
+          _expansionSuggestions = results;
+          _suggestions = [];
+          _showSuggestions = results.isNotEmpty;
+        });
+      } else {
+        final results = await _catalogService.searchCards(query);
+        if (!mounted) return;
+        setState(() {
+          _suggestions = results;
+          _expansionSuggestions = [];
+          _showSuggestions = results.isNotEmpty;
+        });
+      }
     } catch (_) {
       // Search failed silently — user can retry
     }
@@ -105,10 +125,40 @@ class _CardSearchFieldState extends State<CardSearchField> {
     setState(() {
       _showSuggestions = false;
       _suggestions = [];
+      _expansionSuggestions = [];
     });
     _suppressSuggestions = false;
     _focusNode.unfocus();
     widget.onCardSelected?.call(card);
+  }
+
+  void _selectExpansion(Map<String, dynamic> expansion) {
+    final id = expansion['id'] as int? ?? 0;
+    final name = expansion['name'] as String? ?? 'Expansion';
+    final kindLabel = _sealedKindLabel();
+    final card = CardBlueprint(
+      id: 'exp_$id',
+      blueprintId: -id,
+      name: '$name $kindLabel',
+      expansionId: id,
+      expansionName: name,
+    );
+    _selectCard(card);
+  }
+
+  String _sealedKindLabel() {
+    switch (widget.productKind) {
+      case ProductKind.boosterPack:
+        return 'Busta';
+      case ProductKind.boosterBox:
+        return 'Box';
+      case ProductKind.display:
+        return 'Display';
+      case ProductKind.bundle:
+        return 'Bundle';
+      default:
+        return '';
+    }
   }
 
   @override
@@ -186,7 +236,7 @@ class _CardSearchFieldState extends State<CardSearchField> {
           ),
         ),
         // Suggestions dropdown (inline, no overlay)
-        if (_showSuggestions && _suggestions.isNotEmpty)
+        if (_showSuggestions && (_suggestions.isNotEmpty || _expansionSuggestions.isNotEmpty))
           Container(
             margin: const EdgeInsets.only(top: 4),
             constraints: const BoxConstraints(maxHeight: 280),
@@ -206,18 +256,32 @@ class _CardSearchFieldState extends State<CardSearchField> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: EdgeInsets.zero,
-                itemCount: _suggestions.length,
-                itemBuilder: (context, index) {
-                  final card = _suggestions[index];
-                  return _CardSuggestionTile(
-                    card: card,
-                    onTap: () => _selectCard(card),
-                  );
-                },
-              ),
+              child: _isSealed
+                  ? ListView.builder(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      itemCount: _expansionSuggestions.length,
+                      itemBuilder: (context, index) {
+                        final exp = _expansionSuggestions[index];
+                        return _ExpansionSuggestionTile(
+                          expansion: exp,
+                          kindLabel: _sealedKindLabel(),
+                          onTap: () => _selectExpansion(exp),
+                        );
+                      },
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      itemCount: _suggestions.length,
+                      itemBuilder: (context, index) {
+                        final card = _suggestions[index];
+                        return _CardSuggestionTile(
+                          card: card,
+                          onTap: () => _selectCard(card),
+                        );
+                      },
+                    ),
             ),
           ),
       ],
@@ -345,6 +409,85 @@ class _CardSuggestionTile extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExpansionSuggestionTile extends StatelessWidget {
+  final Map<String, dynamic> expansion;
+  final String kindLabel;
+  final VoidCallback onTap;
+
+  const _ExpansionSuggestionTile({
+    required this.expansion,
+    required this.kindLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = expansion['name'] as String? ?? 'Expansion';
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: Colors.white.withValues(alpha: 0.04),
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Expansion icon
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.accentPurple.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.inventory_2,
+                color: AppColors.accentPurple,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Expansion info
+            Expanded(
+              child: Text(
+                name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Kind badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.accentPurple.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                kindLabel,
+                style: const TextStyle(
+                  color: AppColors.accentPurple,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ],
         ),
       ),
