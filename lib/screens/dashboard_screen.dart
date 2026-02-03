@@ -63,7 +63,9 @@ class DashboardScreen extends StatelessWidget {
       return GlassCard(
         padding: const EdgeInsets.all(20),
         glowColor: profileColor,
-        child: _buildProfileHeader(context, profile, profileColor),
+        child: Row(
+          children: [_buildProfileHeader(context, profile, profileColor)],
+        ),
       );
     }
 

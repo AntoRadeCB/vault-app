@@ -178,23 +178,23 @@ class FirestoreService {
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month, 1);
 
-    return getPurchases().asyncExpand((purchases) {
+    // Simple approach: purchases stream, with sales fetched once per emission
+    return getPurchases().asyncMap((purchases) async {
       final grossSpent = purchases
           .where((p) =>
               p.date.isAfter(monthStart) ||
               p.date.isAtSameMomentAs(monthStart))
           .fold<double>(0, (acc, p) => acc + p.totalCost);
 
-      return getSales().map((sales) {
-        final saleRefill = sales
-            .where((s) =>
-                s.date.isAfter(monthStart) ||
-                s.date.isAtSameMomentAs(monthStart))
-            .fold<double>(0, (acc, s) => acc + s.salePrice);
+      // Fetch latest sales snapshot
+      final sales = await getSales().first;
+      final saleRefill = sales
+          .where((s) =>
+              s.date.isAfter(monthStart) ||
+              s.date.isAtSameMomentAs(monthStart))
+          .fold<double>(0, (acc, s) => acc + s.salePrice);
 
-        // Sales refill the budget first; can't go below 0
-        return (grossSpent - saleRefill).clamp(0.0, double.infinity);
-      });
+      return (grossSpent - saleRefill).clamp(0.0, double.infinity);
     });
   }
 
