@@ -34,7 +34,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _trackingController = TextEditingController();
   CarrierInfo? _detectedCarrier;
   CardBlueprint? _selectedCard;
-  ProductKind _selectedKind = ProductKind.singleCard;
+  String? _kindFilter; // null = 'Tutto' (all), or 'singleCard', 'boosterPack', etc.
   String _selectedStatus = 'inInventory';
   bool _saving = false;
   bool _barcodeLoading = false;
@@ -123,21 +123,16 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   void _applyCardSelection(CardBlueprint card) {
     setState(() {
-      // Check if this is an expansion-based selection (sealed product)
-      if (card.blueprintId < 0) {
-        // Expansion selection for sealed products
-        _selectedCard = null; // No card preview for sealed
-        _nameController.text = card.name;
-        _brandController.text = (card.game ?? 'RIFTBOUND').toUpperCase();
-      } else {
-        // Individual card selection
-        _selectedCard = card;
-        _nameController.text = card.name;
-        _brandController.text = card.expansionName ?? 'RIFTBOUND';
-        if (card.marketPrice != null) {
-          _priceController.text =
-              (card.marketPrice!.cents / 100).toStringAsFixed(2);
-        }
+      _selectedCard = card;
+      _nameController.text = card.name;
+      _brandController.text = card.expansionName ?? 'RIFTBOUND';
+      if (card.marketPrice != null) {
+        _priceController.text =
+            (card.marketPrice!.cents / 100).toStringAsFixed(2);
+      }
+      // If catalog item has a kind, update the filter to match
+      if (card.kind != null) {
+        _kindFilter = card.kind;
       }
     });
   }
@@ -148,7 +143,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     final card = await CardBrowserSheet.show(
       context,
       trackedGames: tracked,
-      productKind: _selectedKind,
+      kindFilter: _kindFilter,
     );
     if (card != null && mounted) {
       _applyCardSelection(card);
@@ -300,7 +295,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         marketPrice: _selectedCard?.marketPrice != null
             ? _selectedCard!.marketPrice!.cents / 100
             : null,
-        kind: _selectedKind,
+        kind: _resolveProductKind(),
       );
 
       final productRef = await _firestoreService.addProduct(product);
@@ -443,63 +438,29 @@ class _AddItemScreenState extends State<AddItemScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            // ─── Product Kind selector ───
+            // ─── Product Kind filter ───
             StaggeredFadeSlide(
               index: 0,
               child: _buildField(
                 label: 'Tipo prodotto',
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: ProductKind.values.map((kind) {
-                    final isSelected = _selectedKind == kind;
-                    final label = _kindChipLabel(kind);
-                    final icon = _kindChipIcon(kind);
-                    return ScaleOnPress(
-                      onTap: () => setState(() {
-                        _selectedKind = kind;
-                        // Clear card selection if switching away from single card
-                        if (kind != ProductKind.singleCard) {
-                          _selectedCard = null;
-                        }
-                      }),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.accentBlue.withValues(alpha: 0.15)
-                              : Colors.white.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected
-                                ? AppColors.accentBlue.withValues(alpha: 0.5)
-                                : Colors.white.withValues(alpha: 0.08),
-                            width: isSelected ? 2 : 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(icon,
-                                size: 16,
-                                color: isSelected
-                                    ? AppColors.accentBlue
-                                    : AppColors.textMuted),
-                            const SizedBox(width: 6),
-                            Text(
-                              label,
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : AppColors.textSecondary,
-                                fontSize: 13,
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: [
+                      _buildKindFilterChip(null, 'Tutto', Icons.grid_view),
+                      const SizedBox(width: 6),
+                      _buildKindFilterChip('singleCard', 'Carte', Icons.style),
+                      const SizedBox(width: 6),
+                      _buildKindFilterChip('boosterPack', 'Buste', Icons.inventory_2_outlined),
+                      const SizedBox(width: 6),
+                      _buildKindFilterChip('boosterBox', 'Box', Icons.all_inbox),
+                      const SizedBox(width: 6),
+                      _buildKindFilterChip('display', 'Display', Icons.view_module),
+                      const SizedBox(width: 6),
+                      _buildKindFilterChip('bundle', 'Bundle', Icons.card_giftcard),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -510,8 +471,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 label: l.itemName,
                 child: CardSearchField(
                   controller: _nameController,
-                  hintText: _kindPlaceholder(_selectedKind),
-                  productKind: _selectedKind,
+                  hintText: _kindFilter != null ? _kindPlaceholder(_kindFilter!) : 'Cerca prodotto...',
+                  kindFilter: _kindFilter,
                   validator: (v) =>
                       (v == null || v.isEmpty) ? l.requiredField : null,
                   suffixIcon: Row(
@@ -536,7 +497,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                             ],
                           ),
                           child: Icon(
-                            _selectedKind == ProductKind.singleCard
+                            _kindFilter == null || _kindFilter == 'singleCard'
                                 ? Icons.style
                                 : Icons.inventory_2,
                             color: Colors.white,
@@ -800,6 +761,74 @@ class _AddItemScreenState extends State<AddItemScreen> {
     );
   }
 
+  /// Resolve ProductKind from filter or catalog selection
+  ProductKind _resolveProductKind() {
+    // If a specific kind is selected in the filter, use it
+    if (_kindFilter != null) {
+      switch (_kindFilter) {
+        case 'singleCard': return ProductKind.singleCard;
+        case 'boosterPack': return ProductKind.boosterPack;
+        case 'boosterBox': return ProductKind.boosterBox;
+        case 'display': return ProductKind.display;
+        case 'bundle': return ProductKind.bundle;
+      }
+    }
+    // If a catalog item was selected and has a kind, use it
+    if (_selectedCard?.kind != null) {
+      switch (_selectedCard!.kind) {
+        case 'singleCard': return ProductKind.singleCard;
+        case 'boosterPack': return ProductKind.boosterPack;
+        case 'boosterBox': return ProductKind.boosterBox;
+        case 'display': return ProductKind.display;
+        case 'bundle': return ProductKind.bundle;
+      }
+    }
+    // Default
+    return ProductKind.singleCard;
+  }
+
+  Widget _buildKindFilterChip(String? value, String label, IconData icon) {
+    final isSelected = _kindFilter == value;
+    return ScaleOnPress(
+      onTap: () => setState(() {
+        _kindFilter = value;
+        _selectedCard = null;
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.accentBlue.withValues(alpha: 0.15)
+              : Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.accentBlue.withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 14,
+                color: isSelected ? AppColors.accentBlue : AppColors.textMuted),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildField({required String label, required Widget child}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -818,48 +847,20 @@ class _AddItemScreenState extends State<AddItemScreen> {
     );
   }
 
-  String _kindChipLabel(ProductKind kind) {
-    switch (kind) {
-      case ProductKind.singleCard:
-        return 'Carta';
-      case ProductKind.boosterPack:
-        return 'Busta';
-      case ProductKind.boosterBox:
-        return 'Box';
-      case ProductKind.display:
-        return 'Display';
-      case ProductKind.bundle:
-        return 'Bundle';
-    }
-  }
-
-  IconData _kindChipIcon(ProductKind kind) {
-    switch (kind) {
-      case ProductKind.singleCard:
-        return Icons.style;
-      case ProductKind.boosterPack:
-        return Icons.inventory_2_outlined;
-      case ProductKind.boosterBox:
-        return Icons.all_inbox;
-      case ProductKind.display:
-        return Icons.view_module;
-      case ProductKind.bundle:
-        return Icons.card_giftcard;
-    }
-  }
-
-  String _kindPlaceholder(ProductKind kind) {
-    switch (kind) {
-      case ProductKind.singleCard:
+  String _kindPlaceholder(String kindFilter) {
+    switch (kindFilter) {
+      case 'singleCard':
         return 'Cerca carta...';
-      case ProductKind.boosterPack:
-        return 'es. Pokémon 151 Booster Pack';
-      case ProductKind.boosterBox:
-        return 'es. Scarlet & Violet Booster Box';
-      case ProductKind.display:
-        return 'es. MTG Karlov Manor Display';
-      case ProductKind.bundle:
-        return 'es. ETB Scarlet & Violet';
+      case 'boosterPack':
+        return 'Cerca busta...';
+      case 'boosterBox':
+        return 'Cerca box...';
+      case 'display':
+        return 'Cerca display...';
+      case 'bundle':
+        return 'Cerca bundle...';
+      default:
+        return 'Cerca prodotto...';
     }
   }
 }

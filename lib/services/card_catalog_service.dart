@@ -70,18 +70,19 @@ class CardCatalogService {
     }
   }
 
-  /// Search cards by name (client-side filter from cache for speed)
-  Future<List<CardBlueprint>> searchCards(String query) async {
+  /// Search cards by name, optionally filtered by product kind
+  Future<List<CardBlueprint>> searchCards(String query, {String? kind}) async {
     if (query.trim().isEmpty) return [];
 
     final cards = await getAllCards();
     if (cards.isEmpty) return [];
 
     final q = query.toLowerCase();
-    return cards
-        .where((c) => c.name.toLowerCase().contains(q))
-        .take(20)
-        .toList();
+    var results = cards.where((c) => c.name.toLowerCase().contains(q));
+    if (kind != null) {
+      results = results.where((c) => c.kind == kind);
+    }
+    return results.take(20).toList();
   }
 
   /// Get a single card by blueprintId
@@ -110,40 +111,6 @@ class CardCatalogService {
     final doc = await _db.collection('cardCatalog').doc('_meta').get();
     if (!doc.exists) return null;
     return doc.data() as Map<String, dynamic>;
-  }
-
-  /// Search expansions by name (client-side filter)
-  Future<List<Map<String, dynamic>>> searchExpansions(String query, {String? game}) async {
-    final expansions = await getExpansions();
-    final cards = await getAllCards();
-    var results = List<Map<String, dynamic>>.from(expansions);
-
-    if (game != null) {
-      final gameExpIds = <int>{};
-      for (final c in cards) {
-        if ((c.game ?? 'riftbound') == game && c.expansionId != null) {
-          gameExpIds.add(c.expansionId!);
-        }
-      }
-      results = results.where((e) => gameExpIds.contains(e['id'])).toList();
-    }
-
-    if (query.trim().isNotEmpty) {
-      final q = query.toLowerCase();
-      results = results.where((e) {
-        final name = (e['name'] as String? ?? '').toLowerCase();
-        return name.contains(q);
-      }).toList();
-    }
-
-    return results;
-  }
-
-  /// Get representative image for an expansion (first card with image)
-  Future<String?> getExpansionImage(int expansionId) async {
-    final cards = await getAllCards();
-    final match = cards.where((c) => c.expansionId == expansionId && c.imageUrl != null);
-    return match.isNotEmpty ? match.first.imageUrl : null;
   }
 
   /// Clear cache (e.g., after a sync)
