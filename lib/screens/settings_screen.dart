@@ -34,7 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   User? get _user => _authService.currentUser;
   String get _userName => _user?.displayName ?? 'Vault User';
-  String get _userEmail => _user?.email ?? 'vault@reselling.pro';
+  String get _userEmail => _user?.email ?? 'vault@cardvault.app';
 
   // ═══════════════════════════════════════════════════
   //  DIALOGS & SHEETS
@@ -607,7 +607,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showCreateProfileDialog() {
     final nameController = TextEditingController();
-    ProfileType selectedType = ProfileType.generic;
+    ProfileType selectedType = ProfileType.other;
 
     showModalBottomSheet(
       context: context,
@@ -680,49 +680,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: ProfileType.values.map((type) {
                     final isSelected = type == selectedType;
                     final preset = UserProfile.presets.firstWhere(
                       (p) => p.type == type,
-                      orElse: () => UserProfile.presetGenerico,
+                      orElse: () => UserProfile.presetOther,
                     );
-                    return Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          right: type != ProfileType.values.last ? 8 : 0,
+                    return GestureDetector(
+                      onTap: () => setSheetState(() => selectedType = type),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? preset.color.withValues(alpha: 0.15)
+                              : AppColors.cardDark,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSelected
+                                ? preset.color.withValues(alpha: 0.4)
+                                : Colors.white.withValues(alpha: 0.06),
+                          ),
                         ),
-                        child: GestureDetector(
-                          onTap: () => setSheetState(() => selectedType = type),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? preset.color.withValues(alpha: 0.15)
-                                  : AppColors.cardDark,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: isSelected
-                                    ? preset.color.withValues(alpha: 0.4)
-                                    : Colors.white.withValues(alpha: 0.06),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(preset.icon, color: preset.color, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              UserProfile.categoryLabel(type),
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : AppColors.textMuted,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            child: Column(
-                              children: [
-                                Icon(preset.icon, color: preset.color, size: 20),
-                                const SizedBox(height: 4),
-                                Text(
-                                  type.name[0].toUpperCase() + type.name.substring(1),
-                                  style: TextStyle(
-                                    color: isSelected ? Colors.white : AppColors.textMuted,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          ],
                         ),
                       ),
                     );
@@ -760,7 +756,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           if (nameController.text.trim().isEmpty) return;
                           final preset = UserProfile.presets.firstWhere(
                             (p) => p.type == selectedType,
-                            orElse: () => UserProfile.presetGenerico,
+                            orElse: () => UserProfile.presetOther,
                           );
                           final newProfile = preset.copyWith(
                             name: nameController.text.trim(),
@@ -1089,14 +1085,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String _profileTypeDisplayName(ProfileType type) {
-    switch (type) {
-      case ProfileType.generic:
-        return 'Generico';
-      case ProfileType.cards:
-        return 'Carte Pokémon';
-      case ProfileType.sneakers:
-        return 'Sneakers';
-    }
+    return UserProfile.categoryLabel(type);
   }
 
   // ═══════════════════════════════════════════════════

@@ -6,6 +6,7 @@ import '../models/sale.dart';
 import '../models/shipment.dart';
 import '../models/app_notification.dart';
 import '../models/user_profile.dart';
+import '../models/card_pull.dart';
 import 'demo_data_service.dart';
 
 class FirestoreService {
@@ -94,6 +95,47 @@ class FirestoreService {
         .snapshots()
         .map((snap) =>
             snap.docs.map((doc) => Sale.fromFirestore(doc)).toList());
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  CARD PULLS (subcollection of products)
+  // ═══════════════════════════════════════════════════
+
+  /// Stream card pulls for a specific product (pack/box).
+  Stream<List<CardPull>> getCardPulls(String productId) {
+    if (demoMode) return Stream.value([]);
+    return _userCollection('products')
+        .doc(productId)
+        .collection('cardPulls')
+        .orderBy('pulledAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => CardPull.fromFirestore(doc)).toList());
+  }
+
+  /// Add a card pull to a product's subcollection.
+  Future<DocumentReference> addCardPull(CardPull pull) {
+    return _userCollection('products')
+        .doc(pull.parentProductId)
+        .collection('cardPulls')
+        .add(pull.toFirestore());
+  }
+
+  /// Delete a card pull.
+  Future<void> deleteCardPull(String productId, String pullId) {
+    return _userCollection('products')
+        .doc(productId)
+        .collection('cardPulls')
+        .doc(pullId)
+        .delete();
+  }
+
+  /// Mark a product as opened (pack/box).
+  Future<void> markProductOpened(String productId) {
+    return _userCollection('products').doc(productId).update({
+      'isOpened': true,
+      'openedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   // ═══════════════════════════════════════════════════
@@ -462,46 +504,15 @@ class FirestoreService {
 
     final now = DateTime.now();
 
-    // Sample products
+    // Sample products — card-themed
     final products = [
-      Product(
-        name: 'Nike Air Max 90',
-        brand: 'NIKE',
-        quantity: 2,
-        price: 89.99,
-        status: ProductStatus.inInventory,
-        createdAt: now.subtract(const Duration(days: 5)),
-      ),
-      Product(
-        name: 'Adidas Yeezy 350',
-        brand: 'ADIDAS',
-        quantity: 1,
-        price: 220,
-        status: ProductStatus.shipped,
-        createdAt: now.subtract(const Duration(days: 3)),
-      ),
-      Product(
-        name: 'New Balance 550',
-        brand: 'NEW BALANCE',
-        quantity: 3,
-        price: 65,
-        status: ProductStatus.inInventory,
-        createdAt: now.subtract(const Duration(days: 7)),
-      ),
-      Product(
-        name: 'Jordan 1 Retro High',
-        brand: 'NIKE',
-        quantity: 1,
-        price: 170,
-        status: ProductStatus.listed,
-        createdAt: now.subtract(const Duration(days: 2)),
-      ),
       Product(
         name: 'Charizard VMAX',
         brand: 'POKÉMON',
         quantity: 1,
         price: 45,
         status: ProductStatus.inInventory,
+        kind: ProductKind.singleCard,
         createdAt: now.subtract(const Duration(days: 10)),
       ),
       Product(
@@ -510,7 +521,55 @@ class FirestoreService {
         quantity: 1,
         price: 320,
         status: ProductStatus.listed,
+        kind: ProductKind.singleCard,
         createdAt: now.subtract(const Duration(days: 1)),
+      ),
+      Product(
+        name: 'Pokémon 151 Booster Pack',
+        brand: 'POKÉMON',
+        quantity: 6,
+        price: 4.50,
+        status: ProductStatus.inInventory,
+        kind: ProductKind.boosterPack,
+        createdAt: now.subtract(const Duration(days: 5)),
+      ),
+      Product(
+        name: 'MTG Murders at Karlov Manor Display',
+        brand: 'MTG',
+        quantity: 1,
+        price: 120,
+        status: ProductStatus.inInventory,
+        kind: ProductKind.display,
+        createdAt: now.subtract(const Duration(days: 3)),
+      ),
+      Product(
+        name: 'Riftbound Starter Box',
+        brand: 'RIFTBOUND',
+        quantity: 2,
+        price: 35,
+        status: ProductStatus.inInventory,
+        kind: ProductKind.boosterBox,
+        createdAt: now.subtract(const Duration(days: 7)),
+      ),
+      Product(
+        name: 'Yu-Gi-Oh! Age of Overlord Booster Box',
+        brand: 'YU-GI-OH!',
+        quantity: 1,
+        price: 65,
+        status: ProductStatus.shipped,
+        kind: ProductKind.boosterBox,
+        createdAt: now.subtract(const Duration(days: 2)),
+      ),
+      Product(
+        name: 'One Piece OP-06 Booster Pack',
+        brand: 'ONE PIECE',
+        quantity: 10,
+        price: 4,
+        status: ProductStatus.inInventory,
+        kind: ProductKind.boosterPack,
+        isOpened: true,
+        openedAt: now.subtract(const Duration(days: 4)),
+        createdAt: now.subtract(const Duration(days: 6)),
       ),
     ];
 
@@ -521,46 +580,46 @@ class FirestoreService {
     // Sample purchases
     final purchases = [
       Purchase(
-        productName: 'Nike Air Max 90',
-        price: 89.99,
-        quantity: 2,
-        date: now.subtract(const Duration(days: 5)),
-        workspace: 'demo',
-      ),
-      Purchase(
-        productName: 'Adidas Yeezy 350',
-        price: 220,
-        quantity: 1,
-        date: now.subtract(const Duration(days: 3)),
-        workspace: 'demo',
-      ),
-      Purchase(
-        productName: 'New Balance 550',
-        price: 65,
-        quantity: 3,
-        date: now.subtract(const Duration(days: 7)),
-        workspace: 'demo',
-      ),
-      Purchase(
-        productName: 'Jordan 1 Retro High',
-        price: 170,
-        quantity: 1,
-        date: now.subtract(const Duration(days: 2)),
-        workspace: 'demo',
-      ),
-      Purchase(
         productName: 'Charizard VMAX',
         price: 45,
         quantity: 1,
         date: now.subtract(const Duration(days: 10)),
-        workspace: 'demo',
+        workspace: 'cards',
       ),
       Purchase(
         productName: 'Pikachu Gold Star',
         price: 320,
         quantity: 1,
         date: now.subtract(const Duration(days: 1)),
-        workspace: 'demo',
+        workspace: 'cards',
+      ),
+      Purchase(
+        productName: 'Pokémon 151 Booster Pack',
+        price: 4.50,
+        quantity: 6,
+        date: now.subtract(const Duration(days: 5)),
+        workspace: 'cards',
+      ),
+      Purchase(
+        productName: 'MTG Murders at Karlov Manor Display',
+        price: 120,
+        quantity: 1,
+        date: now.subtract(const Duration(days: 3)),
+        workspace: 'cards',
+      ),
+      Purchase(
+        productName: 'Riftbound Starter Box',
+        price: 35,
+        quantity: 2,
+        date: now.subtract(const Duration(days: 7)),
+        workspace: 'cards',
+      ),
+      Purchase(
+        productName: 'Yu-Gi-Oh! Age of Overlord Booster Box',
+        price: 65,
+        quantity: 1,
+        date: now.subtract(const Duration(days: 2)),
+        workspace: 'cards',
       ),
     ];
 
@@ -571,25 +630,25 @@ class FirestoreService {
     // Sample sales
     final sales = [
       Sale(
-        productName: 'Nike Dunk Low Panda',
-        salePrice: 155,
-        purchasePrice: 95,
-        fees: 12,
-        date: now.subtract(const Duration(days: 4)),
-      ),
-      Sale(
-        productName: 'Stone Island Hoodie',
-        salePrice: 280,
-        purchasePrice: 120,
-        fees: 22,
-        date: now.subtract(const Duration(days: 6)),
-      ),
-      Sale(
         productName: 'Umbreon VMAX Alt Art',
         salePrice: 180,
         purchasePrice: 85,
         fees: 14,
         date: now.subtract(const Duration(days: 8)),
+      ),
+      Sale(
+        productName: 'Black Lotus (Played)',
+        salePrice: 4500,
+        purchasePrice: 3200,
+        fees: 180,
+        date: now.subtract(const Duration(days: 12)),
+      ),
+      Sale(
+        productName: 'Luffy Leader OP-01',
+        salePrice: 45,
+        purchasePrice: 20,
+        fees: 4,
+        date: now.subtract(const Duration(days: 4)),
       ),
     ];
 

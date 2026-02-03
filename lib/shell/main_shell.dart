@@ -12,6 +12,7 @@ import '../screens/shipments_screen.dart';
 import '../screens/tracking_detail_screen.dart';
 import '../screens/add_sale_screen.dart';
 import '../screens/edit_product_screen.dart';
+import '../screens/open_product_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../widgets/animated_widgets.dart';
 import '../widgets/coach_mark_overlay.dart';
@@ -207,6 +208,13 @@ class _MainShellState extends State<MainShell> {
         onSaved: () {},
       );
     }
+    if (_nav.openingProduct != null) {
+      return OpenProductScreen(
+        product: _nav.openingProduct!,
+        onBack: _nav.closeOverlay,
+        onDone: _nav.closeOverlay,
+      );
+    }
     if (_nav.trackingShipment != null) {
       return TrackingDetailScreen(
         shipment: _nav.trackingShipment!,
@@ -226,7 +234,10 @@ class _MainShellState extends State<MainShell> {
           onNewSale: _guardedAddSale,
         );
       case 'inventory':
-        return InventoryScreen(onEditProduct: _nav.showEditProduct);
+        return InventoryScreen(
+          onEditProduct: _nav.showEditProduct,
+          onOpenProduct: _nav.showOpenProduct,
+        );
       case 'shipments':
         return ShipmentsScreen(onTrackShipment: _nav.showTrackingDetail);
       case 'reports':

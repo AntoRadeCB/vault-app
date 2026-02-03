@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum ProductStatus { shipped, inInventory, listed }
 
+enum ProductKind { singleCard, boosterPack, boosterBox, display, bundle }
+
 class Product {
   final String? id;
   final String name;
@@ -18,6 +20,14 @@ class Product {
   final String? cardExpansion;
   final String? cardRarity;
   final double? marketPrice;
+  // Product kind (card, pack, box, etc.)
+  final ProductKind kind;
+  // Pack/box opening fields
+  final bool isOpened;
+  final DateTime? openedAt;
+  final List<String>? pullIds;
+  // If this card came from opening a pack/box
+  final String? parentProductId;
 
   const Product({
     this.id,
@@ -34,6 +44,11 @@ class Product {
     this.cardExpansion,
     this.cardRarity,
     this.marketPrice,
+    this.kind = ProductKind.singleCard,
+    this.isOpened = false,
+    this.openedAt,
+    this.pullIds,
+    this.parentProductId,
   });
 
   String get statusLabel {
@@ -46,6 +61,31 @@ class Product {
         return 'LISTED';
     }
   }
+
+  String get kindLabel {
+    switch (kind) {
+      case ProductKind.singleCard:
+        return 'Carta';
+      case ProductKind.boosterPack:
+        return 'Busta';
+      case ProductKind.boosterBox:
+        return 'Box';
+      case ProductKind.display:
+        return 'Display';
+      case ProductKind.bundle:
+        return 'Bundle';
+    }
+  }
+
+  bool get isSealed =>
+      kind != ProductKind.singleCard && !isOpened;
+
+  bool get canBeOpened =>
+      (kind == ProductKind.boosterPack ||
+          kind == ProductKind.boosterBox ||
+          kind == ProductKind.display ||
+          kind == ProductKind.bundle) &&
+      !isOpened;
 
   String get formattedPrice {
     if (price >= 1000) {
@@ -84,6 +124,22 @@ class Product {
     }
   }
 
+  static ProductKind _kindFromString(String? s) {
+    switch (s) {
+      case 'boosterPack':
+        return ProductKind.boosterPack;
+      case 'boosterBox':
+        return ProductKind.boosterBox;
+      case 'display':
+        return ProductKind.display;
+      case 'bundle':
+        return ProductKind.bundle;
+      case 'singleCard':
+      default:
+        return ProductKind.singleCard;
+    }
+  }
+
   bool get isCard => cardBlueprintId != null;
 
   String get displayImageUrl => cardImageUrl ?? imageUrl ?? '';
@@ -113,6 +169,15 @@ class Product {
       cardExpansion: data['cardExpansion'],
       cardRarity: data['cardRarity'],
       marketPrice: (data['marketPrice'] as num?)?.toDouble(),
+      kind: _kindFromString(data['kind']),
+      isOpened: data['isOpened'] ?? false,
+      openedAt: data['openedAt'] != null
+          ? (data['openedAt'] as Timestamp).toDate()
+          : null,
+      pullIds: data['pullIds'] != null
+          ? List<String>.from(data['pullIds'])
+          : null,
+      parentProductId: data['parentProductId'],
     );
   }
 
@@ -133,6 +198,11 @@ class Product {
       if (cardExpansion != null) 'cardExpansion': cardExpansion,
       if (cardRarity != null) 'cardRarity': cardRarity,
       if (marketPrice != null) 'marketPrice': marketPrice,
+      'kind': kind.name,
+      'isOpened': isOpened,
+      if (openedAt != null) 'openedAt': Timestamp.fromDate(openedAt!),
+      if (pullIds != null) 'pullIds': pullIds,
+      if (parentProductId != null) 'parentProductId': parentProductId,
     };
   }
 
@@ -151,6 +221,11 @@ class Product {
     String? cardExpansion,
     String? cardRarity,
     double? marketPrice,
+    ProductKind? kind,
+    bool? isOpened,
+    DateTime? openedAt,
+    List<String>? pullIds,
+    String? parentProductId,
   }) {
     return Product(
       id: id ?? this.id,
@@ -167,37 +242,46 @@ class Product {
       cardExpansion: cardExpansion ?? this.cardExpansion,
       cardRarity: cardRarity ?? this.cardRarity,
       marketPrice: marketPrice ?? this.marketPrice,
+      kind: kind ?? this.kind,
+      isOpened: isOpened ?? this.isOpened,
+      openedAt: openedAt ?? this.openedAt,
+      pullIds: pullIds ?? this.pullIds,
+      parentProductId: parentProductId ?? this.parentProductId,
     );
   }
 
   static List<Product> get sampleProducts => [
         const Product(
-          name: 'Nike Air Max 90',
-          brand: 'NIKE',
+          name: 'Charizard VMAX',
+          brand: 'POKÉMON',
           quantity: 1,
           price: 45,
-          status: ProductStatus.shipped,
-        ),
-        const Product(
-          name: 'Adidas Forum Low',
-          brand: 'ADIDAS',
-          quantity: 2,
-          price: 65,
           status: ProductStatus.inInventory,
+          kind: ProductKind.singleCard,
         ),
         const Product(
-          name: 'Stone Island Hoodie',
-          brand: 'STONE ISLAND',
+          name: 'Pokémon 151 Booster Pack',
+          brand: 'POKÉMON',
+          quantity: 5,
+          price: 4.50,
+          status: ProductStatus.inInventory,
+          kind: ProductKind.boosterPack,
+        ),
+        const Product(
+          name: 'MTG Murders at Karlov Manor Display',
+          brand: 'MTG',
           quantity: 1,
           price: 120,
           status: ProductStatus.listed,
+          kind: ProductKind.display,
         ),
         const Product(
-          name: 'Bitcoin (BTC)',
-          brand: 'BITCOIN',
-          quantity: 0.25,
-          price: 45000,
+          name: 'Riftbound Starter Box',
+          brand: 'RIFTBOUND',
+          quantity: 1,
+          price: 35,
           status: ProductStatus.inInventory,
+          kind: ProductKind.boosterBox,
         ),
       ];
 }

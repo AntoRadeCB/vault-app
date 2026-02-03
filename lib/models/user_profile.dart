@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// The type of a Vault profile, determines icon, color, and default tabs.
-enum ProfileType { generic, cards, sneakers }
+/// The type of a Vault profile — one per card game.
+enum ProfileType { riftbound, pokemon, mtg, yugioh, onepiece, other }
 
-/// Represents a user profile (e.g. "Generico", "Carte Pokémon", "Sneakers").
+/// Represents a user profile (e.g. "Pokémon TCG", "Magic: The Gathering").
 /// Each profile controls which tabs are visible (feature gating) and
 /// optionally has a monthly budget.
 class UserProfile {
@@ -29,24 +29,36 @@ class UserProfile {
   // ─── Icon derived from type ─────────────────────
   IconData get icon {
     switch (type) {
-      case ProfileType.generic:
-        return Icons.inventory_2;
-      case ProfileType.cards:
+      case ProfileType.riftbound:
+        return Icons.auto_awesome;
+      case ProfileType.pokemon:
+        return Icons.catching_pokemon;
+      case ProfileType.mtg:
+        return Icons.auto_fix_high;
+      case ProfileType.yugioh:
         return Icons.style;
-      case ProfileType.sneakers:
-        return Icons.directions_run;
+      case ProfileType.onepiece:
+        return Icons.sailing;
+      case ProfileType.other:
+        return Icons.collections_bookmark;
     }
   }
 
   // ─── Color derived from type ────────────────────
   Color get color {
     switch (type) {
-      case ProfileType.generic:
+      case ProfileType.riftbound:
         return const Color(0xFF667eea); // accentBlue
-      case ProfileType.cards:
+      case ProfileType.pokemon:
+        return const Color(0xFFFFCB05); // Pokémon yellow
+      case ProfileType.mtg:
         return const Color(0xFF764ba2); // accentPurple
-      case ProfileType.sneakers:
-        return const Color(0xFF26C6DA); // accentTeal
+      case ProfileType.yugioh:
+        return const Color(0xFFE53935); // red
+      case ProfileType.onepiece:
+        return const Color(0xFFFF7043); // deep orange
+      case ProfileType.other:
+        return const Color(0xFF26C6DA); // teal
     }
   }
 
@@ -77,7 +89,7 @@ class UserProfile {
       name: data['name'] ?? 'Profilo',
       type: ProfileType.values.firstWhere(
         (e) => e.name == data['type'],
-        orElse: () => ProfileType.generic,
+        orElse: () => ProfileType.other,
       ),
       enabledTabs: List<String>.from(data['enabledTabs'] ?? _allTabs),
       budgetMonthly: (data['budgetMonthly'] as num?)?.toDouble(),
@@ -118,81 +130,99 @@ class UserProfile {
   ];
 
   // ═══════════════════════════════════════════════════
-  //  3 STATIC PRESET PROFILES
+  //  6 STATIC PRESET PROFILES (one per card game)
   // ═══════════════════════════════════════════════════
 
-  /// Generale — all tabs, blue, inventory icon
-  static UserProfile get presetGenerico => UserProfile(
+  static UserProfile get presetRiftbound => UserProfile(
         id: '',
-        name: 'Generale',
-        type: ProfileType.generic,
-        enabledTabs: const [
-          'dashboard',
-          'inventory',
-          'shipments',
-          'reports',
-          'settings',
-        ],
+        name: 'Riftbound',
+        type: ProfileType.riftbound,
+        enabledTabs: _allTabs,
         createdAt: DateTime.now(),
       );
 
-  /// Carte da collezionismo — all tabs, purple, style icon
-  static UserProfile get presetCards => UserProfile(
+  static UserProfile get presetPokemon => UserProfile(
         id: '',
-        name: 'Carte da collezionismo',
-        type: ProfileType.cards,
-        enabledTabs: const [
-          'dashboard',
-          'inventory',
-          'shipments',
-          'reports',
-          'settings',
-        ],
+        name: 'Pokémon TCG',
+        type: ProfileType.pokemon,
+        enabledTabs: _allTabs,
         createdAt: DateTime.now(),
       );
 
-  /// Scarpe — all tabs, teal, running icon
-  static UserProfile get presetSneakers => UserProfile(
+  static UserProfile get presetMtg => UserProfile(
         id: '',
-        name: 'Scarpe',
-        type: ProfileType.sneakers,
-        enabledTabs: const [
-          'dashboard',
-          'inventory',
-          'shipments',
-          'reports',
-          'settings',
-        ],
+        name: 'Magic: The Gathering',
+        type: ProfileType.mtg,
+        enabledTabs: _allTabs,
+        createdAt: DateTime.now(),
+      );
+
+  static UserProfile get presetYugioh => UserProfile(
+        id: '',
+        name: 'Yu-Gi-Oh!',
+        type: ProfileType.yugioh,
+        enabledTabs: _allTabs,
+        createdAt: DateTime.now(),
+      );
+
+  static UserProfile get presetOnePiece => UserProfile(
+        id: '',
+        name: 'One Piece TCG',
+        type: ProfileType.onepiece,
+        enabledTabs: _allTabs,
+        createdAt: DateTime.now(),
+      );
+
+  static UserProfile get presetOther => UserProfile(
+        id: '',
+        name: 'Altro',
+        type: ProfileType.other,
+        enabledTabs: _allTabs,
         createdAt: DateTime.now(),
       );
 
   static List<UserProfile> get presets => [
-        presetGenerico,
-        presetCards,
-        presetSneakers,
+        presetRiftbound,
+        presetPokemon,
+        presetMtg,
+        presetYugioh,
+        presetOnePiece,
+        presetOther,
       ];
 
   /// Category display label (used in onboarding picker)
   static String categoryLabel(ProfileType type) {
     switch (type) {
-      case ProfileType.generic:
-        return 'Generale';
-      case ProfileType.cards:
-        return 'Carte da collezionismo';
-      case ProfileType.sneakers:
-        return 'Scarpe';
+      case ProfileType.riftbound:
+        return 'Riftbound';
+      case ProfileType.pokemon:
+        return 'Pokémon TCG';
+      case ProfileType.mtg:
+        return 'Magic: The Gathering';
+      case ProfileType.yugioh:
+        return 'Yu-Gi-Oh!';
+      case ProfileType.onepiece:
+        return 'One Piece TCG';
+      case ProfileType.other:
+        return 'Altro';
     }
   }
 
   /// Category hint examples (shown below category in onboarding)
   static String categoryHint(ProfileType type) {
     switch (type) {
-      case ProfileType.generic:
-        return 'Abbigliamento, tech, luxury, vintage e tutto il resto';
-      case ProfileType.cards:
-        return 'Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, Riftbound, One Piece...';
-      case ProfileType.sneakers:
-        return 'Jordan, Yeezy, Dunk, New Balance, limited edition...';
+      case ProfileType.riftbound:
+        return 'Il nuovo gioco di carte collezionabili. Starter box, buste e carte singole.';
+      case ProfileType.pokemon:
+        return 'Carte singole, booster pack, ETB, display box e prodotti speciali Pokémon.';
+      case ProfileType.mtg:
+        return 'Draft booster, collector booster, carte singole, mazzi Commander e altro.';
+      case ProfileType.yugioh:
+        return 'Buste, tin, carte singole, structure deck e prodotti Yu-Gi-Oh!';
+      case ProfileType.onepiece:
+        return 'Booster pack, starter deck, carte singole del gioco One Piece Card Game.';
+      case ProfileType.other:
+        return 'Qualsiasi altro gioco di carte collezionabili: Digimon, Dragon Ball, Lorcana...';
     }
   }
 }

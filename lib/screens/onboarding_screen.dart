@@ -173,7 +173,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   SizedBox(height: isCompact ? 28 : 40),
                   const Text(
-                    'Benvenuto in Vault!',
+                    'Benvenuto in CardVault!',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 28,
@@ -184,8 +184,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'Il tuo tracker professionale per il reselling.\n'
-                    'Gestisci inventario, spedizioni e profitti\nin un unico posto.',
+                    'Il tuo gestore per carte collezionabili.\n'
+                    'Traccia la collezione, apri buste e\nmonitora il valore delle tue carte.',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 16,

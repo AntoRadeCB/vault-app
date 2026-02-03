@@ -38,6 +38,9 @@ class DashboardScreen extends StatelessWidget {
             const SizedBox(height: 16),
             // 4. Quick stats row
             _buildQuickStats(context),
+            const SizedBox(height: 16),
+            // 4b. Sealed vs Opened stat
+            StaggeredFadeSlide(index: 3, child: _buildSealedVsOpenedStat(context)),
             const SizedBox(height: 24),
             // 5. Recent Activity (unified)
             StaggeredFadeSlide(index: 4, child: _buildRecentActivity(context)),
@@ -198,7 +201,7 @@ class DashboardScreen extends StatelessWidget {
                         const PulsingDot(color: AppColors.accentGreen, size: 8),
                         const SizedBox(width: 8),
                         Text(
-                          '$count articoli in inventario',
+                          '$count carte in collezione',
                           style: const TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 13,
@@ -362,7 +365,7 @@ class DashboardScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'VALORE INVENTARIO',
+                          'VALORE COLLEZIONE',
                           style: TextStyle(
                             color: Color(0xFFFFD700),
                             fontSize: 10,
@@ -372,7 +375,7 @@ class DashboardScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${cardProducts.length} carte in inventario',
+                          '${cardProducts.length} carte in collezione',
                           style: const TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 11,
@@ -531,7 +534,7 @@ class DashboardScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'VALORE INVENTARIO',
+                      'VALORE COLLEZIONE',
                       style: TextStyle(
                         color: Color(0xFFFFD700),
                         fontSize: 10,
@@ -634,6 +637,70 @@ class DashboardScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════
+  //  SEALED vs OPENED
+  // ════════════════════════════════════════════════════
+
+  Widget _buildSealedVsOpenedStat(BuildContext context) {
+    return StreamBuilder<List<Product>>(
+      stream: _firestoreService.getProducts(),
+      builder: (context, snapshot) {
+        final products = snapshot.data ?? [];
+        final sealable = products.where((p) => p.kind != ProductKind.singleCard).toList();
+        if (sealable.isEmpty) return const SizedBox.shrink();
+
+        final sealed = sealable.where((p) => !p.isOpened).length;
+        final opened = sealable.where((p) => p.isOpened).length;
+
+        return GlassCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock, color: AppColors.accentOrange, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$sealed sigillati',
+                      style: const TextStyle(
+                        color: AppColors.accentOrange,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 20,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    const Icon(Icons.inventory_2, color: AppColors.accentGreen, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$opened aperti',
+                      style: const TextStyle(
+                        color: AppColors.accentGreen,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

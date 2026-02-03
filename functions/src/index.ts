@@ -24,6 +24,7 @@ import "./docs/notifications.docs";
 import "./docs/stats.docs";
 
 import { FieldValue } from "firebase-admin/firestore";
+import { mapMilestoneToAppStatus } from "./services/tracking.service";
 
 // ── Secrets ───────────────────────────────────────
 const SHIP24_API_KEY = defineSecret("SHIP24_API_KEY");
@@ -100,25 +101,8 @@ export const api = onRequest(
 );
 
 // ── Ship24 Webhook (standalone, separate secrets) ─
-function mapMilestoneToAppStatus(milestone: string): string {
-  switch (milestone) {
-    case "pending":
-    case "info_received":
-      return "pending";
-    case "in_transit":
-    case "out_for_delivery":
-    case "available_for_pickup":
-      return "inTransit";
-    case "delivered":
-      return "delivered";
-    case "exception":
-    case "attempt_fail":
-    case "failed_attempt":
-      return "exception";
-    default:
-      return "unknown";
-  }
-}
+// mapMilestoneToAppStatus is imported from tracking.service.ts
+// to avoid duplication.
 
 export const trackingWebhook = onRequest(
   {
@@ -142,7 +126,7 @@ export const trackingWebhook = onRequest(
     }
 
     try {
-      // Verify webhook secret
+      // Verify webhook secret — reject requests with invalid secrets
       const webhookSecret = SHIP24_WEBHOOK_SECRET.value();
       const headerSecret =
         (req.headers["x-ship24-webhook-secret"] as string) ||
@@ -152,11 +136,15 @@ export const trackingWebhook = onRequest(
 
       if (webhookSecret && headerSecret !== webhookSecret) {
         console.warn(
-          "Webhook secret mismatch — expected:",
-          webhookSecret.substring(0, 8) + "...",
+          "Webhook secret mismatch — rejecting request. Expected:",
+          webhookSecret.substring(0, 4) + "***",
           "got header keys:",
-          Object.keys(req.headers).join(", ")
+          Object.keys(req.headers)
+            .filter((k) => k.startsWith("x-") || k === "authorization")
+            .join(", ")
         );
+        res.status(401).json({ error: "Unauthorized" });
+        return;
       }
 
       const payload = req.body;
@@ -194,65 +182,69 @@ export const trackingWebhook = onRequest(
             ? events[0].courierCode
             : tracker.courierCode?.[0] || null;
 
-        // Search all users for this tracking number
-        const usersSnap = await db.collection("users").get();
-        for (const userDoc of usersSnap.docs) {
-          const shipmentsRef = userDoc.ref.collection("shipments");
-          const snapshot = await shipmentsRef
-            .where("trackingCode", "==", trackingNumber)
-            .limit(1)
-            .get();
+        // Search all users for this tracking number using collectionGroup
+        // query instead of iterating every user document.
+        // TODO: For scale, consider a top-level `trackingIndex` collection
+        // mapping trackingCode → { userId, shipmentId }.
+        const shipmentsSnap = await db
+          .collectionGroup("shipments")
+          .where("trackingCode", "==", trackingNumber)
+          .limit(5)
+          .get();
 
-          if (!snapshot.empty) {
-            const doc = snapshot.docs[0];
-            const oldData = doc.data();
-            const oldStatus = oldData.status;
+        for (const shipmentDoc of shipmentsSnap.docs) {
+          // shipmentDoc.ref.parent is the "shipments" collection ref;
+          // shipmentDoc.ref.parent.parent is the user document ref.
+          const userDocRef = shipmentDoc.ref.parent.parent;
+          if (!userDocRef) continue;
 
-            // Update shipment
-            await doc.ref.update({
-              status: appStatus,
-              ship24Status: shipment.statusMilestone || "unknown",
-              ship24StatusCode: shipment.statusCode || null,
-              trackingApiStatus: shipment.statusMilestone || null,
-              lastUpdate: FieldValue.serverTimestamp(),
-              lastEvent: events.length > 0 ? events[0].status : null,
-              trackingHistory: trackingHistory,
-              carrier: carrierCode || oldData.carrier,
-              externalTrackingUrl: `https://t.ship24.com/t/${trackingNumber}`,
-              estimatedDelivery:
-                shipment.delivery?.estimatedDeliveryDate || null,
-              originCountry: shipment.originCountryCode || null,
-              destinationCountry: shipment.destinationCountryCode || null,
+          const oldData = shipmentDoc.data();
+          const oldStatus = oldData.status;
+
+          // Update shipment
+          await shipmentDoc.ref.update({
+            status: appStatus,
+            ship24Status: shipment.statusMilestone || "unknown",
+            ship24StatusCode: shipment.statusCode || null,
+            trackingApiStatus: shipment.statusMilestone || null,
+            lastUpdate: FieldValue.serverTimestamp(),
+            lastEvent: events.length > 0 ? events[0].status : null,
+            trackingHistory: trackingHistory,
+            carrier: carrierCode || oldData.carrier,
+            externalTrackingUrl: `https://t.ship24.com/t/${trackingNumber}`,
+            estimatedDelivery:
+              shipment.delivery?.estimatedDeliveryDate || null,
+            originCountry: shipment.originCountryCode || null,
+            destinationCountry: shipment.destinationCountryCode || null,
+          });
+
+          // Create notification if status changed
+          if (oldStatus !== appStatus) {
+            const statusLabels: Record<string, string> = {
+              pending: "In attesa",
+              inTransit: "In transito",
+              delivered: "Consegnato",
+              exception: "Problema",
+              unknown: "Sconosciuto",
+            };
+
+            await userDocRef.collection("notifications").add({
+              type: "tracking_update",
+              title: "Aggiornamento Spedizione",
+              message: `${oldData.productName || trackingNumber}: ${statusLabels[appStatus] || appStatus}`,
+              trackingCode: trackingNumber,
+              shipmentId: shipmentDoc.id,
+              oldStatus: oldStatus,
+              newStatus: appStatus,
+              statusMilestone: shipment.statusMilestone,
+              read: false,
+              createdAt: FieldValue.serverTimestamp(),
             });
-
-            // Create notification if status changed
-            if (oldStatus !== appStatus) {
-              const statusLabels: Record<string, string> = {
-                pending: "In attesa",
-                inTransit: "In transito",
-                delivered: "Consegnato",
-                exception: "Problema",
-                unknown: "Sconosciuto",
-              };
-
-              await userDoc.ref.collection("notifications").add({
-                type: "tracking_update",
-                title: "Aggiornamento Spedizione",
-                message: `${oldData.productName || trackingNumber}: ${statusLabels[appStatus] || appStatus}`,
-                trackingCode: trackingNumber,
-                shipmentId: doc.id,
-                oldStatus: oldStatus,
-                newStatus: appStatus,
-                statusMilestone: shipment.statusMilestone,
-                read: false,
-                createdAt: FieldValue.serverTimestamp(),
-              });
-            }
-
-            console.log(
-              `Updated shipment ${doc.id} for ${trackingNumber}: ${oldStatus} → ${appStatus}`
-            );
           }
+
+          console.log(
+            `Updated shipment ${shipmentDoc.id} for ${trackingNumber}: ${oldStatus} → ${appStatus}`
+          );
         }
       }
 

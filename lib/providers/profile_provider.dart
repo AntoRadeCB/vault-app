@@ -58,7 +58,7 @@ class ProfileProvider extends InheritedWidget {
   }
 
   /// Returns the list of enabled tab identifiers for the active profile.
-  List<String> get enabledTabs => profile?.enabledTabs ?? UserProfile.presetGenerico.enabledTabs;
+  List<String> get enabledTabs => profile?.enabledTabs ?? UserProfile.presetOther.enabledTabs;
 
   @override
   bool updateShouldNotify(ProfileProvider oldWidget) {

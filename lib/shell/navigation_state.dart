@@ -13,6 +13,7 @@ class NavigationController extends ChangeNotifier {
   bool _showAddSale = false;
   bool _showNotifications = false;
   Product? _editingProduct;
+  Product? _openingProduct;
   Shipment? _trackingShipment;
 
   // ─── Getters ────────────────────────────────────
@@ -21,6 +22,7 @@ class NavigationController extends ChangeNotifier {
   bool get isShowingAddSale => _showAddSale;
   bool get isShowingNotifications => _showNotifications;
   Product? get editingProduct => _editingProduct;
+  Product? get openingProduct => _openingProduct;
   Shipment? get trackingShipment => _trackingShipment;
 
   /// Whether any overlay screen (add item, add sale, etc.) is visible.
@@ -29,6 +31,7 @@ class NavigationController extends ChangeNotifier {
       isShowingAddSale ||
       isShowingNotifications ||
       _editingProduct != null ||
+      _openingProduct != null ||
       _trackingShipment != null;
 
   /// A unique key describing the current visible screen,
@@ -38,6 +41,7 @@ class NavigationController extends ChangeNotifier {
     if (isShowingAddItem) return 'add';
     if (isShowingAddSale) return 'sale';
     if (_editingProduct != null) return 'edit-${_editingProduct!.id}';
+    if (_openingProduct != null) return 'open-${_openingProduct!.id}';
     if (_trackingShipment != null) {
       return 'track-${_trackingShipment!.trackingCode}';
     }
@@ -70,6 +74,12 @@ class NavigationController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void showOpenProduct(Product product) {
+    _clearOverlays();
+    _openingProduct = product;
+    notifyListeners();
+  }
+
   void showTrackingDetail(Shipment shipment) {
     _clearOverlays();
     _trackingShipment = shipment;
@@ -98,6 +108,7 @@ class NavigationController extends ChangeNotifier {
     _showAddSale = false;
     _showNotifications = false;
     _editingProduct = null;
+    _openingProduct = null;
     _trackingShipment = null;
   }
 }

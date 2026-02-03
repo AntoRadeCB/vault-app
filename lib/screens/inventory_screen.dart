@@ -8,8 +8,9 @@ import '../l10n/app_localizations.dart';
 
 class InventoryScreen extends StatefulWidget {
   final void Function(Product product)? onEditProduct;
+  final void Function(Product product)? onOpenProduct;
 
-  const InventoryScreen({super.key, this.onEditProduct});
+  const InventoryScreen({super.key, this.onEditProduct, this.onOpenProduct});
 
   @override
   State<InventoryScreen> createState() => _InventoryScreenState();
@@ -20,6 +21,7 @@ class _InventoryScreenState extends State<InventoryScreen>
   late TabController _tabController;
   String _searchQuery = '';
   bool _searchFocused = false;
+  String _kindFilter = 'all'; // all, singleCard, boosterPack, boosterBox, display
   final FirestoreService _firestoreService = FirestoreService();
   final CardCatalogService _catalogService = CardCatalogService();
   Map<String, double> _livePrices = {};
@@ -51,6 +53,38 @@ class _InventoryScreenState extends State<InventoryScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  List<Product> _applyFilters(List<Product> products) {
+    var filtered = products.where((p) {
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase();
+        if (!p.name.toLowerCase().contains(q) &&
+            !p.brand.toLowerCase().contains(q)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+
+    if (_kindFilter != 'all') {
+      filtered = filtered.where((p) {
+        switch (_kindFilter) {
+          case 'singleCard':
+            return p.kind == ProductKind.singleCard;
+          case 'boosterPack':
+            return p.kind == ProductKind.boosterPack;
+          case 'boosterBox':
+            return p.kind == ProductKind.boosterBox;
+          case 'display':
+            return p.kind == ProductKind.display;
+          default:
+            return true;
+        }
+      }).toList();
+    }
+
+    return filtered;
   }
 
   void _confirmDelete(Product product) {
@@ -105,11 +139,7 @@ class _InventoryScreenState extends State<InventoryScreen>
       stream: _firestoreService.getProducts(),
       builder: (context, snapshot) {
         final allProducts = snapshot.data ?? [];
-        final products = allProducts.where((p) {
-          if (_searchQuery.isEmpty) return true;
-          return p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              p.brand.toLowerCase().contains(_searchQuery.toLowerCase());
-        }).toList();
+        final products = _applyFilters(allProducts);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -154,7 +184,32 @@ class _InventoryScreenState extends State<InventoryScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            // ─── Kind filter chips ───
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: StaggeredFadeSlide(
+                index: 0,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: [
+                      _buildFilterChip('all', 'Tutto', Icons.grid_view),
+                      const SizedBox(width: 6),
+                      _buildFilterChip('singleCard', 'Carte', Icons.style),
+                      const SizedBox(width: 6),
+                      _buildFilterChip('boosterPack', 'Buste', Icons.inventory_2_outlined),
+                      const SizedBox(width: 6),
+                      _buildFilterChip('boosterBox', 'Box', Icons.all_inbox),
+                      const SizedBox(width: 6),
+                      _buildFilterChip('display', 'Display', Icons.view_module),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: StaggeredFadeSlide(
@@ -225,7 +280,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                           setState(() => _searchQuery = value),
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        hintText: l.searchProduct,
+                        hintText: 'Cerca carta, busta, box...',
                         prefixIcon: Icon(
                           Icons.search,
                           color: _searchFocused
@@ -275,13 +330,52 @@ class _InventoryScreenState extends State<InventoryScreen>
     );
   }
 
+  Widget _buildFilterChip(String value, String label, IconData icon) {
+    final isSelected = _kindFilter == value;
+    return ScaleOnPress(
+      onTap: () => setState(() => _kindFilter = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.accentBlue.withValues(alpha: 0.15)
+              : Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.accentBlue.withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 14,
+                color: isSelected ? AppColors.accentBlue : AppColors.textMuted),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyState() {
     final l = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inventory_2_outlined,
+          Icon(Icons.style_outlined,
               color: AppColors.textMuted.withValues(alpha: 0.5), size: 64),
           const SizedBox(height: 16),
           Text(
@@ -293,9 +387,9 @@ class _InventoryScreenState extends State<InventoryScreen>
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            l.addYourFirstProduct,
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
+          const Text(
+            'Aggiungi la tua prima carta o busta',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 14),
           ),
         ],
       ),
@@ -347,12 +441,14 @@ class _InventoryScreenState extends State<InventoryScreen>
     final l = AppLocalizations.of(context)!;
     final totalValue =
         products.fold<double>(0, (sum, p) => sum + (p.price * p.quantity));
-    final shipped =
-        products.where((p) => p.status == ProductStatus.shipped).length;
+    final singleCards =
+        products.where((p) => p.kind == ProductKind.singleCard).length;
+    final sealedCount =
+        products.where((p) => p.kind != ProductKind.singleCard && !p.isOpened).length;
+    final openedCount =
+        products.where((p) => p.kind != ProductKind.singleCard && p.isOpened).length;
     final inStock =
         products.where((p) => p.status == ProductStatus.inInventory).length;
-    final listed =
-        products.where((p) => p.status == ProductStatus.listed).length;
 
     return ListView(
       physics: const BouncingScrollPhysics(),
@@ -360,26 +456,32 @@ class _InventoryScreenState extends State<InventoryScreen>
       children: [
         StaggeredFadeSlide(
           index: 0,
-          child: _buildSummaryCard(l.totalInventoryValue,
+          child: _buildSummaryCard('Valore Collezione',
               '€${totalValue.toStringAsFixed(2)}', Icons.euro, AppColors.accentBlue),
         ),
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 1,
-          child: _buildSummaryCard(l.shippedProducts, '$shipped',
-              Icons.local_shipping, AppColors.accentOrange),
+          child: _buildSummaryCard('Carte Singole', '$singleCards',
+              Icons.style, AppColors.accentPurple),
         ),
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 2,
-          child: _buildSummaryCard(l.inInventory, '$inStock',
-              Icons.inventory_2, AppColors.accentTeal),
+          child: _buildSummaryCard('Sigillati 🔒', '$sealedCount',
+              Icons.lock, AppColors.accentOrange),
         ),
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 3,
-          child: _buildSummaryCard(l.onSale, '$listed', Icons.storefront,
-              AppColors.accentGreen),
+          child: _buildSummaryCard('Aperti 📦', '$openedCount',
+              Icons.inventory_2, AppColors.accentGreen),
+        ),
+        const SizedBox(height: 12),
+        StaggeredFadeSlide(
+          index: 4,
+          child: _buildSummaryCard(l.inInventory, '$inStock',
+              Icons.inventory_2, AppColors.accentTeal),
         ),
       ],
     );
@@ -422,10 +524,155 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   Widget _buildProductCard(Product product) {
     // Use card-specific display if it's a linked card
-    if (product.isCard) {
+    if (product.isCard && product.kind == ProductKind.singleCard) {
       return _buildCardProductCard(product);
     }
 
+    // Sealed/opened product display
+    if (product.kind != ProductKind.singleCard) {
+      return _buildSealedProductCard(product);
+    }
+
+    return _buildGenericProductCard(product);
+  }
+
+  Widget _buildSealedProductCard(Product product) {
+    final isSealedProduct = !product.isOpened;
+    final badgeColor = isSealedProduct ? AppColors.accentOrange : AppColors.accentGreen;
+    final badgeText = isSealedProduct ? 'Sigillato 🔒' : 'Aperto 📦';
+
+    return GlassCard(
+      padding: const EdgeInsets.all(14),
+      glowColor: badgeColor,
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: badgeColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: badgeColor.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Icon(
+              _kindIcon(product.kind),
+              color: badgeColor,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: badgeColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        badgeText,
+                        style: TextStyle(
+                          color: badgeColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        product.kindLabel,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Qta: ${product.formattedQuantity}',
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                product.formattedPrice,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 6),
+              if (product.canBeOpened)
+                ScaleOnPress(
+                  onTap: () => widget.onOpenProduct?.call(product),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF6B35), Color(0xFFE53935)],
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.lock_open, color: Colors.white, size: 12),
+                        SizedBox(width: 4),
+                        Text('Apri',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                _buildStatusBadge(product.status, product.statusLabel),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGenericProductCard(Product product) {
     return GlassCard(
       padding: const EdgeInsets.all(14),
       glowColor: _getProductColor(product.brand),
@@ -449,7 +696,7 @@ class _InventoryScreenState extends State<InventoryScreen>
               ),
             ),
             child: Icon(
-              _getProductIcon(product.brand),
+              Icons.style,
               color: _getProductColor(product.brand),
               size: 24,
             ),
@@ -519,6 +766,21 @@ class _InventoryScreenState extends State<InventoryScreen>
         ],
       ),
     );
+  }
+
+  IconData _kindIcon(ProductKind kind) {
+    switch (kind) {
+      case ProductKind.singleCard:
+        return Icons.style;
+      case ProductKind.boosterPack:
+        return Icons.inventory_2_outlined;
+      case ProductKind.boosterBox:
+        return Icons.all_inbox;
+      case ProductKind.display:
+        return Icons.view_module;
+      case ProductKind.bundle:
+        return Icons.card_giftcard;
+    }
   }
 
   Color _getRarityColor(String? rarity) {
@@ -721,31 +983,21 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   Color _getProductColor(String brand) {
     switch (brand.toUpperCase()) {
-      case 'NIKE':
-        return const Color(0xFFFF6B35);
-      case 'ADIDAS':
-        return const Color(0xFF00B4D8);
-      case 'STONE ISLAND':
-        return const Color(0xFFFFC107);
-      case 'BITCOIN':
-        return const Color(0xFFF7931A);
+      case 'POKÉMON':
+      case 'POKEMON':
+        return const Color(0xFFFFCB05);
+      case 'MTG':
+      case 'MAGIC':
+        return const Color(0xFF764ba2);
+      case 'YU-GI-OH!':
+      case 'YUGIOH':
+        return const Color(0xFFE53935);
+      case 'RIFTBOUND':
+        return const Color(0xFF667eea);
+      case 'ONE PIECE':
+        return const Color(0xFFFF7043);
       default:
         return AppColors.accentBlue;
-    }
-  }
-
-  IconData _getProductIcon(String brand) {
-    switch (brand.toUpperCase()) {
-      case 'NIKE':
-        return Icons.directions_run;
-      case 'ADIDAS':
-        return Icons.sports_soccer;
-      case 'STONE ISLAND':
-        return Icons.checkroom;
-      case 'BITCOIN':
-        return Icons.currency_bitcoin;
-      default:
-        return Icons.shopping_bag;
     }
   }
 

@@ -91,17 +91,17 @@ class CoachStepsBuilder {
   static String tabCoachDesc(String id) {
     switch (id) {
       case 'dashboard':
-        return 'Il tuo centro di controllo. Qui vedi il riepilogo completo: '
-            'budget, acquisti recenti e andamento.';
+        return 'Il tuo centro di controllo. Qui vedi il riepilogo della collezione: '
+            'valore carte, budget e attività recente.';
       case 'inventory':
-        return 'Tutti i tuoi articoli in un posto. Aggiungi acquisti, '
-            'gestisci lo stock e tieni traccia dei costi.';
+        return 'Tutta la tua collezione in un posto. Carte singole, buste sigillate, '
+            'box e display. Apri le buste e registra le pulls!';
       case 'shipments':
         return 'Traccia ogni pacco automaticamente. Inserisci il tracking '
-            'e Vault monitora corriere, stato e notifiche.';
+            'e CardVault monitora corriere, stato e notifiche.';
       case 'reports':
-        return 'Grafici e statistiche su profitti, vendite e andamento. '
-            'Filtra per periodo e vedi come va il business.';
+        return 'Grafici e statistiche su valore della collezione, vendite e profitti. '
+            'Filtra per periodo e analizza il tuo portfolio.';
       case 'settings':
         return 'Cambia profilo, lingua, gestisci il tuo account e '
             "personalizza l'app come preferisci.";
@@ -145,8 +145,8 @@ class CoachStepsBuilder {
           targetKey: fabKey,
           title: 'Aggiungi Nuovo',
           description:
-              'Tocca qui per aggiungere un nuovo articolo al tuo '
-              'inventario in modo rapido.',
+              'Tocca qui per aggiungere una nuova carta, busta o box '
+              'alla tua collezione.',
           icon: Icons.add_circle,
           accentColor: AppColors.accentBlue,
           preferredPosition: TooltipPosition.above,

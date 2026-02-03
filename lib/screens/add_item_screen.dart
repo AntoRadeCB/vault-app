@@ -33,7 +33,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _trackingController = TextEditingController();
   CarrierInfo? _detectedCarrier;
   CardBlueprint? _selectedCard;
-  String _selectedWorkspace = 'Reselling Vinted 2025';
+  ProductKind _selectedKind = ProductKind.singleCard;
   String _selectedStatus = 'inInventory';
   bool _saving = false;
   bool _barcodeLoading = false;
@@ -284,6 +284,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         marketPrice: _selectedCard?.marketPrice != null
             ? _selectedCard!.marketPrice!.cents / 100
             : null,
+        kind: _selectedKind,
       );
 
       final productRef = await _firestoreService.addProduct(product);
@@ -294,7 +295,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         price: product.price,
         quantity: product.quantity,
         date: DateTime.now(),
-        workspace: _selectedWorkspace,
+        workspace: 'cards',
       );
       await _firestoreService.addPurchase(purchase);
 
@@ -382,6 +383,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
+    final isSingleCard = _selectedKind == ProductKind.singleCard;
+
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(24),
@@ -425,82 +428,150 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+            // ─── Product Kind selector ───
+            StaggeredFadeSlide(
+              index: 0,
+              child: _buildField(
+                label: 'Tipo prodotto',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: ProductKind.values.map((kind) {
+                    final isSelected = _selectedKind == kind;
+                    final label = _kindChipLabel(kind);
+                    final icon = _kindChipIcon(kind);
+                    return ScaleOnPress(
+                      onTap: () => setState(() {
+                        _selectedKind = kind;
+                        // Clear card selection if switching away from single card
+                        if (kind != ProductKind.singleCard) {
+                          _selectedCard = null;
+                        }
+                      }),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.accentBlue.withValues(alpha: 0.15)
+                              : Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected
+                                ? AppColors.accentBlue.withValues(alpha: 0.5)
+                                : Colors.white.withValues(alpha: 0.08),
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(icon,
+                                size: 16,
+                                color: isSelected
+                                    ? AppColors.accentBlue
+                                    : AppColors.textMuted),
+                            const SizedBox(width: 6),
+                            Text(
+                              label,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : AppColors.textSecondary,
+                                fontSize: 13,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
             StaggeredFadeSlide(
               index: 1,
               child: _buildField(
                 label: l.itemName,
-                child: CardSearchField(
-                  controller: _nameController,
-                  hintText: l.itemNameHint,
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? l.requiredField : null,
-                  suffixIcon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Browse catalog button
-                      ScaleOnPress(
-                        onTap: _openCardBrowser,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 8),
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF764ba2), Color(0xFF667eea)],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.accentPurple.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.style,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      // Barcode scanner button
-                      ScaleOnPress(
-                        onTap: _barcodeLoading ? null : _scanBarcode,
-                        child: Container(
-                          margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.blueButtonGradient,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color:
-                                    AppColors.accentBlue.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          ),
-                          child: _barcodeLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
+                child: isSingleCard
+                    ? CardSearchField(
+                        controller: _nameController,
+                        hintText: isSingleCard ? 'Cerca carta...' : l.itemNameHint,
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? l.requiredField : null,
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Browse catalog button (only for single cards)
+                            ScaleOnPress(
+                              onTap: _openCardBrowser,
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF764ba2), Color(0xFF667eea)],
                                   ),
-                                )
-                              : const Icon(
-                                  Icons.qr_code_scanner,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.accentPurple.withValues(alpha: 0.3),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.style,
                                   color: Colors.white,
                                   size: 20,
                                 ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            // Barcode scanner button
+                            ScaleOnPress(
+                              onTap: _barcodeLoading ? null : _scanBarcode,
+                              child: Container(
+                                margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  gradient: AppColors.blueButtonGradient,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          AppColors.accentBlue.withValues(alpha: 0.3),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                                child: _barcodeLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.qr_code_scanner,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                              ),
+                            ),
+                          ],
                         ),
+                        onCardSelected: _applyCardSelection,
+                      )
+                    : GlowTextField(
+                        controller: _nameController,
+                        hintText: _kindPlaceholder(_selectedKind),
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? l.requiredField : null,
                       ),
-                    ],
-                  ),
-                  onCardSelected: _applyCardSelection,
-                ),
               ),
             ),
             // Selected card preview
@@ -574,7 +645,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 label: l.brand,
                 child: GlowTextField(
                   controller: _brandController,
-                  hintText: l.brandHint,
+                  hintText: 'Pokémon, MTG, Riftbound...',
                   validator: (v) =>
                       (v == null || v.isEmpty) ? l.requiredField : null,
                 ),
@@ -664,48 +735,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            StaggeredFadeSlide(
-              index: 6,
-              child: _buildField(
-                label: l.workspace,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.06),
-                    ),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedWorkspace,
-                      isExpanded: true,
-                      dropdownColor: AppColors.surface,
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 16),
-                      icon: const Icon(Icons.keyboard_arrow_down,
-                          color: AppColors.textMuted),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'Reselling Vinted 2025',
-                          child: Text('Reselling Vinted 2025'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _selectedWorkspace = value);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
             // Tracking code (optional)
             StaggeredFadeSlide(
-              index: 7,
+              index: 6,
               child: TrackingInput(
                 controller: _trackingController,
                 onCarrierDetected: (carrier) {
@@ -715,7 +747,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
             ),
             const SizedBox(height: 32),
             StaggeredFadeSlide(
-              index: 8,
+              index: 7,
               child: ShimmerButton(
                 baseGradient: AppColors.blueButtonGradient,
                 onTap: _saving ? null : _submit,
@@ -774,5 +806,50 @@ class _AddItemScreenState extends State<AddItemScreen> {
         child,
       ],
     );
+  }
+
+  String _kindChipLabel(ProductKind kind) {
+    switch (kind) {
+      case ProductKind.singleCard:
+        return 'Carta';
+      case ProductKind.boosterPack:
+        return 'Busta';
+      case ProductKind.boosterBox:
+        return 'Box';
+      case ProductKind.display:
+        return 'Display';
+      case ProductKind.bundle:
+        return 'Bundle';
+    }
+  }
+
+  IconData _kindChipIcon(ProductKind kind) {
+    switch (kind) {
+      case ProductKind.singleCard:
+        return Icons.style;
+      case ProductKind.boosterPack:
+        return Icons.inventory_2_outlined;
+      case ProductKind.boosterBox:
+        return Icons.all_inbox;
+      case ProductKind.display:
+        return Icons.view_module;
+      case ProductKind.bundle:
+        return Icons.card_giftcard;
+    }
+  }
+
+  String _kindPlaceholder(ProductKind kind) {
+    switch (kind) {
+      case ProductKind.singleCard:
+        return 'Cerca carta...';
+      case ProductKind.boosterPack:
+        return 'es. Pokémon 151 Booster Pack';
+      case ProductKind.boosterBox:
+        return 'es. Scarlet & Violet Booster Box';
+      case ProductKind.display:
+        return 'es. MTG Karlov Manor Display';
+      case ProductKind.bundle:
+        return 'es. ETB Scarlet & Violet';
+    }
   }
 }
