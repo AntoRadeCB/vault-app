@@ -1166,6 +1166,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
                   trailing: _buildChevron(),
+                  iconColor: AppColors.accentBlue,
                 ),
                 _buildSettingsRow(
                   icon: Icons.lock_outline,
@@ -1181,6 +1182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
                   trailing: _buildChevron(),
+                  iconColor: AppColors.accentBlue,
                 ),
                 _buildSettingsRow(
                   icon: Icons.security,
@@ -1190,6 +1192,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     AppLocalizations.of(context)!.twoFactorTitle,
                     AppLocalizations.of(context)!.twoFactorDescription,
                   ),
+                  iconColor: AppColors.accentBlue,
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
