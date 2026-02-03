@@ -4,6 +4,7 @@ import '../widgets/animated_widgets.dart';
 import '../widgets/barcode_scanner_dialog.dart';
 import '../widgets/tracking_input.dart';
 import '../widgets/card_search_field.dart';
+import '../widgets/card_browser_sheet.dart';
 import '../widgets/glow_text_field.dart';
 import '../models/product.dart';
 import '../models/purchase.dart';
@@ -117,6 +118,25 @@ class _AddItemScreenState extends State<AddItemScreen> {
     } catch (_) {}
 
     if (mounted) setState(() => _barcodeLoading = false);
+  }
+
+  void _applyCardSelection(CardBlueprint card) {
+    setState(() {
+      _selectedCard = card;
+      _nameController.text = card.name;
+      _brandController.text = card.expansionName ?? 'RIFTBOUND';
+      if (card.marketPrice != null) {
+        _priceController.text =
+            (card.marketPrice!.cents / 100).toStringAsFixed(2);
+      }
+    });
+  }
+
+  Future<void> _openCardBrowser() async {
+    final card = await CardBrowserSheet.show(context);
+    if (card != null && mounted) {
+      _applyCardSelection(card);
+    }
   }
 
   Widget _buildSelectedCardPreview() {
@@ -415,48 +435,71 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   hintText: l.itemNameHint,
                   validator: (v) =>
                       (v == null || v.isEmpty) ? l.requiredField : null,
-                  suffixIcon: ScaleOnPress(
-                    onTap: _barcodeLoading ? null : _scanBarcode,
-                    child: Container(
-                      margin: const EdgeInsets.all(8),
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.blueButtonGradient,
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color:
-                                AppColors.accentBlue.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                      child: _barcodeLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(
-                              Icons.qr_code_scanner,
-                              color: Colors.white,
-                              size: 20,
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Browse catalog button
+                      ScaleOnPress(
+                        onTap: _openCardBrowser,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF764ba2), Color(0xFF667eea)],
                             ),
-                    ),
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.accentPurple.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.style,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Barcode scanner button
+                      ScaleOnPress(
+                        onTap: _barcodeLoading ? null : _scanBarcode,
+                        child: Container(
+                          margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.blueButtonGradient,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    AppColors.accentBlue.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: _barcodeLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.qr_code_scanner,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                        ),
+                      ),
+                    ],
                   ),
-                  onCardSelected: (card) {
-                    setState(() {
-                      _selectedCard = card;
-                      _brandController.text = card.expansionName ?? 'RIFTBOUND';
-                      if (card.marketPrice != null) {
-                        _priceController.text =
-                            (card.marketPrice!.cents / 100).toStringAsFixed(2);
-                      }
-                    });
-                  },
+                  onCardSelected: _applyCardSelection,
                 ),
               ),
             ),
