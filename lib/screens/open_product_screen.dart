@@ -33,7 +33,9 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
 
   bool _isOpened = false;
   bool _opening = false;
+  bool _finishing = false;
   final List<_PullEntry> _pulls = [];
+  int _quantityToOpen = 1;
 
   @override
   void initState() {
@@ -47,6 +49,8 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
     _pullValueController.dispose();
     super.dispose();
   }
+
+  int get _maxQuantity => widget.product.quantity.toInt().clamp(1, 999);
 
   Future<void> _markOpened() async {
     if (_opening) return;
@@ -85,6 +89,7 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
         cardName: name,
         cardBlueprintId: card?.id,
         cardImageUrl: card?.imageUrl,
+        cardExpansion: card?.expansionName,
         rarity: card?.rarity,
         estimatedValue: value,
       ));
@@ -98,22 +103,66 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
   }
 
   Future<void> _finish() async {
-    // Save all pulls to Firestore
-    if (widget.product.id != null && _pulls.isNotEmpty && !FirestoreService.demoMode) {
-      for (final pull in _pulls) {
-        final cardPull = CardPull(
-          parentProductId: widget.product.id!,
-          cardName: pull.cardName,
-          cardBlueprintId: pull.cardBlueprintId,
-          cardImageUrl: pull.cardImageUrl,
-          rarity: pull.rarity,
-          estimatedValue: pull.estimatedValue,
-          pulledAt: DateTime.now(),
-        );
-        await _fs.addCardPull(cardPull);
+    if (_finishing) return;
+    setState(() => _finishing = true);
+
+    try {
+      final productId = widget.product.id;
+      final isDemoMode = FirestoreService.demoMode;
+
+      if (productId != null && !isDemoMode) {
+        // 1. Save all pulls as CardPull records (history tracking)
+        for (final pull in _pulls) {
+          final cardPull = CardPull(
+            parentProductId: productId,
+            cardName: pull.cardName,
+            cardBlueprintId: pull.cardBlueprintId,
+            cardImageUrl: pull.cardImageUrl,
+            rarity: pull.rarity,
+            estimatedValue: pull.estimatedValue,
+            pulledAt: DateTime.now(),
+          );
+          await _fs.addCardPull(cardPull);
+        }
+
+        // 2. Add pulled cards as new Product items in inventory
+        for (final pull in _pulls) {
+          final newProduct = Product(
+            name: pull.cardName,
+            brand: widget.product.brand,
+            quantity: 1,
+            price: pull.estimatedValue ?? 0,
+            status: ProductStatus.inInventory,
+            kind: ProductKind.singleCard,
+            cardBlueprintId: pull.cardBlueprintId,
+            cardImageUrl: pull.cardImageUrl,
+            cardExpansion: pull.cardExpansion,
+            cardRarity: pull.rarity,
+            marketPrice: pull.estimatedValue,
+            parentProductId: productId,
+            createdAt: DateTime.now(),
+          );
+          await _fs.addProduct(newProduct);
+        }
+
+        // 3. Decrement source product quantity by the number opened
+        await _fs.decrementProductQuantity(
+            productId, _quantityToOpen.toDouble());
       }
+
+      if (mounted) widget.onDone?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Errore: $e'),
+            backgroundColor: AppColors.accentRed,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _finishing = false);
     }
-    widget.onDone?.call();
   }
 
   Future<void> _openCardBrowser() async {
@@ -151,7 +200,8 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                         color: Colors.white.withValues(alpha: 0.06),
                       ),
                     ),
-                    child: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                    child: const Icon(Icons.arrow_back,
+                        color: Colors.white, size: 22),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -174,90 +224,22 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
           // Product info card
           StaggeredFadeSlide(
             index: 1,
-            child: GlassCard(
-              padding: const EdgeInsets.all(16),
-              glowColor: _isOpened ? AppColors.accentGreen : AppColors.accentOrange,
-              child: Row(
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: (_isOpened ? AppColors.accentGreen : AppColors.accentOrange)
-                          .withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      _isOpened ? Icons.inventory_2 : Icons.lock,
-                      color: _isOpened ? AppColors.accentGreen : AppColors.accentOrange,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.product.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.06),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                widget.product.kindLabel,
-                                style: const TextStyle(
-                                  color: AppColors.textMuted,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _isOpened ? 'Aperto 📦' : 'Sigillato 🔒',
-                              style: TextStyle(
-                                color: _isOpened ? AppColors.accentGreen : AppColors.accentOrange,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    widget.product.formattedPrice,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            child: _buildProductInfoCard(),
           ),
           const SizedBox(height: 24),
+
+          // Quantity selector (before opening)
+          if (!_isOpened && _maxQuantity > 1)
+            StaggeredFadeSlide(
+              index: 2,
+              child: _buildQuantitySelector(),
+            ),
+          if (!_isOpened && _maxQuantity > 1) const SizedBox(height: 16),
 
           // Open button (if not opened yet)
           if (!_isOpened)
             StaggeredFadeSlide(
-              index: 2,
+              index: 3,
               child: ShimmerButton(
                 baseGradient: const LinearGradient(
                   colors: [Color(0xFFFF6B35), Color(0xFFE53935)],
@@ -279,11 +261,14 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                           ),
                         )
                       else ...[
-                        const Icon(Icons.lock_open, color: Colors.white, size: 22),
+                        const Icon(Icons.lock_open,
+                            color: Colors.white, size: 22),
                         const SizedBox(width: 10),
-                        const Text(
-                          'Apri! 🎉',
-                          style: TextStyle(
+                        Text(
+                          _quantityToOpen > 1
+                              ? 'Apri $_quantityToOpen! 🎉'
+                              : 'Apri! 🎉',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
@@ -310,7 +295,8 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppColors.accentGreen.withValues(alpha: 0.12),
+                          color:
+                              AppColors.accentGreen.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(Icons.trending_up,
@@ -377,14 +363,18 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                                 horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xFF764ba2), Color(0xFF667eea)],
+                                colors: [
+                                  Color(0xFF764ba2),
+                                  Color(0xFF667eea)
+                                ],
                               ),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.style, color: Colors.white, size: 14),
+                                Icon(Icons.style,
+                                    color: Colors.white, size: 14),
                                 SizedBox(width: 4),
                                 Text('Catalogo',
                                     style: TextStyle(
@@ -522,29 +512,283 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                 baseGradient: const LinearGradient(
                   colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
                 ),
-                onTap: _finish,
+                onTap: _finishing ? null : _finish,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 18),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.check_circle, color: Colors.white, size: 22),
-                      SizedBox(width: 10),
-                      Text(
-                        'Fatto',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                      if (_finishing)
+                        const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      else ...[
+                        const Icon(Icons.check_circle,
+                            color: Colors.white, size: 22),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Fatto',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductInfoCard() {
+    final productImage = widget.product.displayImageUrl;
+    final hasImage = productImage.isNotEmpty;
+    final accentColor =
+        _isOpened ? AppColors.accentGreen : AppColors.accentOrange;
+
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      glowColor: accentColor,
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: hasImage ? 78 : 56,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(hasImage ? 6 : 12),
+              border: hasImage
+                  ? Border.all(color: accentColor.withValues(alpha: 0.3))
+                  : null,
+              boxShadow: hasImage
+                  ? [
+                      BoxShadow(
+                        color: accentColor.withValues(alpha: 0.15),
+                        blurRadius: 6,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: hasImage
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: Image.network(
+                      productImage,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                        _isOpened ? Icons.inventory_2 : Icons.lock,
+                        color: accentColor,
+                        size: 28,
+                      ),
+                    ),
+                  )
+                : Icon(
+                    _isOpened ? Icons.inventory_2 : Icons.lock,
+                    color: accentColor,
+                    size: 28,
+                  ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.product.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        widget.product.kindLabel,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isOpened ? 'Aperto 📦' : 'Sigillato 🔒',
+                      style: TextStyle(
+                        color: accentColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                if (widget.product.quantity > 1) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Quantità disponibile: ${widget.product.formattedQuantity}',
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Text(
+            widget.product.formattedPrice,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuantitySelector() {
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      glowColor: AppColors.accentBlue,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.numbers, color: AppColors.accentBlue, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Quanti vuoi aprire?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Decrement button
+              ScaleOnPress(
+                onTap: _quantityToOpen > 1
+                    ? () => setState(() => _quantityToOpen--)
+                    : null,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _quantityToOpen > 1
+                        ? AppColors.accentBlue.withValues(alpha: 0.15)
+                        : Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _quantityToOpen > 1
+                          ? AppColors.accentBlue.withValues(alpha: 0.3)
+                          : Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.remove,
+                    color: _quantityToOpen > 1
+                        ? AppColors.accentBlue
+                        : AppColors.textMuted,
+                    size: 22,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              // Quantity display
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: AppColors.blueButtonGradient,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.accentBlue.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                    ),
+                  ],
+                ),
+                child: Text(
+                  '$_quantityToOpen',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              // Increment button
+              ScaleOnPress(
+                onTap: _quantityToOpen < _maxQuantity
+                    ? () => setState(() => _quantityToOpen++)
+                    : null,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _quantityToOpen < _maxQuantity
+                        ? AppColors.accentBlue.withValues(alpha: 0.15)
+                        : Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _quantityToOpen < _maxQuantity
+                          ? AppColors.accentBlue.withValues(alpha: 0.3)
+                          : Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.add,
+                    color: _quantityToOpen < _maxQuantity
+                        ? AppColors.accentBlue
+                        : AppColors.textMuted,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Text(
+              'su ${widget.product.formattedQuantity} disponibili',
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 12,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -556,6 +800,7 @@ class _PullEntry {
   final String cardName;
   final String? cardBlueprintId;
   final String? cardImageUrl;
+  final String? cardExpansion;
   final String? rarity;
   final double? estimatedValue;
 
@@ -563,6 +808,7 @@ class _PullEntry {
     required this.cardName,
     this.cardBlueprintId,
     this.cardImageUrl,
+    this.cardExpansion,
     this.rarity,
     this.estimatedValue,
   });

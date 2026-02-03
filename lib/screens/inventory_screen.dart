@@ -540,6 +540,8 @@ class _InventoryScreenState extends State<InventoryScreen>
     final isSealedProduct = !product.isOpened;
     final badgeColor = isSealedProduct ? AppColors.accentOrange : AppColors.accentGreen;
     final badgeText = isSealedProduct ? 'Sigillato 🔒' : 'Aperto 📦';
+    final productImage = product.displayImageUrl;
+    final hasImage = productImage.isNotEmpty;
 
     return GlassCard(
       padding: const EdgeInsets.all(14),
@@ -548,19 +550,40 @@ class _InventoryScreenState extends State<InventoryScreen>
         children: [
           Container(
             width: 52,
-            height: 52,
+            height: hasImage ? 72 : 52,
             decoration: BoxDecoration(
               color: badgeColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(hasImage ? 6 : 12),
               border: Border.all(
                 color: badgeColor.withValues(alpha: 0.2),
               ),
+              boxShadow: hasImage
+                  ? [
+                      BoxShadow(
+                        color: badgeColor.withValues(alpha: 0.15),
+                        blurRadius: 6,
+                      ),
+                    ]
+                  : null,
             ),
-            child: Icon(
-              _kindIcon(product.kind),
-              color: badgeColor,
-              size: 24,
-            ),
+            child: hasImage
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: Image.network(
+                      productImage,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                        _kindIcon(product.kind),
+                        color: badgeColor,
+                        size: 24,
+                      ),
+                    ),
+                  )
+                : Icon(
+                    _kindIcon(product.kind),
+                    color: badgeColor,
+                    size: 24,
+                  ),
           ),
           const SizedBox(width: 14),
           Expanded(

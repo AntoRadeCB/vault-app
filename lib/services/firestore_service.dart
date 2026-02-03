@@ -138,6 +138,22 @@ class FirestoreService {
     });
   }
 
+  /// Decrement a product's quantity by [amount].
+  /// If the resulting quantity is <= 0, delete the product instead.
+  Future<void> decrementProductQuantity(String productId, double amount) async {
+    final docRef = _userCollection('products').doc(productId);
+    final doc = await docRef.get();
+    if (!doc.exists) return;
+    final data = doc.data() as Map<String, dynamic>;
+    final currentQty = (data['quantity'] ?? 0).toDouble();
+    final newQty = currentQty - amount;
+    if (newQty <= 0) {
+      await docRef.delete();
+    } else {
+      await docRef.update({'quantity': newQty});
+    }
+  }
+
   // ═══════════════════════════════════════════════════
   //  STATS (computed from real data)
   // ═══════════════════════════════════════════════════
