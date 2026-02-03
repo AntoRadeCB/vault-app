@@ -1206,14 +1206,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                 ),
-                _buildSettingsRow(
-                  icon: Icons.logout,
-                  title: 'Logout',
-                  subtitle: 'Esci dal tuo account',
-                  onTap: _showLogoutDialog,
-                  trailing: _buildChevron(),
-                  iconColor: AppColors.accentRed,
-                ),
               ],
             ),
           ),
@@ -1451,6 +1443,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: _buildChevron(),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // ══════════════════════════════════════════
+          //  LOGOUT (bottom)
+          // ══════════════════════════════════════════
+          StaggeredFadeSlide(
+            index: 6,
+            child: ScaleOnPress(
+              onTap: _showLogoutDialog,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.accentRed.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppColors.accentRed.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.logout, color: AppColors.accentRed, size: 20),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Logout',
+                      style: TextStyle(
+                        color: AppColors.accentRed,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 40),
