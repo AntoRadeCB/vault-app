@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../providers/profile_provider.dart';
 import '../screens/dashboard_screen.dart';
@@ -36,6 +38,11 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   final NavigationController _nav = NavigationController();
   bool _showTutorial = false;
+  bool _tutorialReady = false; // true once target widgets are verified
+
+  // Firebase refs for tutorial persistence
+  static final __firebaseAuth = FirebaseAuth.instance;
+  static final __firestore = FirebaseFirestore.instance;
 
   // ─── GlobalKeys for interactive coach marks ──────
   final _keyDashboardNav = GlobalKey();
@@ -69,11 +76,64 @@ class _MainShellState extends State<MainShell> {
   void _onNavChanged() => setState(() {});
 
   Future<void> _checkFirstLaunch() async {
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) setState(() => _showTutorial = true);
+    // Check if tutorial was already completed (persisted in Firestore)
+    try {
+      final user = __firebaseAuth.currentUser;
+      if (user != null) {
+        final doc = await __firestore
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        if (doc.exists && doc.data()?['tutorialComplete'] == true) {
+          return; // Already done, don't show again
+        }
+      }
+    } catch (_) {
+      // If we can't check, still show the tutorial
+    }
+
+    // Wait for the UI to be fully rendered: poll until at least one
+    // GlobalKey has a valid RenderObject (max ~5 seconds).
+    for (int i = 0; i < 25; i++) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return;
+      // Check if the bottom nav OR sidebar keys are mounted
+      if (_keyDashboardNav.currentContext != null ||
+          _keySidebarDashboard.currentContext != null) {
+        // Give one more frame for everything to settle
+        await Future.delayed(const Duration(milliseconds: 300));
+        break;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _showTutorial = true;
+      _tutorialReady = true;
+    });
   }
 
-  void _dismissTutorial() => setState(() => _showTutorial = false);
+  void _dismissTutorial() {
+    setState(() {
+      _showTutorial = false;
+      _tutorialReady = false;
+    });
+    // Persist completion so it won't show again
+    _markTutorialComplete();
+  }
+
+  Future<void> _markTutorialComplete() async {
+    try {
+      final user = __firebaseAuth.currentUser;
+      if (user != null) {
+        await __firestore.collection('users').doc(user.uid).set(
+          {'tutorialComplete': true},
+          SetOptions(merge: true),
+        );
+      }
+    } catch (_) {
+      // Non-critical – worst case the tutorial shows once more
+    }
+  }
 
   // ─── Visible tabs based on profile ──────────────
   List<TabDef> _visibleTabs(BuildContext context) {
@@ -191,7 +251,7 @@ class _MainShellState extends State<MainShell> {
       body: Stack(
         children: [
           isWide ? _buildDesktopLayout(context) : _buildMobileLayout(context),
-          if (_showTutorial)
+          if (_showTutorial && _tutorialReady)
             CoachMarkOverlay(
               steps: CoachStepsBuilder.build(
                 context: context,
@@ -207,17 +267,23 @@ class _MainShellState extends State<MainShell> {
             ),
         ],
       ),
-      bottomNavigationBar: (!_showTutorial && !isWide)
-          ? AppBottomNav(
-              tabs: _visibleTabs(context),
-              currentIndex: _nav.currentIndex,
-              hasOverlay: _nav.hasOverlay,
-              onTap: _nav.navigateTo,
-              mobileNavKey: _mobileNavKey,
+      bottomNavigationBar: !isWide
+          ? IgnorePointer(
+              ignoring: _showTutorial,
+              child: AppBottomNav(
+                tabs: _visibleTabs(context),
+                currentIndex: _nav.currentIndex,
+                hasOverlay: _nav.hasOverlay,
+                onTap: _nav.navigateTo,
+                mobileNavKey: _mobileNavKey,
+              ),
             )
           : null,
-      floatingActionButton: (!_showTutorial && !isWide)
-          ? AnimatedFab(key: _keyFab, onTap: _guardedAddItem)
+      floatingActionButton: !isWide
+          ? IgnorePointer(
+              ignoring: _showTutorial,
+              child: AnimatedFab(key: _keyFab, onTap: _guardedAddItem),
+            )
           : null,
     );
   }

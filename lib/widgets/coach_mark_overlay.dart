@@ -106,16 +106,40 @@ class _CoachMarkOverlayState extends State<CoachMarkOverlay>
         key.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox != null && renderBox.hasSize) {
       final position = renderBox.localToGlobal(Offset.zero);
-      setState(() {
-        _prevTargetRect = _targetRect;
-        _targetRect = Rect.fromLTWH(
-          position.dx,
-          position.dy,
-          renderBox.size.width,
-          renderBox.size.height,
-        );
-      });
+      final newRect = Rect.fromLTWH(
+        position.dx,
+        position.dy,
+        renderBox.size.width,
+        renderBox.size.height,
+      );
+      // Sanity check: rect should be on-screen and have real size
+      if (newRect.width > 0 && newRect.height > 0) {
+        setState(() {
+          _prevTargetRect = _targetRect;
+          _targetRect = newRect;
+        });
+      }
+    } else {
+      // Target not found – skip to next step that has a valid target
+      _skipToNextValidStep();
     }
+  }
+
+  void _skipToNextValidStep() {
+    for (int i = _currentStep + 1; i < widget.steps.length; i++) {
+      final key = widget.steps[i].targetKey;
+      final rb = key.currentContext?.findRenderObject() as RenderBox?;
+      if (rb != null && rb.hasSize) {
+        setState(() => _currentStep = i);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _updateTargetRect();
+          _spotlightController.forward();
+        });
+        return;
+      }
+    }
+    // No valid steps left – finish the tutorial
+    _finish();
   }
 
   void _goToStep(int index) {
