@@ -136,7 +136,7 @@ class UserProfile {
         createdAt: DateTime.now(),
       );
 
-  /// Carte da collezionismo — no shipments tab, purple, style icon
+  /// Carte da collezionismo — all tabs, purple, style icon
   static UserProfile get presetCards => UserProfile(
         id: '',
         name: 'Carte da collezionismo',
@@ -144,6 +144,7 @@ class UserProfile {
         enabledTabs: const [
           'dashboard',
           'inventory',
+          'shipments',
           'reports',
           'settings',
         ],
