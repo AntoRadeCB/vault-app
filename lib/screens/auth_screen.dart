@@ -122,7 +122,7 @@ class _AuthScreenState extends State<AuthScreen>
     } on FirebaseAuthException catch (e) {
       _showError(_firebaseErrorMessage(e));
     } catch (e) {
-      _showError(AppLocalizations.of(context)!.error(e.toString()));
+      if (mounted) _showError(AppLocalizations.of(context)!.error(e.toString()));
     } finally {
       if (mounted) setState(() => _loginLoading = false);
     }
@@ -154,7 +154,7 @@ class _AuthScreenState extends State<AuthScreen>
     } on FirebaseAuthException catch (e) {
       _showError(_firebaseErrorMessage(e));
     } catch (e) {
-      _showError(AppLocalizations.of(context)!.error(e.toString()));
+      if (mounted) _showError(AppLocalizations.of(context)!.error(e.toString()));
     } finally {
       if (mounted) setState(() => _registerLoading = false);
     }

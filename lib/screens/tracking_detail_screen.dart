@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:html' as html;
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../models/shipment.dart';
@@ -75,6 +75,8 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
               result.trackingHistory.isNotEmpty ? result.trackingHistory : null,
         );
       }
+
+      if (!mounted) return;
 
       // Update local state
       setState(() {
@@ -184,9 +186,11 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
     }
   }
 
-  void _openCarrierPage() {
-    final url = _shipment.carrierTrackingUrl;
-    html.window.open(url, '_blank');
+  Future<void> _openCarrierPage() async {
+    final url = Uri.parse(_shipment.carrierTrackingUrl);
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
   }
 
   Color get _statusColor {

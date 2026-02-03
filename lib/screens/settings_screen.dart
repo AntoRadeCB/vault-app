@@ -767,6 +767,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             type: selectedType,
                           );
                           await _firestoreService.addProfile(newProfile);
+                          if (!ctx.mounted) return;
                           Navigator.pop(ctx);
                           _showSuccessSnackbar('Profilo "${nameController.text.trim()}" creato!');
                         },
@@ -1156,12 +1157,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: 'Email',
                     currentValue: _userEmail,
                     onSave: (v) async {
+                      final l = AppLocalizations.of(context)!;
                       try {
                         await _authService.updateEmail(v);
-                        _showSuccessSnackbar(
-                            AppLocalizations.of(context)!.verificationSent);
+                        if (!mounted) return;
+                        _showSuccessSnackbar(l.verificationSent);
                       } catch (e) {
-                        _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
+                        if (!mounted) return;
+                        _showSuccessSnackbar(l.error('$e'));
                       }
                     },
                   ),
@@ -1173,12 +1176,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: AppLocalizations.of(context)!.password,
                   subtitle: AppLocalizations.of(context)!.resetViaEmail,
                   onTap: () async {
+                    final l = AppLocalizations.of(context)!;
                     try {
                       await _authService.resetPassword(_userEmail);
-                      _showSuccessSnackbar(
-                          AppLocalizations.of(context)!.resetEmailSent(_userEmail));
+                      if (!mounted) return;
+                      _showSuccessSnackbar(l.resetEmailSent(_userEmail));
                     } catch (e) {
-                      _showSuccessSnackbar(AppLocalizations.of(context)!.error('$e'));
+                      if (!mounted) return;
+                      _showSuccessSnackbar(l.error('$e'));
                     }
                   },
                   trailing: _buildChevron(),
