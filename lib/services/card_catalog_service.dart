@@ -50,8 +50,16 @@ class CardCatalogService {
           .whereType<CardBlueprint>()
           .toList();
 
-      // Sort client-side
-      _cachedCards!.sort((a, b) => a.name.compareTo(b.name));
+      // Sort by expansion (descending id = newest first), then collector number
+      _cachedCards!.sort((a, b) {
+        // First by expansion (higher id = newer)
+        final expCmp = (b.expansionId ?? 0).compareTo(a.expansionId ?? 0);
+        if (expCmp != 0) return expCmp;
+        // Then by collector number (numeric sort)
+        final aNum = int.tryParse(a.collectorNumber ?? '') ?? 9999;
+        final bNum = int.tryParse(b.collectorNumber ?? '') ?? 9999;
+        return aNum.compareTo(bNum);
+      });
 
       _cacheTime = DateTime.now();
       return _cachedCards!;

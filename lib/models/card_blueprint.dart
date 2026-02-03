@@ -6,6 +6,7 @@ class CardBlueprint {
   final int blueprintId;
   final String name;
   final String? version;
+  final String? game; // e.g. 'riftbound', 'pokemon', 'mtg'
   final int? expansionId;
   final String? expansionName;
   final String? expansionCode;
@@ -19,6 +20,7 @@ class CardBlueprint {
     required this.blueprintId,
     required this.name,
     this.version,
+    this.game,
     this.expansionId,
     this.expansionName,
     this.expansionCode,
@@ -35,6 +37,7 @@ class CardBlueprint {
       blueprintId: data['blueprintId'] ?? 0,
       name: data['name'] ?? '',
       version: data['version'],
+      game: data['game'] as String?,
       expansionId: data['expansionId'],
       expansionName: data['expansionName'],
       expansionCode: data['expansionCode'],
