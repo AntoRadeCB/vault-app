@@ -15,6 +15,8 @@ class CardBlueprint {
   final String? imageUrl;
   final MarketPrice? marketPrice;
   final String? kind; // 'singleCard', 'boosterPack', 'boosterBox', 'display', 'bundle'
+  final int? categoryId;
+  final String? categoryName;
 
   const CardBlueprint({
     required this.id,
@@ -30,6 +32,8 @@ class CardBlueprint {
     this.imageUrl,
     this.marketPrice,
     this.kind,
+    this.categoryId,
+    this.categoryName,
   });
 
   factory CardBlueprint.fromFirestore(DocumentSnapshot doc) {
@@ -50,6 +54,8 @@ class CardBlueprint {
           ? MarketPrice.fromMap(data['marketPrice'] as Map<String, dynamic>)
           : null,
       kind: data['kind'] as String?,
+      categoryId: data['categoryId'] as int?,
+      categoryName: data['categoryName'] as String?,
     );
   }
 
