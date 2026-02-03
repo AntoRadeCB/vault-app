@@ -22,19 +22,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // Onboarding state
   int _selectedPresetIndex = 0;
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _budgetController = TextEditingController();
   bool _saving = false;
-
-  /// Descriptions per profile type for the picker cards.
-  static const _presetDescriptions = <int, String>{
-    0: 'Per qualsiasi tipo di reselling',
-    1: 'Catalogo carte con prezzi live',
-    2: 'Tracking specifico per sneaker reselling',
-  };
 
   @override
   void dispose() {
     _pageController.dispose();
+    _nameController.dispose();
     _budgetController.dispose();
     super.dispose();
   }
@@ -66,10 +61,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final budgetText = _budgetController.text.trim();
       final budget = budgetText.isNotEmpty ? double.tryParse(budgetText) : null;
 
-      // Only create the selected profile
-      final profileToSave = budget != null
-          ? preset.copyWith(budgetMonthly: budget)
-          : preset;
+      // Use custom name if provided, otherwise use category label
+      final customName = _nameController.text.trim();
+      final profileName = customName.isNotEmpty
+          ? customName
+          : UserProfile.categoryLabel(preset.type);
+
+      final profileToSave = preset.copyWith(
+        name: profileName,
+        budgetMonthly: budget,
+      );
       final ref = await _fs.addProfile(profileToSave);
       await _fs.setActiveProfile(ref.id);
 
@@ -204,16 +205,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ─── Page 2: Profile Picker ─────────────────────
+  // ─── Page 2: Profile Name + Category ─────────────
   Widget _buildProfilePickerPage() {
     final presets = UserProfile.presets;
+    final selectedPreset = presets[_selectedPresetIndex];
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           const Text(
-            'Scegli il tuo Profilo',
+            'Crea il tuo Profilo',
             style: TextStyle(
               color: Colors.white,
               fontSize: 24,
@@ -222,11 +225,61 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Ogni profilo ha tab e funzionalità diverse.\nPotrai cambiarli in qualsiasi momento.',
+            'Scegli un nome e una categoria.\nPotrai modificarli in qualsiasi momento.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
+
+          // ─── Name input ───
+          GlassCard(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: TextField(
+              controller: _nameController,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: InputDecoration(
+                hintText: UserProfile.categoryLabel(selectedPreset.type),
+                hintStyle: TextStyle(
+                  color: AppColors.textMuted.withValues(alpha: 0.5),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w400,
+                ),
+                border: InputBorder.none,
+                prefixIcon: Icon(
+                  Icons.edit_outlined,
+                  color: selectedPreset.color.withValues(alpha: 0.7),
+                  size: 20,
+                ),
+                prefixIconConstraints: const BoxConstraints(minWidth: 40),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ─── Category label ───
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 10),
+              child: Text(
+                'Categoria',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+
+          // ─── Category cards ───
           Expanded(
             child: ListView.builder(
               physics: const BouncingScrollPhysics(),
@@ -234,13 +287,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               itemBuilder: (context, i) {
                 final p = presets[i];
                 final isSelected = _selectedPresetIndex == i;
+                final categoryLabel = UserProfile.categoryLabel(p.type);
+                final categoryHint = UserProfile.categoryHint(p.type);
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: ScaleOnPress(
                     onTap: () => setState(() => _selectedPresetIndex = i),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? p.color.withValues(alpha: 0.12)
@@ -263,45 +319,49 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             : [],
                       ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            width: 48,
-                            height: 48,
+                            width: 44,
+                            height: 44,
                             decoration: BoxDecoration(
                               color: p.color.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Icon(p.icon, color: p.color, size: 26),
+                            child: Icon(p.icon, color: p.color, size: 24),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 14),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  p.name,
+                                  categoryLabel,
                                   style: TextStyle(
                                     color: isSelected ? Colors.white : AppColors.textSecondary,
-                                    fontSize: 17,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  _presetDescriptions[i] ?? '${p.enabledTabs.length} tab attive',
+                                  categoryHint,
                                   style: TextStyle(
                                     color: isSelected
-                                        ? p.color
+                                        ? p.color.withValues(alpha: 0.8)
                                         : AppColors.textMuted,
-                                    fontSize: 13,
-                                    height: 1.3,
+                                    fontSize: 12,
+                                    height: 1.4,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                           if (isSelected)
-                            Icon(Icons.check_circle, color: p.color, size: 24),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: Icon(Icons.check_circle, color: p.color, size: 22),
+                            ),
                         ],
                       ),
                     ),
@@ -404,6 +464,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final budgetText = _budgetController.text.trim();
     final hasBudget = budgetText.isNotEmpty && (double.tryParse(budgetText) ?? 0) > 0;
 
+    final customName = _nameController.text.trim();
+    final profileName = customName.isNotEmpty
+        ? customName
+        : UserProfile.categoryLabel(preset.type);
+    final categoryLabel = UserProfile.categoryLabel(preset.type);
+
     // Build a human-readable tab list
     final tabNames = preset.enabledTabs.map((id) {
       switch (id) {
@@ -457,11 +523,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               glowColor: preset.color,
               child: Column(
                 children: [
-                  _summaryRow('Profilo', preset.name, preset.icon, preset.color),
+                  _summaryRow('Nome', profileName, preset.icon, preset.color),
                   const SizedBox(height: 14),
                   _summaryRow(
-                    'Tipo',
-                    _presetDescriptions[_selectedPresetIndex] ?? '',
+                    'Categoria',
+                    categoryLabel,
                     Icons.category_outlined,
                     preset.color,
                   ),

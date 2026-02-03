@@ -121,10 +121,10 @@ class UserProfile {
   //  3 STATIC PRESET PROFILES
   // ═══════════════════════════════════════════════════
 
-  /// Generico — all tabs, blue, inventory icon
+  /// Generale — all tabs, blue, inventory icon
   static UserProfile get presetGenerico => UserProfile(
         id: '',
-        name: 'Generico',
+        name: 'Generale',
         type: ProfileType.generic,
         enabledTabs: const [
           'dashboard',
@@ -136,10 +136,10 @@ class UserProfile {
         createdAt: DateTime.now(),
       );
 
-  /// Carte Pokémon — no shipments tab, purple, style icon
+  /// Carte da collezionismo — no shipments tab, purple, style icon
   static UserProfile get presetCards => UserProfile(
         id: '',
-        name: 'Carte Pokémon',
+        name: 'Carte da collezionismo',
         type: ProfileType.cards,
         enabledTabs: const [
           'dashboard',
@@ -150,10 +150,10 @@ class UserProfile {
         createdAt: DateTime.now(),
       );
 
-  /// Sneakers — all tabs, teal, running icon
+  /// Scarpe — all tabs, teal, running icon
   static UserProfile get presetSneakers => UserProfile(
         id: '',
-        name: 'Sneakers',
+        name: 'Scarpe',
         type: ProfileType.sneakers,
         enabledTabs: const [
           'dashboard',
@@ -170,4 +170,28 @@ class UserProfile {
         presetCards,
         presetSneakers,
       ];
+
+  /// Category display label (used in onboarding picker)
+  static String categoryLabel(ProfileType type) {
+    switch (type) {
+      case ProfileType.generic:
+        return 'Generale';
+      case ProfileType.cards:
+        return 'Carte da collezionismo';
+      case ProfileType.sneakers:
+        return 'Scarpe';
+    }
+  }
+
+  /// Category hint examples (shown below category in onboarding)
+  static String categoryHint(ProfileType type) {
+    switch (type) {
+      case ProfileType.generic:
+        return 'Abbigliamento, tech, luxury, vintage e tutto il resto';
+      case ProfileType.cards:
+        return 'Pokémon TCG, Magic: The Gathering, Yu-Gi-Oh!, Riftbound, One Piece...';
+      case ProfileType.sneakers:
+        return 'Jordan, Yeezy, Dunk, New Balance, limited edition...';
+    }
+  }
 }
