@@ -3,18 +3,23 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/ocr_service.dart';
+import '../models/card_blueprint.dart';
 
 /// Full-screen OCR scanner for reading collector numbers from cards.
 /// Returns the detected collector number string via Navigator.pop.
 class OcrScannerDialog extends StatefulWidget {
-  const OcrScannerDialog({super.key});
+  final List<CardBlueprint> expansionCards;
+
+  const OcrScannerDialog({super.key, this.expansionCards = const []});
 
   /// Show the OCR scanner and return the detected collector number, or null if cancelled.
-  static Future<String?> scan(BuildContext context) {
+  static Future<String?> scan(BuildContext context,
+      {List<CardBlueprint> expansionCards = const []}) {
     return Navigator.of(context).push<String>(
       PageRouteBuilder(
         opaque: false,
-        pageBuilder: (_, __, ___) => const OcrScannerDialog(),
+        pageBuilder: (_, __, ___) =>
+            OcrScannerDialog(expansionCards: expansionCards),
         transitionsBuilder: (_, anim, __, child) {
           return FadeTransition(opacity: anim, child: child);
         },
@@ -38,6 +43,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
   _ScanStatus _status = _ScanStatus.init;
   String? _errorMessage;
   String? _foundNumber;
+  CardBlueprint? _matchedCard;
   Timer? _scanTimer;
   bool _cameraReady = false;
 
@@ -126,13 +132,28 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
         _scanTimer?.cancel();
         _ocrService.vibrate();
 
+        // Try to match against expansion cards
+        CardBlueprint? matched;
+        if (widget.expansionCards.isNotEmpty) {
+          matched = widget.expansionCards.where((c) {
+            if (c.collectorNumber == null) return false;
+            if (c.collectorNumber == collectorNumber) return true;
+            if (c.collectorNumber!.toLowerCase() ==
+                collectorNumber.toLowerCase()) return true;
+            final cNum = int.tryParse(c.collectorNumber!);
+            final oNum = int.tryParse(collectorNumber);
+            return cNum != null && oNum != null && cNum == oNum;
+          }).firstOrNull;
+        }
+
         setState(() {
           _status = _ScanStatus.found;
           _foundNumber = collectorNumber;
+          _matchedCard = matched;
         });
 
-        // Auto-return after short delay
-        await Future.delayed(const Duration(milliseconds: 600));
+        // Auto-return after delay (longer if showing card info)
+        await Future.delayed(Duration(milliseconds: matched != null ? 1200 : 600));
         if (mounted) {
           Navigator.of(context).pop(_foundNumber);
         }
@@ -446,7 +467,14 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
         break;
       case _ScanStatus.found:
         icon = Icons.check_circle;
-        text = 'Trovato: #$_foundNumber ✓';
+        if (_matchedCard != null) {
+          final price = _matchedCard!.marketPrice != null
+              ? ' — ${_matchedCard!.formattedPrice}'
+              : '';
+          text = '${_matchedCard!.name}$price';
+        } else {
+          text = 'Trovato: #$_foundNumber ✓';
+        }
         bgColor = AppColors.accentGreen.withValues(alpha: 0.9);
         borderColor = AppColors.accentGreen.withValues(alpha: 0.5);
         break;

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
-import '../widgets/glow_text_field.dart';
-import '../widgets/card_search_field.dart';
 import '../widgets/card_browser_sheet.dart';
 import '../widgets/ocr_scanner_dialog.dart';
 import '../models/product.dart';
@@ -31,8 +29,6 @@ class OpenProductScreen extends StatefulWidget {
 class _OpenProductScreenState extends State<OpenProductScreen> {
   final FirestoreService _fs = FirestoreService();
   final CardCatalogService _catalogService = CardCatalogService();
-  final _pullNameController = TextEditingController();
-  final _pullValueController = TextEditingController();
   final _checklistSearchController = TextEditingController();
 
   // Local UI state — NOT tied to widget.product.isOpened
@@ -44,7 +40,7 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
 
   // Expansion checklist state
   List<CardBlueprint> _expansionCards = [];
-  final Set<String> _checkedCardIds = {};
+  final Map<String, int> _checkedCardCounts = {};
   bool _loadingExpansion = false;
   String _checklistSearch = '';
   bool _showChecklist = true;
@@ -57,8 +53,6 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
 
   @override
   void dispose() {
-    _pullNameController.dispose();
-    _pullValueController.dispose();
     _checklistSearchController.dispose();
     super.dispose();
   }
@@ -142,15 +136,17 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
     }
   }
 
-  void _toggleChecklistCard(CardBlueprint card) {
+  /// Tap → add one more copy
+  void _incrementChecklistCard(CardBlueprint card) {
     setState(() {
-      if (_checkedCardIds.contains(card.id)) {
-        // Uncheck — remove from pulls
-        _checkedCardIds.remove(card.id);
-        _pulls.removeWhere((p) => p.cardBlueprintId == card.id);
+      final current = _checkedCardCounts[card.id] ?? 0;
+      _checkedCardCounts[card.id] = current + 1;
+
+      // Find existing pull entry and increment, or create new
+      final existing = _pulls.where((p) => p.cardBlueprintId == card.id).firstOrNull;
+      if (existing != null) {
+        existing.quantity = current + 1;
       } else {
-        // Check — add to pulls
-        _checkedCardIds.add(card.id);
         _pulls.add(_PullEntry(
           cardName: card.name,
           cardBlueprintId: card.id,
@@ -165,30 +161,44 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
     });
   }
 
-  void _addPull({CardBlueprint? card}) {
-    final name = card?.name ?? _pullNameController.text.trim();
-    if (name.isEmpty) return;
+  /// Long press → remove one copy (or remove entirely if count reaches 0)
+  void _decrementChecklistCard(CardBlueprint card) {
+    setState(() {
+      final current = _checkedCardCounts[card.id] ?? 0;
+      if (current <= 1) {
+        _checkedCardCounts.remove(card.id);
+        _pulls.removeWhere((p) => p.cardBlueprintId == card.id);
+      } else {
+        _checkedCardCounts[card.id] = current - 1;
+        final existing = _pulls.where((p) => p.cardBlueprintId == card.id).firstOrNull;
+        if (existing != null) existing.quantity = current - 1;
+      }
+    });
+  }
 
-    final valueText = _pullValueController.text.trim();
-    double? value = double.tryParse(valueText);
-    if (card?.marketPrice != null && value == null) {
-      value = card!.marketPrice!.cents / 100;
-    }
+  void _addPull({CardBlueprint? card}) {
+    if (card == null) return;
+
+    final value = card.marketPrice != null
+        ? card.marketPrice!.cents / 100
+        : null;
 
     setState(() {
-      _pulls.add(_PullEntry(
-        cardName: name,
-        cardBlueprintId: card?.id,
-        cardImageUrl: card?.imageUrl,
-        cardExpansion: card?.expansionName,
-        rarity: card?.rarity,
-        estimatedValue: value,
-      ));
-      if (card != null) {
-        _checkedCardIds.add(card.id);
+      // If card already in pulls, increment quantity
+      final existing = _pulls.where((p) => p.cardBlueprintId == card.id).firstOrNull;
+      if (existing != null) {
+        existing.quantity += 1;
+      } else {
+        _pulls.add(_PullEntry(
+          cardName: card.name,
+          cardBlueprintId: card.id,
+          cardImageUrl: card.imageUrl,
+          cardExpansion: card.expansionName,
+          rarity: card.rarity,
+          estimatedValue: value,
+        ));
       }
-      _pullNameController.clear();
-      _pullValueController.clear();
+      _checkedCardCounts[card.id] = (_checkedCardCounts[card.id] ?? 0) + 1;
     });
   }
 
@@ -196,7 +206,7 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
     setState(() {
       final pull = _pulls[index];
       if (pull.cardBlueprintId != null) {
-        _checkedCardIds.remove(pull.cardBlueprintId);
+        _checkedCardCounts.remove(pull.cardBlueprintId);
       }
       _pulls.removeAt(index);
     });
@@ -213,16 +223,18 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
       if (productId != null && !isDemoMode) {
         // 1. Save all pulls as CardPull records (history tracking)
         for (final pull in _pulls) {
-          final cardPull = CardPull(
-            parentProductId: productId,
-            cardName: pull.cardName,
-            cardBlueprintId: pull.cardBlueprintId,
-            cardImageUrl: pull.cardImageUrl,
-            rarity: pull.rarity,
-            estimatedValue: pull.estimatedValue,
-            pulledAt: DateTime.now(),
-          );
-          await _fs.addCardPull(cardPull);
+          for (int i = 0; i < pull.quantity; i++) {
+            final cardPull = CardPull(
+              parentProductId: productId,
+              cardName: pull.cardName,
+              cardBlueprintId: pull.cardBlueprintId,
+              cardImageUrl: pull.cardImageUrl,
+              rarity: pull.rarity,
+              estimatedValue: pull.estimatedValue,
+              pulledAt: DateTime.now(),
+            );
+            await _fs.addCardPull(cardPull);
+          }
         }
 
         // 2. Add pulled cards as new Product items in inventory
@@ -230,7 +242,7 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
           final newProduct = Product(
             name: pull.cardName,
             brand: widget.product.brand,
-            quantity: 1,
+            quantity: pull.quantity.toDouble(),
             price: pull.estimatedValue ?? 0,
             status: ProductStatus.inInventory,
             kind: ProductKind.singleCard,
@@ -273,7 +285,10 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
   }
 
   Future<void> _openOcrScanner() async {
-    final collectorNumber = await OcrScannerDialog.scan(context);
+    final collectorNumber = await OcrScannerDialog.scan(
+      context,
+      expansionCards: _expansionCards,
+    );
     if (collectorNumber != null && mounted) {
       await _handleOcrResult(collectorNumber);
     }
@@ -339,8 +354,17 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
   }
 
   double get _totalPullValue {
-    return _pulls.fold(0.0, (sum, p) => sum + (p.estimatedValue ?? 0));
+    return _pulls.fold(0.0, (sum, p) => sum + (p.estimatedValue ?? 0) * p.quantity);
   }
+
+  int get _totalPullCount {
+    return _pulls.fold(0, (sum, p) => sum + p.quantity);
+  }
+
+  int get _checkedTotalCount =>
+      _checkedCardCounts.values.fold(0, (a, b) => a + b);
+
+  int get _checkedUniqueCount => _checkedCardCounts.length;
 
   List<CardBlueprint> get _filteredExpansionCards {
     if (_checklistSearch.isEmpty) return _expansionCards;
@@ -397,12 +421,13 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Product info card
+          // Product info card (compact when opened)
           StaggeredFadeSlide(
             index: 1,
-            child: _buildProductInfoCard(),
+            child: _isOpened ? _buildCompactProductStrip() : _buildProductInfoCard(),
           ),
-          const SizedBox(height: 24),
+          if (!_isOpened) const SizedBox(height: 24),
+          if (_isOpened) const SizedBox(height: 12),
 
           // Quantity selector (before opening)
           if (!_isOpened && _maxQuantity > 1)
@@ -459,57 +484,6 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
 
           // Pull logging interface (shown after opening)
           if (_isOpened) ...[
-            // Pull total value
-            if (_pulls.isNotEmpty)
-              StaggeredFadeSlide(
-                index: 2,
-                child: GlassCard(
-                  padding: const EdgeInsets.all(14),
-                  glowColor: AppColors.accentGreen,
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color:
-                              AppColors.accentGreen.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.trending_up,
-                            color: AppColors.accentGreen, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Valore totale pulls',
-                              style: TextStyle(
-                                  color: AppColors.textMuted, fontSize: 11)),
-                          Text(
-                            '€${_totalPullValue.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: AppColors.accentGreen,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${_pulls.length} carte',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            const SizedBox(height: 16),
-
             // Expansion checklist section
             if (_loadingExpansion)
               StaggeredFadeSlide(
@@ -545,130 +519,29 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                 index: 2,
                 child: _buildExpansionChecklist(),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
             ],
 
-            // Quick add pull (manual)
-            StaggeredFadeSlide(
-              index: 3,
-              child: GlassCard(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            // Pulls list
+            if (_pulls.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.add_circle_outline,
-                            color: AppColors.accentBlue, size: 18),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Aggiungi carta',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const Spacer(),
-                        ScaleOnPress(
-                          onTap: _openOcrScanner,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  AppColors.accentTeal,
-                                  Color(0xFF00ACC1),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.photo_camera,
-                                    color: Colors.white, size: 14),
-                                SizedBox(width: 4),
-                                Text('Scansiona',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600)),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        ScaleOnPress(
-                          onTap: _openCardBrowser,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  Color(0xFF764ba2),
-                                  Color(0xFF667eea)
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.style,
-                                    color: Colors.white, size: 14),
-                                SizedBox(width: 4),
-                                Text('Catalogo',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    GlowTextField(
-                      controller: _pullNameController,
-                      hintText: 'Nome carta...',
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GlowTextField(
-                            controller: _pullValueController,
-                            hintText: 'Valore €',
-                            keyboardType: TextInputType.number,
-                            prefixText: '€ ',
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ScaleOnPress(
-                          onTap: () => _addPull(),
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              gradient: AppColors.blueButtonGradient,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.add,
-                                color: Colors.white, size: 22),
-                          ),
-                        ),
-                      ],
+                    const Icon(Icons.list_alt, color: AppColors.textMuted, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$_totalPullCount carte trovate',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-
-            // Pulls list
+            ],
             ...List.generate(_pulls.length, (i) {
               final pull = _pulls[i];
               return Padding(
@@ -681,8 +554,8 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                       children: [
                         // Card image or icon
                         Container(
-                          width: 40,
-                          height: 56,
+                          width: 36,
+                          height: 50,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(4),
                             color: AppColors.surface,
@@ -695,10 +568,10 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                                       errorBuilder: (_, __, ___) =>
                                           const Icon(Icons.style,
                                               color: AppColors.textMuted,
-                                              size: 20)),
+                                              size: 18)),
                                 )
                               : const Icon(Icons.style,
-                                  color: AppColors.textMuted, size: 20),
+                                  color: AppColors.textMuted, size: 18),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -726,9 +599,27 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                             ],
                           ),
                         ),
+                        if (pull.quantity > 1)
+                          Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.accentBlue.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'x${pull.quantity}',
+                              style: const TextStyle(
+                                color: AppColors.accentBlue,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
                         if (pull.estimatedValue != null)
                           Text(
-                            '€${pull.estimatedValue!.toStringAsFixed(2)}',
+                            '€${(pull.estimatedValue! * pull.quantity).toStringAsFixed(2)}',
                             style: const TextStyle(
                               color: AppColors.accentGreen,
                               fontSize: 13,
@@ -791,6 +682,102 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// Compact strip shown after opening — product info + pull value in one row
+  Widget _buildCompactProductStrip() {
+    final productImage = widget.product.displayImageUrl;
+    final hasImage = productImage.isNotEmpty;
+
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          // Product thumbnail
+          Container(
+            width: 32,
+            height: hasImage ? 44 : 32,
+            decoration: BoxDecoration(
+              color: AppColors.accentGreen.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(hasImage ? 4 : 8),
+            ),
+            child: hasImage
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: Image.network(
+                      productImage,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.inventory_2,
+                          color: AppColors.accentGreen,
+                          size: 16),
+                    ),
+                  )
+                : const Icon(Icons.inventory_2,
+                    color: AppColors.accentGreen, size: 16),
+          ),
+          const SizedBox(width: 10),
+          // Product name + kind
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.product.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  widget.product.kindLabel,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Pull value summary
+          if (_pulls.isNotEmpty) ...[
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '€${_totalPullValue.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: AppColors.accentGreen,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  '$_totalPullCount carte',
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ] else
+            Text(
+              widget.product.formattedPrice,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
         ],
       ),
     );
@@ -1053,86 +1040,118 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
 
   Widget _buildExpansionChecklist() {
     final filteredCards = _filteredExpansionCards;
-    final checkedCount = _checkedCardIds.length;
     final totalCount = _expansionCards.length;
 
     return GlassCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       glowColor: AppColors.accentPurple,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with toggle
+          // Header row: title + progress + action buttons
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: AppColors.accentPurple.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.checklist,
-                    color: AppColors.accentPurple, size: 18),
-              ),
-              const SizedBox(width: 10),
+              const Icon(Icons.checklist,
+                  color: AppColors.accentPurple, size: 18),
+              const SizedBox(width: 8),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '📋 Checklist Espansione',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      '$checkedCount/$totalCount trovate',
-                      style: TextStyle(
-                        color: checkedCount > 0
-                            ? AppColors.accentGreen
-                            : AppColors.textMuted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ScaleOnPress(
-                onTap: () => setState(() => _showChecklist = !_showChecklist),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.1),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                child: Text.rich(
+                  TextSpan(
                     children: [
-                      Icon(
-                        _showChecklist
-                            ? Icons.keyboard_arrow_up
-                            : Icons.keyboard_arrow_down,
-                        color: AppColors.textMuted,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _showChecklist ? 'Nascondi' : 'Mostra',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
+                      const TextSpan(
+                        text: '📋 Checklist ',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                      TextSpan(
+                        text: '$_checkedUniqueCount/$totalCount',
+                        style: TextStyle(
+                          color: _checkedUniqueCount > 0
+                              ? AppColors.accentGreen
+                              : AppColors.textMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (_checkedTotalCount != _checkedUniqueCount)
+                        TextSpan(
+                          text: ' ($_checkedTotalCount tot)',
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 10,
+                          ),
+                        ),
                     ],
                   ),
+                ),
+              ),
+              // Scan button
+              ScaleOnPress(
+                onTap: _openOcrScanner,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.accentTeal, Color(0xFF00ACC1)],
+                    ),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.photo_camera,
+                          color: Colors.white, size: 13),
+                      SizedBox(width: 3),
+                      Text('Scan',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 5),
+              // Catalog button
+              ScaleOnPress(
+                onTap: _openCardBrowser,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF764ba2), Color(0xFF667eea)],
+                    ),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.style, color: Colors.white, size: 13),
+                      SizedBox(width: 3),
+                      Text('Catalogo',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 5),
+              // Toggle button
+              ScaleOnPress(
+                onTap: () => setState(() => _showChecklist = !_showChecklist),
+                child: Icon(
+                  _showChecklist
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: AppColors.textMuted,
+                  size: 20,
                 ),
               ),
             ],
@@ -1144,7 +1163,7 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: totalCount > 0 ? checkedCount / totalCount : 0,
+                value: totalCount > 0 ? _checkedUniqueCount / totalCount : 0,
                 minHeight: 4,
                 backgroundColor: Colors.white.withValues(alpha: 0.06),
                 valueColor: const AlwaysStoppedAnimation<Color>(
@@ -1222,8 +1241,8 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                       itemCount: filteredCards.length,
                       itemBuilder: (context, index) {
                         final card = filteredCards[index];
-                        final isChecked = _checkedCardIds.contains(card.id);
-                        return _buildChecklistCard(card, isChecked);
+                        final count = _checkedCardCounts[card.id] ?? 0;
+                        return _buildChecklistCard(card, count);
                       },
                     ),
             ),
@@ -1233,9 +1252,11 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
     );
   }
 
-  Widget _buildChecklistCard(CardBlueprint card, bool isChecked) {
-    return ScaleOnPress(
-      onTap: () => _toggleChecklistCard(card),
+  Widget _buildChecklistCard(CardBlueprint card, int count) {
+    final isChecked = count > 0;
+    return GestureDetector(
+      onTap: () => _incrementChecklistCard(card),
+      onLongPress: count > 0 ? () => _decrementChecklistCard(card) : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
@@ -1337,13 +1358,13 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
               ],
             ),
 
-            // Checkbox overlay
+            // Count badge overlay
             Positioned(
               top: 4,
               right: 4,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                width: 22,
+                width: count > 1 ? 26 : 22,
                 height: 22,
                 decoration: BoxDecoration(
                   color: isChecked
@@ -1358,8 +1379,19 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                   ),
                 ),
                 child: isChecked
-                    ? const Icon(Icons.check,
-                        color: Colors.white, size: 14)
+                    ? Center(
+                        child: count > 1
+                            ? Text(
+                                '$count',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : const Icon(Icons.check,
+                                color: Colors.white, size: 14),
+                      )
                     : null,
               ),
             ),
@@ -1401,13 +1433,15 @@ class _PullEntry {
   final String? cardExpansion;
   final String? rarity;
   final double? estimatedValue;
+  int quantity;
 
-  const _PullEntry({
+  _PullEntry({
     required this.cardName,
     this.cardBlueprintId,
     this.cardImageUrl,
     this.cardExpansion,
     this.rarity,
     this.estimatedValue,
+    this.quantity = 1,
   });
 }
