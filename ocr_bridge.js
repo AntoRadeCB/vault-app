@@ -1,5 +1,4 @@
 // OCR Bridge - Tesseract.js + Camera for Flutter web
-// Manages Tesseract.js OCR worker and camera access
 
 let ocrWorker = null;
 const cameraState = {};
@@ -7,18 +6,15 @@ const cameraState = {};
 async function initOcrWorker() {
   if (ocrWorker) return;
   ocrWorker = await Tesseract.createWorker('eng');
-  // Set PSM to sparse text (good for small numbers on cards)
   await ocrWorker.setParameters({
     tessedit_char_whitelist: '0123456789/ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#- ',
-    tessedit_pageseg_mode: '11', // sparse text
+    tessedit_pageseg_mode: '11',
   });
 }
 
 async function startOcrCamera(containerId) {
   const container = document.getElementById(containerId);
-  if (!container) {
-    return JSON.stringify({ error: 'Container not found' });
-  }
+  if (!container) return JSON.stringify({ error: 'Container not found' });
 
   const video = document.createElement('video');
   video.setAttribute('autoplay', '');
@@ -27,7 +23,6 @@ async function startOcrCamera(containerId) {
   video.muted = true;
   video.style.cssText = 'width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;';
 
-  // Hidden canvases for processing
   const canvasFull = document.createElement('canvas');
   canvasFull.style.display = 'none';
   const canvasCrop = document.createElement('canvas');
@@ -49,12 +44,7 @@ async function startOcrCamera(containerId) {
     });
     video.srcObject = stream;
     await video.play();
-    cameraState[containerId] = {
-      video: video,
-      canvasFull: canvasFull,
-      canvasCrop: canvasCrop,
-      stream: stream
-    };
+    cameraState[containerId] = { video, canvasFull, canvasCrop, stream };
     return JSON.stringify({ success: true });
   } catch (e) {
     return JSON.stringify({ error: e.message || 'Camera access denied' });
@@ -62,11 +52,9 @@ async function startOcrCamera(containerId) {
 }
 
 /**
- * Lightweight capture: only scan the bottom strip of the card.
- * Alternates between normal and inverted on each call to reduce CPU load.
+ * Multi-zone scan: bottom strip, bottom-left, bottom-right, full card.
+ * Each zone gets threshold + inverted pass. Stops early on pattern match.
  */
-let _scanCycle = 0;
-
 async function captureAndRecognize(containerId) {
   const state = cameraState[containerId];
   if (!state) return JSON.stringify({ error: 'Camera not started' });
@@ -83,84 +71,83 @@ async function captureAndRecognize(containerId) {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
 
-  // Draw full frame at reduced resolution for speed
-  const maxW = 960;
-  const ratio = Math.min(1, maxW / vw);
-  const fw = Math.round(vw * ratio);
-  const fh = Math.round(vh * ratio);
-  canvasFull.width = fw;
-  canvasFull.height = fh;
-  const ctxFull = canvasFull.getContext('2d');
-  ctxFull.drawImage(video, 0, 0, fw, fh);
+  canvasFull.width = vw;
+  canvasFull.height = vh;
+  canvasFull.getContext('2d').drawImage(video, 0, 0);
 
-  // Card area (matching overlay: 72% width, ratio 5:7, centered)
-  const cardW = fw * 0.72;
-  const cardH = Math.min(cardW * (7 / 5), fh * 0.50);
-  const cardX = (fw - cardW) / 2;
-  const cardY = (fh - cardH) / 2;
+  // Card area matching overlay (72% width, 5:7 ratio, centered)
+  const cardW = vw * 0.72;
+  const cardH = cardW * (7 / 5);
+  const cardX = (vw - cardW) / 2;
+  const cardY = (vh - cardH) / 2;
 
-  // Cycle through zones: 0=bottom strip, 1=bottom-left inverted, 2=bottom-right
-  const cycle = _scanCycle++ % 3;
-  let sx, sy, sw, sh;
+  const zones = [
+    { x: cardX, y: cardY + cardH * 0.78, w: cardW, h: cardH * 0.22, name: 'bottom' },
+    { x: cardX, y: cardY + cardH * 0.82, w: cardW * 0.5, h: cardH * 0.18, name: 'bottom-left' },
+    { x: cardX + cardW * 0.5, y: cardY + cardH * 0.82, w: cardW * 0.5, h: cardH * 0.18, name: 'bottom-right' },
+    { x: cardX, y: cardY, w: cardW, h: cardH, name: 'full' },
+  ];
 
-  if (cycle === 0) {
-    // Full bottom strip (20%)
-    sx = cardX; sy = cardY + cardH * 0.78; sw = cardW; sh = cardH * 0.22;
-  } else if (cycle === 1) {
-    // Bottom-left
-    sx = cardX; sy = cardY + cardH * 0.80; sw = cardW * 0.55; sh = cardH * 0.20;
-  } else {
-    // Bottom-right
-    sx = cardX + cardW * 0.45; sy = cardY + cardH * 0.80; sw = cardW * 0.55; sh = cardH * 0.20;
+  let allTexts = [];
+
+  for (const zone of zones) {
+    const sx = Math.max(0, Math.round(zone.x));
+    const sy = Math.max(0, Math.round(zone.y));
+    const sw = Math.min(Math.round(zone.w), vw - sx);
+    const sh = Math.min(Math.round(zone.h), vh - sy);
+    if (sw <= 0 || sh <= 0) continue;
+
+    const scale = Math.max(1, 600 / sw);
+    const dw = Math.round(sw * scale);
+    const dh = Math.round(sh * scale);
+
+    canvasCrop.width = dw;
+    canvasCrop.height = dh;
+    const ctx = canvasCrop.getContext('2d');
+    ctx.drawImage(canvasFull, sx, sy, sw, sh, 0, 0, dw, dh);
+
+    // Normal threshold pass
+    const imgData = ctx.getImageData(0, 0, dw, dh);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const g = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+      const bw = g > 140 ? 255 : 0;
+      d[i] = bw; d[i+1] = bw; d[i+2] = bw;
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    try {
+      const r = await ocrWorker.recognize(canvasCrop);
+      if (r.data.text.trim()) allTexts.push(r.data.text.trim());
+
+      // Inverted pass (white text on dark bg)
+      const inv = ctx.getImageData(0, 0, dw, dh);
+      const di = inv.data;
+      for (let i = 0; i < di.length; i += 4) {
+        di[i] = 255 - di[i]; di[i+1] = 255 - di[i+1]; di[i+2] = 255 - di[i+2];
+      }
+      ctx.putImageData(inv, 0, 0);
+      const ri = await ocrWorker.recognize(canvasCrop);
+      if (ri.data.text.trim()) allTexts.push(ri.data.text.trim());
+
+      // Early exit if we found a number pattern (skip full card scan)
+      if (zone.name !== 'full' && hasCollectorPattern(allTexts.join(' '))) break;
+    } catch (e) {}
   }
 
-  sx = Math.max(0, Math.round(sx));
-  sy = Math.max(0, Math.round(sy));
-  sw = Math.min(Math.round(sw), fw - sx);
-  sh = Math.min(Math.round(sh), fh - sy);
-  if (sw <= 0 || sh <= 0) {
-    return JSON.stringify({ text: '', confidence: 0 });
-  }
+  return JSON.stringify({ text: allTexts.join(' | '), confidence: 0 });
+}
 
-  // Upscale crop to ~500px wide
-  const scale = Math.max(1, 500 / sw);
-  const dw = Math.round(sw * scale);
-  const dh = Math.round(sh * scale);
-
-  canvasCrop.width = dw;
-  canvasCrop.height = dh;
-  const ctx = canvasCrop.getContext('2d');
-  ctx.drawImage(canvasFull, sx, sy, sw, sh, 0, 0, dw, dh);
-
-  // Preprocess: grayscale + threshold
-  const imgData = ctx.getImageData(0, 0, dw, dh);
-  const data = imgData.data;
-  const invert = (cycle === 1); // alternate inverted on cycle 1
-  for (let i = 0; i < data.length; i += 4) {
-    const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
-    let bw = gray > 140 ? 255 : 0;
-    if (invert) bw = 255 - bw;
-    data[i] = bw; data[i+1] = bw; data[i+2] = bw;
-  }
-  ctx.putImageData(imgData, 0, 0);
-
-  try {
-    const result = await ocrWorker.recognize(canvasCrop);
-    return JSON.stringify({
-      text: result.data.text.trim(),
-      confidence: result.data.confidence
-    });
-  } catch (e) {
-    return JSON.stringify({ error: e.message || 'OCR failed', text: '', confidence: 0 });
-  }
+function hasCollectorPattern(text) {
+  return /\d{1,4}\s*[/\\]\s*\d{1,4}/.test(text) ||
+         /[A-Z]{1,5}\d{1,4}\s*[/\\]/.test(text) ||
+         /#\s*\d{1,4}\b/.test(text);
 }
 
 function stopOcrCamera(containerId) {
   const state = cameraState[containerId];
   if (state) {
-    if (state.stream) {
-      state.stream.getTracks().forEach(function(track) { track.stop(); });
-    }
+    if (state.stream) state.stream.getTracks().forEach(t => t.stop());
     delete cameraState[containerId];
   }
 }
@@ -173,12 +160,9 @@ function createOcrContainer(id) {
 }
 
 function vibrateDevice(ms) {
-  try {
-    if (navigator.vibrate) navigator.vibrate(ms);
-  } catch (e) {}
+  try { if (navigator.vibrate) navigator.vibrate(ms); } catch(e) {}
 }
 
-// Expose to Dart
 window.initOcrWorker = initOcrWorker;
 window.startOcrCamera = startOcrCamera;
 window.captureAndRecognize = captureAndRecognize;
