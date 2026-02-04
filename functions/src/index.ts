@@ -635,7 +635,7 @@ export const scanCard = onRequest(
 
       const response = await openai.chat.completions.create({
         model: "gpt-5.2",
-        max_completion_tokens: 512,
+        max_completion_tokens: 2048,
         messages: [
           {
             role: "system",
