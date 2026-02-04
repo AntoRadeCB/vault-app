@@ -101,17 +101,9 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       _status = _ScanStatus.scanning;
     });
 
-    await Future.delayed(const Duration(milliseconds: 1000));
+    await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
-    _startPeriodicScan();
-  }
-
-  void _startPeriodicScan() {
-    _scanTimer?.cancel();
-    _scanTimer = Timer.periodic(const Duration(milliseconds: 2500), (_) {
-      _performOcrScan();
-    });
-    _performOcrScan();
+    // Camera ready — wait for user to tap scan button
   }
 
   Future<void> _performOcrScan() async {
@@ -238,9 +230,9 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       _lastError = null;
     });
 
-    // Show the banner for 2 seconds, then resume scanning
+    // Show the banner for 3 seconds, then go back to ready
     _bannerTimer?.cancel();
-    _bannerTimer = Timer(const Duration(milliseconds: 2000), () {
+    _bannerTimer = Timer(const Duration(milliseconds: 3000), () {
       if (mounted) {
         setState(() {
           _status = _ScanStatus.scanning;
@@ -516,80 +508,83 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Status indicator
-                    _buildStatusPill(),
-                    const SizedBox(height: 10),
                     // Found cards scroll strip
                     if (_foundCards.isNotEmpty) ...[
                       _buildFoundStrip(),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                     ],
-                    // Bottom buttons
+                    // Scan button + action buttons row
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _showManualEntry,
+                        // Manual entry button
+                        GestureDetector(
+                          onTap: _showManualEntry,
+                          child: Container(
+                            width: 52, height: 52,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                            ),
+                            child: const Icon(Icons.keyboard, color: Colors.white70, size: 22),
+                          ),
+                        ),
+                        // Big scan button
+                        GestureDetector(
+                          onTap: (_status == _ScanStatus.processing || !_cameraReady)
+                              ? null
+                              : _performOcrScan,
+                          child: Container(
+                            width: 72, height: 72,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                            ),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              margin: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.1)),
+                                shape: BoxShape.circle,
+                                color: _status == _ScanStatus.processing
+                                    ? Colors.orange
+                                    : Colors.white,
                               ),
-                              child: const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.keyboard,
-                                      color: Colors.white70, size: 18),
-                                  SizedBox(width: 6),
-                                  Text('Manuale',
-                                      style: TextStyle(color: Colors.white70,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500)),
-                                ],
-                              ),
+                              child: _status == _ScanStatus.processing
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(18),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 3,
+                                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                                      ),
+                                    )
+                                  : const Icon(Icons.camera_alt, color: Colors.black87, size: 30),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _close,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 13),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: _foundCards.isNotEmpty
-                                      ? [const Color(0xFF43A047),
-                                         const Color(0xFF2E7D32)]
-                                      : [Colors.white.withValues(alpha: 0.08),
-                                         Colors.white.withValues(alpha: 0.08)],
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    _foundCards.isNotEmpty
-                                        ? Icons.check_circle
-                                        : Icons.close,
-                                    color: Colors.white,
-                                    size: 18),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    _foundCards.isNotEmpty
-                                        ? 'Fatto (${_foundCards.length})'
-                                        : 'Chiudi',
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600)),
-                                ],
-                              ),
+                        // Done/Close button
+                        GestureDetector(
+                          onTap: _close,
+                          child: Container(
+                            width: 52, height: 52,
+                            decoration: BoxDecoration(
+                              color: _foundCards.isNotEmpty
+                                  ? AppColors.accentGreen.withValues(alpha: 0.9)
+                                  : Colors.white.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                             ),
+                            child: _foundCards.isNotEmpty
+                                ? Center(
+                                    child: Text(
+                                      '${_foundCards.length}✓',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  )
+                                : const Icon(Icons.close, color: Colors.white70, size: 22),
                           ),
                         ),
                       ],
