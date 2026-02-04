@@ -84,17 +84,25 @@ function captureFrame(containerId) {
  * Legacy: Capture current frame + call API (synchronous flow).
  * Still works but the Dart side now uses captureFrame + sendToApi separately.
  */
-async function captureAndRecognize(containerId) {
+async function captureAndRecognize(containerId, contextJson) {
   const base64 = captureFrame(containerId);
   if (base64.startsWith('{')) return base64; // error JSON
 
+  // Parse context from Dart (expansion name, card list)
+  let scanContext = {};
+  try { if (contextJson) scanContext = JSON.parse(contextJson); } catch(e) {}
+
   try {
+    const body = { image: base64 };
+    if (scanContext.expansion) body.expansion = scanContext.expansion;
+    if (scanContext.cardNames) body.cardNames = scanContext.cardNames;
+
     const resp = await fetch(
       'https://scancard-orjhcexzoa-ew.a.run.app',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64 })
+        body: JSON.stringify(body)
       }
     );
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
@@ -125,7 +126,18 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     }
 
     try {
-      final result = await _ocrService.captureAndRecognize(_containerId);
+      // Build context from expansion cards to help AI identify
+      String? contextJson;
+      if (widget.expansionCards.isNotEmpty) {
+        final names = widget.expansionCards.map((c) => c.name).toSet().toList();
+        final expansion = widget.expansionCards.first.collectorNumber != null
+            ? null // we don't have expansion name directly, AI will match by card list
+            : null;
+        contextJson = jsonEncode({
+          'cardNames': names,
+        });
+      }
+      final result = await _ocrService.captureAndRecognize(_containerId, contextJson: contextJson);
       if (!mounted) return;
 
       // Check for API errors

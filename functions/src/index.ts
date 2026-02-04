@@ -617,7 +617,7 @@ export const scanCard = onRequest(
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
     if (req.method !== "POST") { res.status(405).json({ error: "POST only" }); return; }
 
-    const { image } = req.body;
+    const { image, expansion, cardNames } = req.body;
     if (!image || typeof image !== "string") {
       res.status(400).json({ error: "Missing 'image' (base64)" });
       return;
@@ -625,13 +625,34 @@ export const scanCard = onRequest(
 
     try {
       const imageSize = image.length;
-      console.log(`scanCard v2: received image, size=${imageSize} chars, starts with: ${image.substring(0, 30)}`);
+      const hasContext = !!(expansion || cardNames);
+      console.log(`scanCard v3: image=${imageSize} chars, context=${hasContext}, cardList=${cardNames?.length || 0}`);
 
       const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
 
       const imageUrl = image.startsWith("data:")
         ? image
         : `data:image/jpeg;base64,${image}`;
+
+      // Build prompt with context if available
+      let prompt = `Identify this trading card from the photo.`;
+
+      if (expansion) {
+        prompt += `\nThis card is from the expansion/set: "${expansion}".`;
+      }
+
+      if (cardNames && Array.isArray(cardNames) && cardNames.length > 0) {
+        prompt += `\n\nThe card MUST be one of these (pick the closest match):\n${cardNames.join('\n')}`;
+        prompt += `\n\nLook at the artwork, colors, creature/character depicted, and any visible text to match the correct card from this list.`;
+      }
+
+      prompt += `\n\nReply in EXACTLY this format:
+CARD_NAME_EN|EXTRA_INFO
+
+Where CARD_NAME_EN is the English card name (must match one from the list if provided).
+EXTRA_INFO is any visible detail: collector number, rarity, card type (ex, V, VMAX, GX, etc).
+
+If you cannot identify the card or see NO trading card, reply exactly: NONE`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5.2",
@@ -642,20 +663,7 @@ export const scanCard = onRequest(
             content: [
               {
                 type: "text",
-                text: `You are a trading card identifier. Identify this trading card. Tell me:
-1. The card name IN ENGLISH (translate if needed)
-2. Any extra info visible: set name, rarity, card type (e.g. "ex", "V", "VMAX", "GX")
-
-Reply in EXACTLY this format:
-CARD_NAME_EN|SET_OR_EXTRA_INFO
-
-Examples:
-Charizard ex|Scarlet & Violet
-Pikachu|Base Set
-Lugia V|Silver Tempest
-Mewtwo VMAX|Pokemon GO
-
-If you see NO trading card, reply exactly: NONE`,
+                text: prompt,
               },
               {
                 type: "image_url",
@@ -666,7 +674,7 @@ If you see NO trading card, reply exactly: NONE`,
         ],
       });
 
-      console.log("scanCard v2 response:", JSON.stringify({
+      console.log("scanCard v3 response:", JSON.stringify({
         content: response.choices[0]?.message?.content,
         finish: response.choices[0]?.finish_reason,
         usage: response.usage,

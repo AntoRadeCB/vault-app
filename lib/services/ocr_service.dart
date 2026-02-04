@@ -8,7 +8,7 @@ external JSPromise<JSAny?> _jsInitOcrWorker();
 external JSPromise<JSAny?> _jsStartOcrCamera(JSString containerId);
 
 @JS('captureAndRecognize')
-external JSPromise<JSAny?> _jsCaptureAndRecognize(JSString containerId);
+external JSPromise<JSAny?> _jsCaptureAndRecognize(JSString containerId, JSString? contextJson);
 
 @JS('stopOcrCamera')
 external void _jsStopOcrCamera(JSString containerId);
@@ -51,9 +51,9 @@ class OcrService {
   }
 
   /// Capture current video frame and run OCR on it.
-  Future<Map<String, dynamic>> captureAndRecognize(String containerId) async {
+  Future<Map<String, dynamic>> captureAndRecognize(String containerId, {String? contextJson}) async {
     try {
-      final result = await _jsCaptureAndRecognize(containerId.toJS).toDart;
+      final result = await _jsCaptureAndRecognize(containerId.toJS, contextJson?.toJS).toDart;
       if (result == null) return {'error': 'No response'};
       return jsonDecode((result as JSString).toDart) as Map<String, dynamic>;
     } catch (e) {
