@@ -639,27 +639,30 @@ export const scanCard = onRequest(
         messages: [
           {
             role: "system",
-            content: "You are a trading card scanner. You identify collector numbers and card names from card images. Cards can be in ANY language (English, Chinese, Japanese, Korean, etc). Always reply in the exact format specified.",
+            content: "You are a trading card scanner. You identify collector numbers and card names. Cards can be in ANY language. Reply in the EXACT format specified. NEVER include set codes or abbreviations in the collector number — only the printed number.",
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Identify this trading card. Find:
-1. The collector number (usually small text at the bottom, like "001/165", "SV049/SV100", "TG01", or just "042")
-2. The card name (the main title of the card, in whatever language it's printed)
+                text: `Look at this trading card image. Find:
+1. The collector number — the number printed on the card (usually at the bottom). Return ONLY the number with slash if present. Do NOT include set codes like "SFD", "SV", "MEW", etc. Just the raw number.
+2. The card name (the main title, in whatever language it's printed)
 
-Reply in EXACTLY this format (one line per card if multiple visible):
-COLLECTOR_NUMBER|CARD_NAME
+Reply in EXACTLY this format:
+NUMBER/TOTAL|CARD_NAME
 
 Examples:
 001/165|Pikachu
-SV049/SV100|リザードンex
+196/221|Charizard ex
 042/165|喷火龙
-TG01/TG30|Charizard
+01/30|リザードンex
 
-If you see NO trading card or cannot find a collector number, reply exactly: NONE`,
+If no total is visible, just the number:
+042|Pikachu
+
+If you see NO trading card, reply exactly: NONE`,
               },
               {
                 type: "image_url",
