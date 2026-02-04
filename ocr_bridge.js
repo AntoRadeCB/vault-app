@@ -62,8 +62,8 @@ async function captureAndRecognize(containerId) {
   const cardX = (vw - cardW) / 2;
   const cardY = (vh - cardH) / 2;
 
-  // Draw just the card area at reasonable resolution
-  const maxDim = 512; // keep image small for fast upload + cheaper API
+  // Draw the card area at good resolution for AI vision
+  const maxDim = 768;
   const scale = Math.min(1, maxDim / Math.max(cardW, cardH));
   const dw = Math.round(cardW * scale);
   const dh = Math.round(cardH * scale);
@@ -73,8 +73,7 @@ async function captureAndRecognize(containerId) {
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, cardX, cardY, cardW, cardH, 0, 0, dw, dh);
 
-  // Convert to JPEG base64
-  const base64 = canvas.toDataURL('image/jpeg', 0.8);
+  const base64 = canvas.toDataURL('image/jpeg', 0.85);
 
   // Send to Cloud Function
   try {
