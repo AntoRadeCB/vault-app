@@ -33,7 +33,7 @@ class OcrScannerDialog extends StatefulWidget {
   State<OcrScannerDialog> createState() => _OcrScannerDialogState();
 }
 
-enum _ScanStatus { init, scanning, processing, found, error }
+enum _ScanStatus { init, scanning, processing, found, error, scanError }
 
 class _OcrScannerDialogState extends State<OcrScannerDialog> {
   final OcrService _ocrService = OcrService();
@@ -46,11 +46,19 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
   Timer? _scanTimer;
   bool _cameraReady = false;
 
+  // Non-blocking scan state
+  int _inflightScans = 0;
+  static const int _maxConcurrent = 2;
+
   // Continuous mode state
   final List<String> _foundNumbers = [];
   final List<_FoundCard> _foundCards = [];
   _FoundCard? _lastFound; // currently displayed card banner
+  String? _lastError; // error banner text
   Timer? _bannerTimer;
+
+  // Deduplicate: don't scan the same card twice in a row
+  final Set<String> _recentlyFound = {};
 
   @override
   void initState() {
@@ -99,7 +107,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 
   void _startPeriodicScan() {
     _scanTimer?.cancel();
-    _scanTimer = Timer.periodic(const Duration(milliseconds: 5000), (_) {
+    _scanTimer = Timer.periodic(const Duration(milliseconds: 2500), (_) {
       _performOcrScan();
     });
     _performOcrScan();
@@ -107,69 +115,144 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 
   Future<void> _performOcrScan() async {
     if (_status == _ScanStatus.error) return;
-    if (_status == _ScanStatus.processing) return;
-    if (_status == _ScanStatus.found) return; // pause while showing result
+    if (_inflightScans >= _maxConcurrent) return;
 
-    setState(() => _status = _ScanStatus.processing);
+    _inflightScans++;
+
+    // Show processing indicator only if nothing else is showing
+    if (_status == _ScanStatus.scanning) {
+      setState(() => _status = _ScanStatus.processing);
+    }
 
     try {
       final result = await _ocrService.captureAndRecognize(_containerId);
       if (!mounted) return;
 
-      if (result.containsKey('error') &&
-          result['error'] != 'Video not ready') {
-        setState(() => _status = _ScanStatus.scanning);
+      // Check for API errors
+      if (result.containsKey('error')) {
+        final err = result['error'] as String? ?? 'Errore sconosciuto';
+        if (err == 'Video not ready') {
+          // Silent — camera not ready yet
+          return;
+        }
+        // Show error banner
+        _showErrorBanner(err);
         return;
       }
 
-      final text = result['text'] as String? ?? '';
-      final collectorNumber = _ocrService.extractCollectorNumber(text);
-
-      if (collectorNumber != null) {
-        // Try to match to a card in the expansion
-        CardBlueprint? matched;
-        if (widget.expansionCards.isNotEmpty) {
-          matched = widget.expansionCards.where((c) {
-            if (c.collectorNumber == null) return false;
-            if (c.collectorNumber == collectorNumber) return true;
-            if (c.collectorNumber!.toLowerCase() ==
-                collectorNumber.toLowerCase()) return true;
-            final cNum = int.tryParse(c.collectorNumber!);
-            final oNum = int.tryParse(collectorNumber);
-            return cNum != null && oNum != null && cNum == oNum;
-          }).firstOrNull;
+      // Handle multi-card response
+      final cards = result['cards'] as List<dynamic>?;
+      if (cards != null && cards.isNotEmpty) {
+        for (final cardData in cards) {
+          final map = cardData is Map<String, dynamic>
+              ? cardData
+              : <String, dynamic>{};
+          final cn = map['collectorNumber'] as String? ?? '';
+          final name = map['cardName'] as String?;
+          final text = '$cn${name != null ? '|$name' : ''}';
+          _processFoundCard(text);
         }
+        return;
+      }
 
-        _ocrService.vibrate();
-        _foundNumbers.add(collectorNumber);
-
-        final found = _FoundCard(
-          collectorNumber: collectorNumber,
-          card: matched,
-        );
-        _foundCards.add(found);
-
-        setState(() {
-          _status = _ScanStatus.found;
-          _lastFound = found;
-        });
-
-        // Show the banner for 2 seconds, then resume scanning
-        _bannerTimer?.cancel();
-        _bannerTimer = Timer(const Duration(milliseconds: 2000), () {
-          if (mounted) {
-            setState(() {
-              _status = _ScanStatus.scanning;
-              _lastFound = null;
-            });
-          }
-        });
+      // Legacy single-card response
+      final text = result['text'] as String? ?? '';
+      if (text.isNotEmpty) {
+        // Could be multi-line (multiple cards)
+        final lines = text.split('\n').where((l) => l.trim().isNotEmpty);
+        for (final line in lines) {
+          _processFoundCard(line.trim());
+        }
       } else {
-        setState(() => _status = _ScanStatus.scanning);
+        // No card found — keep scanning
+        if (_lastFound == null && _lastError == null) {
+          setState(() => _status = _ScanStatus.scanning);
+        }
       }
     } catch (e) {
-      if (mounted) setState(() => _status = _ScanStatus.scanning);
+      if (mounted) {
+        _showErrorBanner(e.toString());
+      }
+    } finally {
+      _inflightScans--;
+      // Reset to scanning if nothing is showing
+      if (mounted && _lastFound == null && _lastError == null &&
+          _status == _ScanStatus.processing) {
+        setState(() => _status = _ScanStatus.scanning);
+      }
     }
+  }
+
+  void _processFoundCard(String text) {
+    final collectorNumber = _ocrService.extractCollectorNumber(text);
+    if (collectorNumber == null) return;
+
+    // Deduplicate: skip if just scanned this card
+    if (_recentlyFound.contains(collectorNumber)) return;
+    _recentlyFound.add(collectorNumber);
+
+    // Clear from dedup set after 10 seconds
+    Future.delayed(const Duration(seconds: 10), () {
+      _recentlyFound.remove(collectorNumber);
+    });
+
+    // Try to match to a card in the expansion
+    CardBlueprint? matched;
+    if (widget.expansionCards.isNotEmpty) {
+      matched = widget.expansionCards.where((c) {
+        if (c.collectorNumber == null) return false;
+        if (c.collectorNumber == collectorNumber) return true;
+        if (c.collectorNumber!.toLowerCase() ==
+            collectorNumber.toLowerCase()) return true;
+        final cNum = int.tryParse(c.collectorNumber!);
+        final oNum = int.tryParse(collectorNumber);
+        return cNum != null && oNum != null && cNum == oNum;
+      }).firstOrNull;
+    }
+
+    _ocrService.vibrate();
+    _foundNumbers.add(collectorNumber);
+
+    final found = _FoundCard(
+      collectorNumber: collectorNumber,
+      card: matched,
+    );
+    _foundCards.add(found);
+
+    setState(() {
+      _status = _ScanStatus.found;
+      _lastFound = found;
+      _lastError = null;
+    });
+
+    // Show the banner for 2 seconds, then resume scanning
+    _bannerTimer?.cancel();
+    _bannerTimer = Timer(const Duration(milliseconds: 2000), () {
+      if (mounted) {
+        setState(() {
+          _status = _ScanStatus.scanning;
+          _lastFound = null;
+        });
+      }
+    });
+  }
+
+  void _showErrorBanner(String error) {
+    setState(() {
+      _status = _ScanStatus.scanError;
+      _lastError = error;
+      _lastFound = null;
+    });
+
+    _bannerTimer?.cancel();
+    _bannerTimer = Timer(const Duration(milliseconds: 3000), () {
+      if (mounted) {
+        setState(() {
+          _status = _ScanStatus.scanning;
+          _lastError = null;
+        });
+      }
+    });
   }
 
   void _close() {
@@ -396,6 +479,18 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
               ),
             ),
 
+          // Error banner
+          if (_lastError != null)
+            Positioned(
+              top: 0, left: 0, right: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 56, left: 20, right: 20),
+                  child: _buildErrorBanner(_lastError!),
+                ),
+              ),
+            ),
+
           // Bottom bar
           Positioned(
             bottom: 0, left: 0, right: 0,
@@ -603,6 +698,66 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     );
   }
 
+  Widget _buildErrorBanner(String error) {
+    // Shorten long error messages
+    String shortError = error;
+    if (shortError.length > 80) {
+      shortError = '${shortError.substring(0, 77)}...';
+    }
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+      builder: (_, value, child) => Transform.translate(
+        offset: Offset(0, -20 * (1 - value)),
+        child: Opacity(opacity: value, child: child),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.accentRed.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.accentRed.withValues(alpha: 0.4),
+              blurRadius: 20, spreadRadius: 2),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36, height: 36,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.error_outline,
+                  color: Colors.white, size: 22),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Errore scansione',
+                      style: TextStyle(color: Colors.white,
+                          fontSize: 14, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 2),
+                  Text(shortError,
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontSize: 11),
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatusPill() {
     String text;
     Color color;
@@ -623,6 +778,10 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       case _ScanStatus.found:
         text = '✅ Carta trovata!';
         color = AppColors.accentGreen;
+        break;
+      case _ScanStatus.scanError:
+        text = '⚠️ Errore — riprovo...';
+        color = AppColors.accentRed;
         break;
       case _ScanStatus.error:
         text = 'Errore';
@@ -865,7 +1024,9 @@ class _CardScanOverlay extends StatelessWidget {
         ? AppColors.accentGreen
         : status == _ScanStatus.processing
             ? AppColors.accentTeal
-            : AppColors.accentBlue;
+            : status == _ScanStatus.scanError
+                ? AppColors.accentRed
+                : AppColors.accentBlue;
     return [
       Positioned(top: top - 2, left: left - 2,
           child: _corner(color, tl: true)),
