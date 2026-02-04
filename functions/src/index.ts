@@ -636,29 +636,27 @@ export const scanCard = onRequest(
         messages: [
           {
             role: "system",
-            content: "You are a trading card scanner. You identify collector numbers and card names from card images. There may be ONE or MULTIPLE cards in the image. Cards can be in ANY language. Always reply in the exact format specified.",
+            content: "You are a trading card scanner. You identify collector numbers and card names from card images. Cards can be in ANY language (English, Chinese, Japanese, Korean, etc). Always reply in the exact format specified.",
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Identify ALL trading cards visible in this image. For each card find:
+                text: `Identify this trading card. Find:
 1. The collector number (usually small text at the bottom, like "001/165", "SV049/SV100", "TG01", or just "042")
 2. The card name (the main title of the card, in whatever language it's printed)
 
-Reply with ONE card per line in EXACTLY this format:
+Reply in EXACTLY this format (one line per card if multiple visible):
 COLLECTOR_NUMBER|CARD_NAME
 
-Examples (single card):
+Examples:
 001/165|Pikachu
-
-Examples (multiple cards):
-001/165|Pikachu
-042/165|Charizard
 SV049/SV100|リザードンex
+042/165|喷火龙
+TG01/TG30|Charizard
 
-If you see NO trading cards or cannot find any collector numbers, reply exactly: NONE`,
+If you see NO trading card or cannot find a collector number, reply exactly: NONE`,
               },
               {
                 type: "image_url",
