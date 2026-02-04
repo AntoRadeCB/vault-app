@@ -99,7 +99,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 
   void _startPeriodicScan() {
     _scanTimer?.cancel();
-    _scanTimer = Timer.periodic(const Duration(milliseconds: 3000), (_) {
+    _scanTimer = Timer.periodic(const Duration(milliseconds: 5000), (_) {
       _performOcrScan();
     });
     _performOcrScan();
@@ -609,7 +609,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 
     switch (_status) {
       case _ScanStatus.init:
-        text = 'Caricamento OCR...';
+        text = 'Avvio fotocamera...';
         color = AppColors.textMuted;
         break;
       case _ScanStatus.scanning:
@@ -617,7 +617,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
         color = AppColors.accentTeal;
         break;
       case _ScanStatus.processing:
-        text = '⏳ Analisi...';
+        text = '🤖 AI sta analizzando...';
         color = AppColors.accentTeal;
         break;
       case _ScanStatus.found:

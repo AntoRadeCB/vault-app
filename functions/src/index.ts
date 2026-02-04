@@ -31,6 +31,7 @@ import { mapMilestoneToAppStatus } from "./services/tracking.service";
 const SHIP24_API_KEY = defineSecret("SHIP24_API_KEY");
 const SHIP24_WEBHOOK_SECRET = defineSecret("SHIP24_WEBHOOK_SECRET");
 const CARDTRADER_API_TOKEN = defineSecret("CARDTRADER_API_TOKEN");
+const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
 
 // ── Express App ───────────────────────────────────
 const app = express();
@@ -599,6 +600,88 @@ export const updateRiftboundPricesHttp = onRequest(
       res.status(200).json({ success: true, updatedCount });
     } catch (error: any) {
       console.error("updateRiftboundPricesHttp error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════
+//  scanCard — AI Vision card recognition via OpenAI
+// ═══════════════════════════════════════════════════════
+import OpenAI from "openai";
+
+export const scanCard = onRequest(
+  { region: "europe-west1", secrets: [OPENAI_API_KEY], timeoutSeconds: 30, memory: "256MiB" },
+  async (req, res) => {
+    setCors(res);
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    if (req.method !== "POST") { res.status(405).json({ error: "POST only" }); return; }
+
+    const { image } = req.body; // base64 image data (with or without data: prefix)
+    if (!image || typeof image !== "string") {
+      res.status(400).json({ error: "Missing 'image' (base64)" });
+      return;
+    }
+
+    try {
+      const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
+
+      // Ensure proper data URL format
+      const imageUrl = image.startsWith("data:")
+        ? image
+        : `data:image/jpeg;base64,${image}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 100,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Look at this trading card image. Find the collector number (usually at the bottom of the card, format like "001/165", "SV049/SV100", "TG01/TG30", or just a number like "001").
+
+Reply with ONLY the collector number, nothing else. If you can also read the card name, reply in this format:
+NUMBER|CARD NAME
+
+Examples:
+001/165|Pikachu
+SV049|Charizard ex
+042
+
+If you cannot find a collector number, reply: NONE`,
+              },
+              {
+                type: "image_url",
+                image_url: { url: imageUrl, detail: "low" },
+              },
+            ],
+          },
+        ],
+      });
+
+      const answer = response.choices[0]?.message?.content?.trim() ?? "NONE";
+
+      if (answer === "NONE") {
+        res.status(200).json({ found: false });
+        return;
+      }
+
+      // Parse response: "NUMBER|NAME" or just "NUMBER"
+      const parts = answer.split("|");
+      const collectorNumber = parts[0].replace(/[/\\].*$/, "").trim(); // take part before /
+      const fullNumber = parts[0].trim(); // keep the full "001/165" format
+      const cardName = parts.length > 1 ? parts[1].trim() : null;
+
+      res.status(200).json({
+        found: true,
+        collectorNumber: fullNumber,
+        numberOnly: collectorNumber,
+        cardName,
+      });
+    } catch (error: any) {
+      console.error("scanCard error:", error.message);
       res.status(500).json({ error: error.message });
     }
   }
