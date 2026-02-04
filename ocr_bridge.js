@@ -2,6 +2,10 @@
 
 const cameraState = {};
 
+// Callback for async scan results (set from Dart side)
+let _onScanResult = null;
+let _onScanError = null;
+
 async function startOcrCamera(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return JSON.stringify({ error: 'Container not found' });
@@ -39,10 +43,10 @@ async function startOcrCamera(containerId) {
 }
 
 /**
- * Capture current frame, crop to card area, convert to JPEG base64,
- * and send to Cloud Function for AI Vision recognition.
+ * Capture current frame and return base64 WITHOUT calling API.
+ * This allows Dart side to fire API calls asynchronously.
  */
-async function captureAndRecognize(containerId) {
+function captureFrame(containerId) {
   const state = cameraState[containerId];
   if (!state) return JSON.stringify({ error: 'Camera not started' });
 
@@ -50,7 +54,7 @@ async function captureAndRecognize(containerId) {
   const canvas = state.canvas;
 
   if (video.videoWidth === 0 || video.videoHeight === 0) {
-    return JSON.stringify({ error: 'Video not ready', text: '', confidence: 0 });
+    return JSON.stringify({ error: 'Video not ready' });
   }
 
   const vw = video.videoWidth;
@@ -73,9 +77,17 @@ async function captureAndRecognize(containerId) {
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, cardX, cardY, cardW, cardH, 0, 0, dw, dh);
 
-  const base64 = canvas.toDataURL('image/jpeg', 0.85);
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
 
-  // Send to Cloud Function
+/**
+ * Legacy: Capture current frame + call API (synchronous flow).
+ * Still works but the Dart side now uses captureFrame + sendToApi separately.
+ */
+async function captureAndRecognize(containerId) {
+  const base64 = captureFrame(containerId);
+  if (base64.startsWith('{')) return base64; // error JSON
+
   try {
     const resp = await fetch(
       'https://europe-west1-inventorymanager-dev-20262.cloudfunctions.net/scanCard',
@@ -85,17 +97,33 @@ async function captureAndRecognize(containerId) {
         body: JSON.stringify({ image: base64 })
       }
     );
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      return JSON.stringify({ error: `API ${resp.status}: ${errText}`, text: '', confidence: 0 });
+    }
+
     const data = await resp.json();
 
-    if (data.found) {
-      // Return in format the Dart side expects
+    if (data.found && data.cards && data.cards.length > 0) {
+      // Multi-card response
+      const lines = data.cards.map(c => c.collectorNumber + (c.cardName ? '|' + c.cardName : '')).join('\n');
+      return JSON.stringify({
+        text: lines,
+        confidence: 95,
+        aiResult: data,
+        cards: data.cards
+      });
+    } else if (data.found) {
+      // Legacy single-card response
       return JSON.stringify({
         text: data.collectorNumber + (data.cardName ? '|' + data.cardName : ''),
         confidence: 95,
-        aiResult: data
+        aiResult: data,
+        cards: [data]
       });
     } else {
-      return JSON.stringify({ text: '', confidence: 0 });
+      return JSON.stringify({ text: '', confidence: 0, cards: [] });
     }
   } catch (e) {
     return JSON.stringify({ error: e.message || 'API call failed', text: '', confidence: 0 });
@@ -127,6 +155,7 @@ function vibrateDevice(ms) {
 window.initOcrWorker = initOcrWorker;
 window.startOcrCamera = startOcrCamera;
 window.captureAndRecognize = captureAndRecognize;
+window.captureFrame = captureFrame;
 window.stopOcrCamera = stopOcrCamera;
 window.createOcrContainer = createOcrContainer;
 window.vibrateDevice = vibrateDevice;
