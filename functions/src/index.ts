@@ -670,8 +670,13 @@ If you see NO trading card, reply exactly: NONE`,
         ],
       });
 
+      console.log("scanCard FULL response:", JSON.stringify({
+        message: response.choices[0]?.message,
+        finish_reason: response.choices[0]?.finish_reason,
+        usage: response.usage,
+        model: response.model,
+      }));
       const rawAnswer = response.choices[0]?.message?.content;
-      console.log("scanCard raw response:", JSON.stringify(response.choices[0]?.message));
       const answer = (rawAnswer ?? "NONE").trim();
 
       if (!answer || answer === "NONE" || answer.toUpperCase() === "NONE") {
