@@ -8,6 +8,7 @@ import '../models/product.dart';
 import '../models/card_pull.dart';
 import '../models/card_blueprint.dart';
 import '../services/firestore_service.dart';
+import '../services/card_catalog_service.dart';
 
 /// Screen for opening a sealed product (pack/box) and logging pulled cards.
 class OpenProductScreen extends StatefulWidget {
@@ -28,50 +29,139 @@ class OpenProductScreen extends StatefulWidget {
 
 class _OpenProductScreenState extends State<OpenProductScreen> {
   final FirestoreService _fs = FirestoreService();
+  final CardCatalogService _catalogService = CardCatalogService();
   final _pullNameController = TextEditingController();
   final _pullValueController = TextEditingController();
+  final _checklistSearchController = TextEditingController();
 
+  // Local UI state — NOT tied to widget.product.isOpened
   bool _isOpened = false;
   bool _opening = false;
   bool _finishing = false;
   final List<_PullEntry> _pulls = [];
   int _quantityToOpen = 1;
 
+  // Expansion checklist state
+  List<CardBlueprint> _expansionCards = [];
+  final Set<String> _checkedCardIds = {};
+  bool _loadingExpansion = false;
+  String _checklistSearch = '';
+  bool _showChecklist = true;
+
   @override
   void initState() {
     super.initState();
-    _isOpened = widget.product.isOpened;
+    // _isOpened starts as false — user must click "Apri!" to open
   }
 
   @override
   void dispose() {
     _pullNameController.dispose();
     _pullValueController.dispose();
+    _checklistSearchController.dispose();
     super.dispose();
   }
 
   int get _maxQuantity => widget.product.quantity.toInt().clamp(1, 999);
 
-  Future<void> _markOpened() async {
+  /// When user clicks "Apri!", just flip local UI state and load expansion data
+  void _openProduct() {
     if (_opening) return;
-    setState(() => _opening = true);
+    setState(() {
+      _opening = true;
+      _isOpened = true;
+      _opening = false;
+    });
+    _loadExpansionCards();
+  }
+
+  /// Load expansion cards for the checklist
+  Future<void> _loadExpansionCards() async {
+    setState(() => _loadingExpansion = true);
     try {
-      if (widget.product.id != null && !FirestoreService.demoMode) {
-        await _fs.markProductOpened(widget.product.id!);
+      int? expansionId;
+
+      // Strategy 1: Look up the product's cardBlueprintId to get expansionId
+      if (widget.product.cardBlueprintId != null) {
+        final blueprint =
+            await _catalogService.getCard(widget.product.cardBlueprintId!);
+        if (blueprint != null && blueprint.expansionId != null) {
+          expansionId = blueprint.expansionId;
+        }
       }
-      if (mounted) setState(() => _isOpened = true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Errore: $e'),
-            backgroundColor: AppColors.accentRed,
-          ),
-        );
+
+      // Strategy 2: Match by expansion name in the catalog
+      if (expansionId == null && widget.product.cardExpansion != null) {
+        final expansions = await _catalogService.getExpansions();
+        final expName = widget.product.cardExpansion!.toLowerCase();
+        for (final exp in expansions) {
+          final name = (exp['name'] as String? ?? '').toLowerCase();
+          if (name == expName || name.contains(expName) || expName.contains(name)) {
+            expansionId = exp['id'] as int?;
+            break;
+          }
+        }
       }
+
+      // Strategy 3: Search all cards for matching expansion name
+      if (expansionId == null && widget.product.cardExpansion != null) {
+        final allCards = await _catalogService.getAllCards();
+        final expName = widget.product.cardExpansion!.toLowerCase();
+        for (final card in allCards) {
+          if (card.expansionName != null &&
+              card.expansionName!.toLowerCase() == expName &&
+              card.expansionId != null) {
+            expansionId = card.expansionId;
+            break;
+          }
+        }
+      }
+
+      if (expansionId != null) {
+        final cards = await _catalogService.getCardsByExpansion(expansionId);
+        // Filter to only single cards (not packs/boxes)
+        final singleCards =
+            cards.where((c) => c.kind == null || c.kind == 'singleCard').toList();
+
+        // Sort by collector number
+        singleCards.sort((a, b) {
+          final aNum = int.tryParse(a.collectorNumber ?? '') ?? 9999;
+          final bNum = int.tryParse(b.collectorNumber ?? '') ?? 9999;
+          return aNum.compareTo(bNum);
+        });
+
+        if (mounted) {
+          setState(() => _expansionCards = singleCards);
+        }
+      }
+    } catch (_) {
+      // Silently fail — checklist just won't show
     } finally {
-      if (mounted) setState(() => _opening = false);
+      if (mounted) setState(() => _loadingExpansion = false);
     }
+  }
+
+  void _toggleChecklistCard(CardBlueprint card) {
+    setState(() {
+      if (_checkedCardIds.contains(card.id)) {
+        // Uncheck — remove from pulls
+        _checkedCardIds.remove(card.id);
+        _pulls.removeWhere((p) => p.cardBlueprintId == card.id);
+      } else {
+        // Check — add to pulls
+        _checkedCardIds.add(card.id);
+        _pulls.add(_PullEntry(
+          cardName: card.name,
+          cardBlueprintId: card.id,
+          cardImageUrl: card.imageUrl,
+          cardExpansion: card.expansionName,
+          rarity: card.rarity,
+          estimatedValue: card.marketPrice != null
+              ? card.marketPrice!.cents / 100
+              : null,
+        ));
+      }
+    });
   }
 
   void _addPull({CardBlueprint? card}) {
@@ -93,13 +183,22 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
         rarity: card?.rarity,
         estimatedValue: value,
       ));
+      if (card != null) {
+        _checkedCardIds.add(card.id);
+      }
       _pullNameController.clear();
       _pullValueController.clear();
     });
   }
 
   void _removePull(int index) {
-    setState(() => _pulls.removeAt(index));
+    setState(() {
+      final pull = _pulls[index];
+      if (pull.cardBlueprintId != null) {
+        _checkedCardIds.remove(pull.cardBlueprintId);
+      }
+      _pulls.removeAt(index);
+    });
   }
 
   Future<void> _finish() async {
@@ -176,6 +275,16 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
     return _pulls.fold(0.0, (sum, p) => sum + (p.estimatedValue ?? 0));
   }
 
+  List<CardBlueprint> get _filteredExpansionCards {
+    if (_checklistSearch.isEmpty) return _expansionCards;
+    final q = _checklistSearch.toLowerCase();
+    return _expansionCards.where((c) {
+      return c.name.toLowerCase().contains(q) ||
+          (c.collectorNumber ?? '').contains(q) ||
+          (c.rarity ?? '').toLowerCase().contains(q);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -244,7 +353,7 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                 baseGradient: const LinearGradient(
                   colors: [Color(0xFFFF6B35), Color(0xFFE53935)],
                 ),
-                onTap: _opening ? null : _markOpened,
+                onTap: _opening ? null : _openProduct,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 18),
@@ -334,7 +443,45 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
               ),
             const SizedBox(height: 16),
 
-            // Quick add pull
+            // Expansion checklist section
+            if (_loadingExpansion)
+              StaggeredFadeSlide(
+                index: 2,
+                child: GlassCard(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.accentPurple.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Caricamento espansione...',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            if (_expansionCards.isNotEmpty) ...[
+              StaggeredFadeSlide(
+                index: 2,
+                child: _buildExpansionChecklist(),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Quick add pull (manual)
             StaggeredFadeSlide(
               index: 3,
               child: GlassCard(
@@ -634,15 +781,28 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _isOpened ? 'Aperto 📦' : 'Sigillato 🔒',
-                      style: TextStyle(
-                        color: accentColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                    if (widget.product.cardExpansion != null) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentPurple.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            widget.product.cardExpansion!,
+                            style: const TextStyle(
+                              color: AppColors.accentPurple,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
                 if (widget.product.quantity > 1) ...[
@@ -790,6 +950,347 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildExpansionChecklist() {
+    final filteredCards = _filteredExpansionCards;
+    final checkedCount = _checkedCardIds.length;
+    final totalCount = _expansionCards.length;
+
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      glowColor: AppColors.accentPurple,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with toggle
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppColors.accentPurple.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.checklist,
+                    color: AppColors.accentPurple, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '📋 Checklist Espansione',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '$checkedCount/$totalCount trovate',
+                      style: TextStyle(
+                        color: checkedCount > 0
+                            ? AppColors.accentGreen
+                            : AppColors.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ScaleOnPress(
+                onTap: () => setState(() => _showChecklist = !_showChecklist),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _showChecklist
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        color: AppColors.textMuted,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _showChecklist ? 'Nascondi' : 'Mostra',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Progress bar
+          if (_showChecklist) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: totalCount > 0 ? checkedCount / totalCount : 0,
+                minHeight: 4,
+                backgroundColor: Colors.white.withValues(alpha: 0.06),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppColors.accentPurple),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Search within checklist
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
+              ),
+              child: TextField(
+                controller: _checklistSearchController,
+                onChanged: (v) => setState(() => _checklistSearch = v),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Cerca nell\'espansione...',
+                  hintStyle: TextStyle(
+                      color: AppColors.textMuted.withValues(alpha: 0.5),
+                      fontSize: 13),
+                  prefixIcon: const Icon(Icons.search,
+                      color: AppColors.textMuted, size: 18),
+                  suffixIcon: _checklistSearch.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear,
+                              color: AppColors.textMuted, size: 16),
+                          onPressed: () {
+                            _checklistSearchController.clear();
+                            setState(() => _checklistSearch = '');
+                          },
+                        )
+                      : null,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: InputBorder.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Card grid
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 400),
+              child: filteredCards.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          _checklistSearch.isNotEmpty
+                              ? 'Nessuna carta trovata'
+                              : 'Nessuna carta disponibile',
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    )
+                  : GridView.builder(
+                      shrinkWrap: true,
+                      physics: const BouncingScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 0.55,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                      ),
+                      itemCount: filteredCards.length,
+                      itemBuilder: (context, index) {
+                        final card = filteredCards[index];
+                        final isChecked = _checkedCardIds.contains(card.id);
+                        return _buildChecklistCard(card, isChecked);
+                      },
+                    ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChecklistCard(CardBlueprint card, bool isChecked) {
+    return ScaleOnPress(
+      onTap: () => _toggleChecklistCard(card),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isChecked
+                ? AppColors.accentGreen.withValues(alpha: 0.6)
+                : Colors.white.withValues(alpha: 0.08),
+            width: isChecked ? 2 : 1,
+          ),
+          boxShadow: isChecked
+              ? [
+                  BoxShadow(
+                    color: AppColors.accentGreen.withValues(alpha: 0.15),
+                    blurRadius: 8,
+                  ),
+                ]
+              : null,
+        ),
+        child: Stack(
+          children: [
+            // Card content
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Card image
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(9)),
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: isChecked ? 0.5 : 1.0,
+                      child: card.imageUrl != null
+                          ? Image.network(
+                              card.imageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: card.rarityColor.withValues(alpha: 0.08),
+                                child: Center(
+                                  child: Icon(Icons.style,
+                                      color: card.rarityColor
+                                          .withValues(alpha: 0.3),
+                                      size: 24),
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: card.rarityColor.withValues(alpha: 0.08),
+                              child: Center(
+                                child: Icon(Icons.style,
+                                    color: card.rarityColor
+                                        .withValues(alpha: 0.3),
+                                    size: 24),
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+                // Card info
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: isChecked
+                        ? AppColors.accentGreen.withValues(alpha: 0.08)
+                        : AppColors.surface,
+                    borderRadius: const BorderRadius.vertical(
+                        bottom: Radius.circular(9)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        card.collectorNumber != null
+                            ? '#${card.collectorNumber}'
+                            : '',
+                        style: TextStyle(
+                          color: isChecked
+                              ? AppColors.accentGreen
+                              : AppColors.textMuted,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        card.name,
+                        style: TextStyle(
+                          color: isChecked ? AppColors.accentGreen : Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          height: 1.2,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            // Checkbox overlay
+            Positioned(
+              top: 4,
+              right: 4,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: isChecked
+                      ? AppColors.accentGreen
+                      : Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: isChecked
+                        ? AppColors.accentGreen
+                        : Colors.white.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: isChecked
+                    ? const Icon(Icons.check,
+                        color: Colors.white, size: 14)
+                    : null,
+              ),
+            ),
+
+            // Price badge
+            if (card.marketPrice != null)
+              Positioned(
+                bottom: 42,
+                left: 4,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    card.formattedPrice,
+                    style: const TextStyle(
+                      color: AppColors.accentGreen,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

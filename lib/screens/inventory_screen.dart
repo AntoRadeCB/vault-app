@@ -443,10 +443,8 @@ class _InventoryScreenState extends State<InventoryScreen>
         products.fold<double>(0, (sum, p) => sum + (p.price * p.quantity));
     final singleCards =
         products.where((p) => p.kind == ProductKind.singleCard).length;
-    final sealedCount =
-        products.where((p) => p.kind != ProductKind.singleCard && !p.isOpened).length;
-    final openedCount =
-        products.where((p) => p.kind != ProductKind.singleCard && p.isOpened).length;
+    final sealedProducts =
+        products.where((p) => p.kind != ProductKind.singleCard).length;
     final inStock =
         products.where((p) => p.status == ProductStatus.inInventory).length;
 
@@ -468,18 +466,12 @@ class _InventoryScreenState extends State<InventoryScreen>
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 2,
-          child: _buildSummaryCard('Sigillati 🔒', '$sealedCount',
-              Icons.lock, AppColors.accentOrange),
+          child: _buildSummaryCard('Prodotti Sigillati', '$sealedProducts',
+              Icons.inventory_2_outlined, AppColors.accentOrange),
         ),
         const SizedBox(height: 12),
         StaggeredFadeSlide(
           index: 3,
-          child: _buildSummaryCard('Aperti 📦', '$openedCount',
-              Icons.inventory_2, AppColors.accentGreen),
-        ),
-        const SizedBox(height: 12),
-        StaggeredFadeSlide(
-          index: 4,
           child: _buildSummaryCard(l.inInventory, '$inStock',
               Icons.inventory_2, AppColors.accentTeal),
         ),
@@ -537,9 +529,7 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   Widget _buildSealedProductCard(Product product) {
-    final isSealedProduct = !product.isOpened;
-    final badgeColor = isSealedProduct ? AppColors.accentOrange : AppColors.accentGreen;
-    final badgeText = isSealedProduct ? 'Sigillato 🔒' : 'Aperto 📦';
+    final badgeColor = AppColors.accentOrange;
     final productImage = product.displayImageUrl;
     final hasImage = productImage.isNotEmpty;
 
@@ -611,28 +601,11 @@ class _InventoryScreenState extends State<InventoryScreen>
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        badgeText,
+                        product.kindLabel,
                         style: TextStyle(
                           color: badgeColor,
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        product.kindLabel,
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -661,7 +634,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                 ),
               ),
               const SizedBox(height: 6),
-              if (product.canBeOpened)
+              if (product.canBeOpened && product.quantity > 0)
                 ScaleOnPress(
                   onTap: () => widget.onOpenProduct?.call(product),
                   child: Container(

@@ -81,11 +81,7 @@ class Product {
       kind != ProductKind.singleCard && !isOpened;
 
   bool get canBeOpened =>
-      (kind == ProductKind.boosterPack ||
-          kind == ProductKind.boosterBox ||
-          kind == ProductKind.display ||
-          kind == ProductKind.bundle) &&
-      !isOpened;
+      kind != ProductKind.singleCard;
 
   String get formattedPrice {
     if (price >= 1000) {
