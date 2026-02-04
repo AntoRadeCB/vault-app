@@ -625,7 +625,7 @@ export const scanCard = onRequest(
 
     try {
       const imageSize = image.length;
-      console.log(`scanCard: received image, size=${imageSize} chars, starts with: ${image.substring(0, 30)}`);
+      console.log(`scanCard v2: received image, size=${imageSize} chars, starts with: ${image.substring(0, 30)}`);
 
       const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
 
@@ -633,16 +633,16 @@ export const scanCard = onRequest(
         ? image
         : `data:image/jpeg;base64,${image}`;
 
-      const response = await openai.responses.create({
+      const response = await openai.chat.completions.create({
         model: "gpt-5.2",
-        instructions: "You are a trading card identifier. You recognize cards by their artwork, name, and visual features. Reply in the EXACT format specified.",
-        input: [
+        max_completion_tokens: 4096,
+        messages: [
           {
             role: "user",
             content: [
               {
-                type: "input_text",
-                text: `Identify this trading card. Tell me:
+                type: "text",
+                text: `You are a trading card identifier. Identify this trading card. Tell me:
 1. The card name IN ENGLISH (translate if needed)
 2. Any extra info visible: set name, rarity, card type (e.g. "ex", "V", "VMAX", "GX")
 
@@ -658,21 +658,21 @@ Mewtwo VMAX|Pokemon GO
 If you see NO trading card, reply exactly: NONE`,
               },
               {
-                type: "input_image",
-                image_url: imageUrl,
-                detail: "high",
+                type: "image_url",
+                image_url: { url: imageUrl, detail: "high" },
               },
             ],
           },
         ],
       });
 
-      console.log("scanCard FULL response:", JSON.stringify({
-        output: response.output,
-        model: response.model,
+      console.log("scanCard v2 response:", JSON.stringify({
+        content: response.choices[0]?.message?.content,
+        finish: response.choices[0]?.finish_reason,
         usage: response.usage,
+        model: response.model,
       }));
-      const rawAnswer = response.output_text;
+      const rawAnswer = response.choices[0]?.message?.content;
       const answer = (rawAnswer ?? "NONE").trim();
 
       if (!answer || answer === "NONE" || answer.toUpperCase() === "NONE") {
