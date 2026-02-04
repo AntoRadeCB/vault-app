@@ -617,7 +617,7 @@ export const scanCard = onRequest(
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
     if (req.method !== "POST") { res.status(405).json({ error: "POST only" }); return; }
 
-    const { image, expansion, cardNames } = req.body;
+    const { image, expansion, cards } = req.body;
     if (!image || typeof image !== "string") {
       res.status(400).json({ error: "Missing 'image' (base64)" });
       return;
@@ -625,8 +625,8 @@ export const scanCard = onRequest(
 
     try {
       const imageSize = image.length;
-      const hasContext = !!(expansion || cardNames);
-      console.log(`scanCard v3: image=${imageSize} chars, context=${hasContext}, cardList=${cardNames?.length || 0}`);
+      const hasContext = !!(expansion || cards);
+      console.log(`scanCard v4: image=${imageSize} chars, expansion=${expansion || 'none'}, cards=${cards?.length || 0}`);
 
       const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
 
@@ -641,16 +641,18 @@ export const scanCard = onRequest(
         prompt += `\nThis card is from the expansion/set: "${expansion}".`;
       }
 
-      if (cardNames && Array.isArray(cardNames) && cardNames.length > 0) {
-        prompt += `\n\nThe card MUST be one of these (pick the closest match):\n${cardNames.join('\n')}`;
-        prompt += `\n\nLook at the artwork, colors, creature/character depicted, and any visible text to match the correct card from this list.`;
+      if (cards && Array.isArray(cards) && cards.length > 0) {
+        // cards format: ["025|Pikachu", "026|Raichu", ...]
+        prompt += `\n\nThe card MUST be one from this list (format: COLLECTOR_NUMBER|NAME):\n${cards.join('\n')}`;
+        prompt += `\n\nIMPORTANT: Many cards share the same name but are DIFFERENT variants. Use the COLLECTOR NUMBER printed on the card (usually bottom-left or bottom-right, format like "025/165") to identify the EXACT card.`;
+        prompt += `\nAlso look at the artwork, colors, creature/character, and card type (ex, V, VMAX, GX, etc.) to distinguish variants.`;
       }
 
-      prompt += `\n\nReply in EXACTLY this format:
-CARD_NAME_EN|EXTRA_INFO
+      prompt += `\n\nReply in EXACTLY this format (no extra text):
+COLLECTOR_NUMBER|CARD_NAME_EN
 
-Where CARD_NAME_EN is the English card name (must match one from the list if provided).
-EXTRA_INFO is any visible detail: collector number, rarity, card type (ex, V, VMAX, GX, etc).
+Where COLLECTOR_NUMBER is the number from the card (e.g. "025" or "025/165").
+CARD_NAME_EN is the English card name matching one from the list.
 
 If you cannot identify the card or see NO trading card, reply exactly: NONE`;
 
@@ -674,7 +676,7 @@ If you cannot identify the card or see NO trading card, reply exactly: NONE`;
         ],
       });
 
-      console.log("scanCard v3 response:", JSON.stringify({
+      console.log("scanCard v4 response:", JSON.stringify({
         content: response.choices[0]?.message?.content,
         finish: response.choices[0]?.finish_reason,
         usage: response.usage,
@@ -688,28 +690,33 @@ If you cannot identify the card or see NO trading card, reply exactly: NONE`;
         return;
       }
 
-      // Parse response: CARD_NAME|EXTRA_INFO
+      // Parse response: COLLECTOR_NUMBER|CARD_NAME or CARD_NAME|EXTRA_INFO
       const lines = answer.split("\n").map((l: string) => l.trim()).filter((l: string) => l && l !== "NONE");
-      const cards: Array<{ cardName: string; extraInfo: string | null }> = [];
+      const parsedCards: Array<{ cardName: string; extraInfo: string | null }> = [];
 
       for (const line of lines) {
         const parts = line.split("|");
         const cardName = parts[0].trim();
         if (!cardName || cardName === "NONE") continue;
         const extraInfo = parts.length > 1 ? parts.slice(1).join("|").trim() : null;
-        cards.push({ cardName, extraInfo });
+        parsedCards.push({ cardName, extraInfo });
       }
 
-      if (cards.length === 0) {
+      if (parsedCards.length === 0) {
         res.status(200).json({ found: false, cards: [] });
         return;
       }
 
+      // Return full response with collector number info
+      // cardName field = first part (could be collector num or name)
+      // extraInfo = second part (name or extra info)
+      const firstCard = parsedCards[0];
       res.status(200).json({
         found: true,
-        cardName: cards[0].cardName,
-        extraInfo: cards[0].extraInfo,
-        cards,
+        cardName: firstCard.extraInfo || firstCard.cardName, // name (second part if available)
+        extraInfo: firstCard.extraInfo ? firstCard.cardName : null, // collector num (first part)
+        fullResponse: answer,
+        cards: parsedCards,
       });
     } catch (error: any) {
       console.error("scanCard error:", error.message);

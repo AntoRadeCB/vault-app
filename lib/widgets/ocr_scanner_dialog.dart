@@ -118,9 +118,15 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       // Build context from expansion cards to help AI identify
       String? contextJson;
       if (widget.expansionCards.isNotEmpty) {
-        final names = widget.expansionCards.map((c) => c.name).toSet().toList();
+        // Pass name + collector number so AI can distinguish variants
+        final cardList = widget.expansionCards.map((c) {
+          final num = c.collectorNumber ?? '?';
+          return '$num|${c.name}';
+        }).toList();
+        final expName = widget.expansionCards.first.expansionName;
         contextJson = jsonEncode({
-          'cardNames': names,
+          if (expName != null) 'expansion': expName,
+          'cards': cardList,
         });
       }
       final result = await _ocrService.captureAndRecognize(_containerId, contextJson: contextJson);
@@ -140,10 +146,13 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       final cardName = result['cardName'] as String? ??
           result['text'] as String? ?? '';
       if (cardName.isNotEmpty && cardName != 'NONE') {
-        _processFoundCardByName(cardName);
+        final matched = _processFoundCardByName(cardName);
+        if (!matched && widget.expansionCards.isNotEmpty) {
+          _showErrorBanner('⚠️ "$cardName" non trovata nell\'espansione');
+        }
       } else {
-        // No card found — show brief feedback then ready again
-        setState(() => _status = _ScanStatus.scanning);
+        // No card found
+        _showErrorBanner('📷 Carta non riconosciuta, riprova');
       }
     } catch (e) {
       if (mounted) {
@@ -155,10 +164,11 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     }
   }
 
-  void _processFoundCardByName(String aiCardName) {
+  /// Returns true if matched a card in the expansion list.
+  bool _processFoundCardByName(String aiCardName) {
     // Deduplicate: skip if just scanned this card
     final dedupeKey = aiCardName.toLowerCase().trim();
-    if (_recentlyFound.contains(dedupeKey)) return;
+    if (_recentlyFound.contains(dedupeKey)) return true; // already found, not an error
     _recentlyFound.add(dedupeKey);
 
     // Clear from dedup set after 10 seconds
@@ -166,25 +176,54 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       _recentlyFound.remove(dedupeKey);
     });
 
+    // AI response may be "COLLECTOR_NUM|CARD_NAME" or just "CARD_NAME"
+    String? aiCollectorNum;
+    String aiName = aiCardName.trim();
+    
+    // Parse collector number from AI response if present (format: "025/165|Pikachu")
+    final pipeIdx = aiName.indexOf('|');
+    if (pipeIdx > 0) {
+      final firstPart = aiName.substring(0, pipeIdx).trim();
+      final secondPart = aiName.substring(pipeIdx + 1).trim();
+      // If first part looks like a number, it's the collector number
+      if (RegExp(r'^\d').hasMatch(firstPart)) {
+        aiCollectorNum = firstPart.replaceAll(RegExp(r'/\d+$'), '').trim(); // "025/165" → "025"
+        aiName = secondPart;
+      }
+    }
+
     // Match by name in the expansion cards
     CardBlueprint? matched;
-    final aiName = aiCardName.toLowerCase().trim();
+    final aiNameLower = aiName.toLowerCase().trim();
 
     if (widget.expansionCards.isNotEmpty) {
+      // 0. Match by collector number first (most precise for variants)
+      if (aiCollectorNum != null) {
+        matched = widget.expansionCards.where((c) {
+          if (c.collectorNumber == null) return false;
+          final cn = c.collectorNumber!;
+          final aiNum = int.tryParse(aiCollectorNum!);
+          final cardNum = int.tryParse(cn);
+          return cn == aiCollectorNum || (aiNum != null && cardNum != null && aiNum == cardNum);
+        }).firstOrNull;
+      }
+
       // 1. Exact name match
-      matched = widget.expansionCards.where((c) =>
-          c.name.toLowerCase() == aiName).firstOrNull;
+      if (matched == null) {
+        matched = widget.expansionCards.where((c) =>
+            c.name.toLowerCase() == aiNameLower).firstOrNull;
+      }
 
       // 2. Name contains (AI might add "ex", "V", etc.)
       if (matched == null) {
         matched = widget.expansionCards.where((c) =>
-            c.name.toLowerCase().contains(aiName) ||
-            aiName.contains(c.name.toLowerCase())).firstOrNull;
+            c.name.toLowerCase().contains(aiNameLower) ||
+            aiNameLower.contains(c.name.toLowerCase())).firstOrNull;
       }
 
       // 3. Fuzzy: split words and check overlap
       if (matched == null) {
-        final aiWords = aiName.split(RegExp(r'[\s\-_]+'))
+        final aiWords = aiNameLower.split(RegExp(r'[\s\-_]+'))
             .where((w) => w.length > 1).toSet();
         int bestScore = 0;
         for (final c in widget.expansionCards) {
@@ -198,6 +237,9 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
           }
         }
       }
+
+      // No match found in expansion
+      if (matched == null) return false;
     }
 
     _ocrService.vibrate();
@@ -226,6 +268,8 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
         });
       }
     });
+
+    return true;
   }
 
   void _showErrorBanner(String error) {
