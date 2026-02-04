@@ -285,12 +285,13 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
   }
 
   Future<void> _openOcrScanner() async {
-    final collectorNumber = await OcrScannerDialog.scan(
+    final numbers = await OcrScannerDialog.scan(
       context,
       expansionCards: _expansionCards,
     );
-    if (collectorNumber != null && mounted) {
-      await _handleOcrResult(collectorNumber);
+    if (!mounted || numbers.isEmpty) return;
+    for (final num in numbers) {
+      await _handleOcrResult(num);
     }
   }
 

@@ -5,27 +5,28 @@ import '../theme/app_theme.dart';
 import '../services/ocr_service.dart';
 import '../models/card_blueprint.dart';
 
-/// Full-screen OCR scanner for reading collector numbers from cards.
-/// Returns the detected collector number string via Navigator.pop.
+/// Full-screen continuous OCR scanner.
+/// Scans cards one after another. Shows name + price on each hit.
+/// Returns a List<String> of all scanned collector numbers on close.
 class OcrScannerDialog extends StatefulWidget {
   final List<CardBlueprint> expansionCards;
 
   const OcrScannerDialog({super.key, this.expansionCards = const []});
 
-  /// Show the OCR scanner and return the detected collector number, or null if cancelled.
-  static Future<String?> scan(BuildContext context,
-      {List<CardBlueprint> expansionCards = const []}) {
-    return Navigator.of(context).push<String>(
+  /// Open the scanner. Returns list of collector numbers found.
+  static Future<List<String>> scan(BuildContext context,
+      {List<CardBlueprint> expansionCards = const []}) async {
+    final result = await Navigator.of(context).push<List<String>>(
       PageRouteBuilder(
         opaque: false,
         pageBuilder: (_, __, ___) =>
             OcrScannerDialog(expansionCards: expansionCards),
-        transitionsBuilder: (_, anim, __, child) {
-          return FadeTransition(opacity: anim, child: child);
-        },
+        transitionsBuilder: (_, anim, __, child) =>
+            FadeTransition(opacity: anim, child: child),
         transitionDuration: const Duration(milliseconds: 250),
       ),
     );
+    return result ?? [];
   }
 
   @override
@@ -42,10 +43,14 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 
   _ScanStatus _status = _ScanStatus.init;
   String? _errorMessage;
-  String? _foundNumber;
-  CardBlueprint? _matchedCard;
   Timer? _scanTimer;
   bool _cameraReady = false;
+
+  // Continuous mode state
+  final List<String> _foundNumbers = [];
+  final List<_FoundCard> _foundCards = [];
+  _FoundCard? _lastFound; // currently displayed card banner
+  Timer? _bannerTimer;
 
   @override
   void initState() {
@@ -67,14 +72,10 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
   }
 
   Future<void> _initializeScanner() async {
-    // Start initializing OCR worker in background
     _ocrService.initWorker();
-
-    // Small delay to let the HtmlElementView render and DOM element appear
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
 
-    // Start camera
     final result = await _ocrService.startCamera(_containerId);
     if (!mounted) return;
 
@@ -91,10 +92,8 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       _status = _ScanStatus.scanning;
     });
 
-    // Wait a bit for camera to warm up, then start periodic OCR
     await Future.delayed(const Duration(milliseconds: 1000));
     if (!mounted) return;
-
     _startPeriodicScan();
   }
 
@@ -103,24 +102,22 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     _scanTimer = Timer.periodic(const Duration(milliseconds: 2500), (_) {
       _performOcrScan();
     });
-    // Also do an immediate first scan
     _performOcrScan();
   }
 
   Future<void> _performOcrScan() async {
-    if (_status == _ScanStatus.found || _status == _ScanStatus.error) return;
-    if (_status == _ScanStatus.processing) return; // Already processing
+    if (_status == _ScanStatus.error) return;
+    if (_status == _ScanStatus.processing) return;
+    if (_status == _ScanStatus.found) return; // pause while showing result
 
     setState(() => _status = _ScanStatus.processing);
 
     try {
       final result = await _ocrService.captureAndRecognize(_containerId);
-
       if (!mounted) return;
 
       if (result.containsKey('error') &&
           result['error'] != 'Video not ready') {
-        // Non-critical error, keep scanning
         setState(() => _status = _ScanStatus.scanning);
         return;
       }
@@ -129,10 +126,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       final collectorNumber = _ocrService.extractCollectorNumber(text);
 
       if (collectorNumber != null) {
-        _scanTimer?.cancel();
-        _ocrService.vibrate();
-
-        // Try to match against expansion cards
+        // Try to match to a card in the expansion
         CardBlueprint? matched;
         if (widget.expansionCards.isNotEmpty) {
           matched = widget.expansionCards.where((c) {
@@ -146,35 +140,50 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
           }).firstOrNull;
         }
 
+        _ocrService.vibrate();
+        _foundNumbers.add(collectorNumber);
+
+        final found = _FoundCard(
+          collectorNumber: collectorNumber,
+          card: matched,
+        );
+        _foundCards.add(found);
+
         setState(() {
           _status = _ScanStatus.found;
-          _foundNumber = collectorNumber;
-          _matchedCard = matched;
+          _lastFound = found;
         });
 
-        // Auto-return after delay (longer if showing card info)
-        await Future.delayed(Duration(milliseconds: matched != null ? 1200 : 600));
-        if (mounted) {
-          Navigator.of(context).pop(_foundNumber);
-        }
+        // Show the banner for 2 seconds, then resume scanning
+        _bannerTimer?.cancel();
+        _bannerTimer = Timer(const Duration(milliseconds: 2000), () {
+          if (mounted) {
+            setState(() {
+              _status = _ScanStatus.scanning;
+              _lastFound = null;
+            });
+          }
+        });
       } else {
         setState(() => _status = _ScanStatus.scanning);
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _status = _ScanStatus.scanning);
-      }
+      if (mounted) setState(() => _status = _ScanStatus.scanning);
     }
+  }
+
+  void _close() {
+    Navigator.of(context).pop(_foundNumbers);
   }
 
   @override
   void dispose() {
     _scanTimer?.cancel();
+    _bannerTimer?.cancel();
     _ocrService.stopCamera(_containerId);
     super.dispose();
   }
 
-  /// Manual entry fallback
   void _showManualEntry() {
     final textController = TextEditingController();
     showModalBottomSheet(
@@ -195,8 +204,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
             children: [
               Center(
                 child: Container(
-                  width: 40,
-                  height: 4,
+                  width: 40, height: 4,
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(2),
@@ -204,63 +212,59 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                 ),
               ),
               const SizedBox(height: 20),
-              const Text(
-                'Inserisci Numero Carta',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              const Text('Inserisci Numero Carta',
+                  style: TextStyle(color: Colors.white, fontSize: 18,
+                      fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text(
-                'Es. 001, SV049, TG01',
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 13,
-                ),
-              ),
+              const Text('Es. 001/165, SV049, TG01',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
               const SizedBox(height: 16),
               TextField(
                 controller: textController,
                 autofocus: true,
                 textCapitalization: TextCapitalization.characters,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontFamily: 'monospace',
-                  letterSpacing: 2,
-                ),
+                style: const TextStyle(color: Colors.white, fontSize: 18,
+                    fontFamily: 'monospace', letterSpacing: 2),
                 decoration: InputDecoration(
                   hintText: 'Es. 001/165',
                   hintStyle: const TextStyle(color: AppColors.textMuted),
-                  filled: true,
-                  fillColor: AppColors.cardDark,
-                  prefixIcon: const Icon(Icons.tag,
-                      color: AppColors.accentTeal),
+                  filled: true, fillColor: AppColors.cardDark,
+                  prefixIcon: const Icon(Icons.tag, color: AppColors.accentTeal),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.06)),
-                  ),
+                        color: Colors.white.withValues(alpha: 0.06))),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.06)),
-                  ),
+                        color: Colors.white.withValues(alpha: 0.06))),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
-                        color: AppColors.accentTeal, width: 1.5),
-                  ),
+                        color: AppColors.accentTeal, width: 1.5)),
                 ),
                 onSubmitted: (value) {
                   final v = value.trim();
                   if (v.isNotEmpty) {
-                    // Try to extract just the collector number from manual input
                     final extracted = _ocrService.extractCollectorNumber(v);
+                    final num = extracted ?? v;
+                    _foundNumbers.add(num);
+
+                    CardBlueprint? matched;
+                    if (widget.expansionCards.isNotEmpty) {
+                      matched = widget.expansionCards.where((c) {
+                        if (c.collectorNumber == null) return false;
+                        if (c.collectorNumber == num) return true;
+                        final cN = int.tryParse(c.collectorNumber!);
+                        final oN = int.tryParse(num);
+                        return cN != null && oN != null && cN == oN;
+                      }).firstOrNull;
+                    }
+
+                    _foundCards.add(_FoundCard(
+                        collectorNumber: num, card: matched));
                     Navigator.pop(ctx);
-                    Navigator.of(context).pop(extracted ?? v);
+                    setState(() {});
                   }
                 },
               ),
@@ -274,17 +278,10 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'Annulla',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
+                          borderRadius: BorderRadius.circular(12)),
+                        child: const Center(child: Text('Annulla',
+                            style: TextStyle(color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600))),
                       ),
                     ),
                   ),
@@ -296,27 +293,23 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                         if (v.isNotEmpty) {
                           final extracted =
                               _ocrService.extractCollectorNumber(v);
+                          final num = extracted ?? v;
+                          _foundNumbers.add(num);
+                          _foundCards.add(_FoundCard(
+                              collectorNumber: num, card: null));
                           Navigator.pop(ctx);
-                          Navigator.of(context).pop(extracted ?? v);
+                          setState(() {});
                         }
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [AppColors.accentTeal, Color(0xFF00897B)],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'Conferma',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
+                            colors: [AppColors.accentTeal, Color(0xFF00897B)]),
+                          borderRadius: BorderRadius.circular(12)),
+                        child: const Center(child: Text('Aggiungi',
+                            style: TextStyle(color: Colors.white,
+                                fontWeight: FontWeight.bold))),
                       ),
                     ),
                   ),
@@ -336,7 +329,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Camera feed or error
+          // Camera feed
           if (_status == _ScanStatus.error)
             _buildErrorView()
           else
@@ -344,91 +337,151 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
               child: HtmlElementView(viewType: _viewType),
             ),
 
-          // Dark overlay with card-shaped cutout (only when camera is working)
+          // Overlay
           if (_status != _ScanStatus.error)
             _CardScanOverlay(
               status: _status,
-              foundNumber: _foundNumber,
             ),
 
           // Top bar
           Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
+            top: 0, left: 0, right: 0,
             child: SafeArea(
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     _circleButton(
                       icon: Icons.close,
-                      onTap: () => Navigator.of(context).pop(null),
+                      onTap: _close,
                     ),
                     const Expanded(
-                      child: Text(
-                        'Scansiona Carta',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: Text('Scansiona Carte',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white, fontSize: 18,
+                              fontWeight: FontWeight.bold)),
                     ),
-                    // Spacer to balance the close button
-                    const SizedBox(width: 42),
+                    // Scanned count badge
+                    if (_foundCards.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentGreen.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_foundCards.length}',
+                          style: const TextStyle(color: Colors.white,
+                              fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                      )
+                    else
+                      const SizedBox(width: 42),
                   ],
                 ),
               ),
             ),
           ),
 
+          // Found card banner (animated, appears when card detected)
+          if (_lastFound != null)
+            Positioned(
+              top: 0, left: 0, right: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 56, left: 20, right: 20),
+                  child: _buildFoundBanner(_lastFound!),
+                ),
+              ),
+            ),
+
           // Bottom bar
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
+            bottom: 0, left: 0, right: 0,
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Status card
-                    _buildStatusCard(),
-                    const SizedBox(height: 12),
-                    // Manual entry button
-                    GestureDetector(
-                      onTap: _showManualEntry,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.keyboard,
-                                color: Colors.white70, size: 18),
-                            SizedBox(width: 8),
-                            Text(
-                              'Inserisci manualmente',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
+                    // Status indicator
+                    _buildStatusPill(),
+                    const SizedBox(height: 10),
+                    // Found cards scroll strip
+                    if (_foundCards.isNotEmpty) ...[
+                      _buildFoundStrip(),
+                      const SizedBox(height: 10),
+                    ],
+                    // Bottom buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: _showManualEntry,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.1)),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.keyboard,
+                                      color: Colors.white70, size: 18),
+                                  SizedBox(width: 6),
+                                  Text('Manuale',
+                                      style: TextStyle(color: Colors.white70,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500)),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: _close,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: _foundCards.isNotEmpty
+                                      ? [const Color(0xFF43A047),
+                                         const Color(0xFF2E7D32)]
+                                      : [Colors.white.withValues(alpha: 0.08),
+                                         Colors.white.withValues(alpha: 0.08)],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    _foundCards.isNotEmpty
+                                        ? Icons.check_circle
+                                        : Icons.close,
+                                    color: Colors.white,
+                                    size: 18),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _foundCards.isNotEmpty
+                                        ? 'Fatto (${_foundCards.length})'
+                                        : 'Chiudi',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -440,88 +493,224 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     );
   }
 
-  Widget _buildStatusCard() {
-    IconData icon;
+  Widget _buildFoundBanner(_FoundCard found) {
+    final card = found.card;
+    final hasCard = card != null;
+    final price = card?.marketPrice != null
+        ? card!.formattedPrice
+        : null;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+      builder: (_, value, child) => Transform.translate(
+        offset: Offset(0, -20 * (1 - value)),
+        child: Opacity(opacity: value, child: child),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.accentGreen.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.accentGreen.withValues(alpha: 0.4),
+              blurRadius: 20, spreadRadius: 2),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Card image
+            if (hasCard && card.imageUrl != null)
+              Container(
+                width: 36, height: 50,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 4),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Image.network(card.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.style, color: Colors.white54, size: 20)),
+                ),
+              )
+            else
+              Container(
+                width: 36, height: 36,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.check,
+                    color: Colors.white, size: 22),
+              ),
+            // Card info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    hasCard ? card.name : '#${found.collectorNumber}',
+                    style: const TextStyle(color: Colors.white,
+                        fontSize: 14, fontWeight: FontWeight.bold),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  ),
+                  if (hasCard) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text('#${found.collectorNumber}',
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 11)),
+                        if (card.rarity != null) ...[
+                          const SizedBox(width: 6),
+                          Text('• ${card.rarity}',
+                              style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 11)),
+                        ],
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Price
+            if (price != null)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8)),
+                child: Text(price,
+                    style: const TextStyle(color: Colors.white,
+                        fontSize: 15, fontWeight: FontWeight.bold)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusPill() {
     String text;
-    Color bgColor;
-    Color borderColor;
+    Color color;
 
     switch (_status) {
       case _ScanStatus.init:
-        icon = Icons.hourglass_top;
         text = 'Caricamento OCR...';
-        bgColor = AppColors.surface.withValues(alpha: 0.9);
-        borderColor = Colors.white.withValues(alpha: 0.1);
+        color = AppColors.textMuted;
         break;
       case _ScanStatus.scanning:
-        icon = Icons.document_scanner;
-        text = 'Inquadra la carta...';
-        bgColor = AppColors.surface.withValues(alpha: 0.9);
-        borderColor = AppColors.accentTeal.withValues(alpha: 0.3);
+        text = '📷 Inquadra una carta';
+        color = AppColors.accentTeal;
         break;
       case _ScanStatus.processing:
-        icon = Icons.auto_awesome;
-        text = 'Analisi in corso...';
-        bgColor = AppColors.accentTeal.withValues(alpha: 0.15);
-        borderColor = AppColors.accentTeal.withValues(alpha: 0.4);
+        text = '⏳ Analisi...';
+        color = AppColors.accentTeal;
         break;
       case _ScanStatus.found:
-        icon = Icons.check_circle;
-        if (_matchedCard != null) {
-          final price = _matchedCard!.marketPrice != null
-              ? ' — ${_matchedCard!.formattedPrice}'
-              : '';
-          text = '${_matchedCard!.name}$price';
-        } else {
-          text = 'Trovato: #$_foundNumber ✓';
-        }
-        bgColor = AppColors.accentGreen.withValues(alpha: 0.9);
-        borderColor = AppColors.accentGreen.withValues(alpha: 0.5);
+        text = '✅ Carta trovata!';
+        color = AppColors.accentGreen;
         break;
       case _ScanStatus.error:
-        icon = Icons.error_outline;
         text = 'Errore';
-        bgColor = AppColors.accentRed.withValues(alpha: 0.15);
-        borderColor = AppColors.accentRed.withValues(alpha: 0.3);
+        color = AppColors.accentRed;
         break;
     }
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (_status == _ScanStatus.processing)
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppColors.accentTeal,
-              ),
-            )
-          else
-            Icon(icon, color: Colors.white, size: 22),
-          const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              text,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: SizedBox(width: 12, height: 12,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 1.5, color: color)),
             ),
-          ),
+          Text(text,
+              style: TextStyle(color: color, fontSize: 12,
+                  fontWeight: FontWeight.w600)),
         ],
+      ),
+    );
+  }
+
+  /// Horizontal scroll strip showing recently found cards
+  Widget _buildFoundStrip() {
+    return SizedBox(
+      height: 56,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _foundCards.length,
+        reverse: true, // newest first
+        itemBuilder: (_, i) {
+          final found = _foundCards[_foundCards.length - 1 - i];
+          final card = found.card;
+          return Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.surface.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: AppColors.accentGreen.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (card?.imageUrl != null)
+                  Container(
+                    width: 28, height: 40,
+                    margin: const EdgeInsets.only(right: 6),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: Image.network(card!.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const SizedBox.shrink()),
+                    ),
+                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      card?.name ?? '#${found.collectorNumber}',
+                      style: const TextStyle(color: Colors.white,
+                          fontSize: 11, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                    ),
+                    if (card?.marketPrice != null)
+                      Text(card!.formattedPrice,
+                          style: const TextStyle(
+                              color: AppColors.accentGreen,
+                              fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -538,58 +727,36 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: AppColors.accentRed.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.videocam_off,
-                color: AppColors.accentRed,
-                size: 48,
-              ),
+                shape: BoxShape.circle),
+              child: const Icon(Icons.videocam_off,
+                  color: AppColors.accentRed, size: 48),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Fotocamera non disponibile',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            const Text('Fotocamera non disponibile',
+                style: TextStyle(color: Colors.white, fontSize: 20,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            Text(
-              msg,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 14,
-                height: 1.5,
-              ),
-            ),
+            Text(msg, textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textSecondary,
+                    fontSize: 14, height: 1.5)),
             const SizedBox(height: 24),
             GestureDetector(
               onTap: _showManualEntry,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 14),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AppColors.accentTeal, Color(0xFF00897B)],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                    colors: [AppColors.accentTeal, Color(0xFF00897B)]),
+                  borderRadius: BorderRadius.circular(12)),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.keyboard, color: Colors.white, size: 20),
                     SizedBox(width: 10),
-                    Text(
-                      'Inserisci Manualmente',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
+                    Text('Inserisci Manualmente',
+                        style: TextStyle(color: Colors.white,
+                            fontWeight: FontWeight.bold, fontSize: 15)),
                   ],
                 ),
               ),
@@ -600,8 +767,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     );
   }
 
-  Widget _circleButton(
-      {required IconData icon, required VoidCallback onTap}) {
+  Widget _circleButton({required IconData icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -609,149 +775,106 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.5),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-        ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.2))),
         child: Icon(icon, color: Colors.white, size: 22),
       ),
     );
   }
 }
 
-/// Draws a dark overlay with a card-shaped (portrait rectangle) transparent window.
+class _FoundCard {
+  final String collectorNumber;
+  final CardBlueprint? card;
+  const _FoundCard({required this.collectorNumber, this.card});
+}
+
+/// Dark overlay with card-shaped cutout.
 class _CardScanOverlay extends StatelessWidget {
   final _ScanStatus status;
-  final String? foundNumber;
-
-  const _CardScanOverlay({
-    required this.status,
-    this.foundNumber,
-  });
+  const _CardScanOverlay({required this.status});
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Card ratio: 63mm x 88mm ≈ 2.5:3.5 ≈ 5:7
         final maxWidth = constraints.maxWidth * 0.72;
-        final maxHeight = constraints.maxHeight * 0.55;
-        // Calculate card dimensions maintaining 5:7 ratio
+        final maxHeight = constraints.maxHeight * 0.50;
         double cardWidth = maxWidth;
         double cardHeight = cardWidth * (7 / 5);
         if (cardHeight > maxHeight) {
           cardHeight = maxHeight;
           cardWidth = cardHeight * (5 / 7);
         }
-
         final top = (constraints.maxHeight - cardHeight) / 2;
         final left = (constraints.maxWidth - cardWidth) / 2;
 
         return Stack(
           children: [
-            // Dark overlay with cutout
             ColorFiltered(
               colorFilter: ColorFilter.mode(
-                Colors.black.withValues(alpha: 0.6),
-                BlendMode.srcOut,
-              ),
+                Colors.black.withValues(alpha: 0.55),
+                BlendMode.srcOut),
               child: Stack(
                 children: [
                   Container(
                     decoration: const BoxDecoration(
                       color: Colors.black,
-                      backgroundBlendMode: BlendMode.dstOut,
-                    ),
-                  ),
+                      backgroundBlendMode: BlendMode.dstOut)),
                   Positioned(
-                    top: top,
-                    left: left,
+                    top: top, left: left,
                     child: Container(
-                      width: cardWidth,
-                      height: cardHeight,
+                      width: cardWidth, height: cardHeight,
                       decoration: BoxDecoration(
                         color: Colors.red,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+                        borderRadius: BorderRadius.circular(12)))),
                 ],
               ),
             ),
-
-            // Corner markers
-            ..._buildCorners(top, left, cardWidth, cardHeight, constraints),
-
-            // Scanning line animation (when scanning/processing)
+            ..._corners(top, left, cardWidth, cardHeight, constraints),
             if (status == _ScanStatus.scanning ||
                 status == _ScanStatus.processing)
               _ScanningLine(
-                top: top,
-                left: left,
-                width: cardWidth,
-                height: cardHeight,
-              ),
+                  top: top, left: left,
+                  width: cardWidth, height: cardHeight),
           ],
         );
       },
     );
   }
 
-  List<Widget> _buildCorners(double top, double left, double cardWidth,
-      double cardHeight, BoxConstraints constraints) {
+  List<Widget> _corners(double top, double left, double w, double h,
+      BoxConstraints c) {
     final color = status == _ScanStatus.found
         ? AppColors.accentGreen
         : status == _ScanStatus.processing
             ? AppColors.accentTeal
             : AppColors.accentBlue;
-
     return [
-      // Top-left
-      Positioned(
-        top: top - 2,
-        left: left - 2,
-        child: _corner(color, topLeft: true),
-      ),
-      // Top-right
-      Positioned(
-        top: top - 2,
-        right: constraints.maxWidth - left - cardWidth - 2,
-        child: _corner(color, topRight: true),
-      ),
-      // Bottom-left
-      Positioned(
-        bottom: constraints.maxHeight - top - cardHeight - 2,
-        left: left - 2,
-        child: _corner(color, bottomLeft: true),
-      ),
-      // Bottom-right
-      Positioned(
-        bottom: constraints.maxHeight - top - cardHeight - 2,
-        right: constraints.maxWidth - left - cardWidth - 2,
-        child: _corner(color, bottomRight: true),
-      ),
+      Positioned(top: top - 2, left: left - 2,
+          child: _corner(color, tl: true)),
+      Positioned(top: top - 2, right: c.maxWidth - left - w - 2,
+          child: _corner(color, tr: true)),
+      Positioned(bottom: c.maxHeight - top - h - 2, left: left - 2,
+          child: _corner(color, bl: true)),
+      Positioned(bottom: c.maxHeight - top - h - 2,
+          right: c.maxWidth - left - w - 2,
+          child: _corner(color, br: true)),
     ];
   }
 
-  Widget _corner(Color color,
-      {bool topLeft = false,
-      bool topRight = false,
-      bool bottomLeft = false,
-      bool bottomRight = false}) {
+  Widget _corner(Color color, {bool tl = false, bool tr = false,
+      bool bl = false, bool br = false}) {
     return Container(
-      width: 28,
-      height: 28,
+      width: 28, height: 28,
       decoration: BoxDecoration(
         border: Border(
-          top: (topLeft || topRight)
-              ? BorderSide(color: color, width: 3)
+          top: (tl || tr) ? BorderSide(color: color, width: 3)
               : BorderSide.none,
-          bottom: (bottomLeft || bottomRight)
-              ? BorderSide(color: color, width: 3)
+          bottom: (bl || br) ? BorderSide(color: color, width: 3)
               : BorderSide.none,
-          left: (topLeft || bottomLeft)
-              ? BorderSide(color: color, width: 3)
+          left: (tl || bl) ? BorderSide(color: color, width: 3)
               : BorderSide.none,
-          right: (topRight || bottomRight)
-              ? BorderSide(color: color, width: 3)
+          right: (tr || br) ? BorderSide(color: color, width: 3)
               : BorderSide.none,
         ),
       ),
@@ -759,72 +882,51 @@ class _CardScanOverlay extends StatelessWidget {
   }
 }
 
-/// Animated scanning line that moves vertically within the card frame.
 class _ScanningLine extends StatefulWidget {
-  final double top;
-  final double left;
-  final double width;
-  final double height;
-
-  const _ScanningLine({
-    required this.top,
-    required this.left,
-    required this.width,
-    required this.height,
-  });
-
+  final double top, left, width, height;
+  const _ScanningLine({required this.top, required this.left,
+      required this.width, required this.height});
   @override
   State<_ScanningLine> createState() => _ScanningLineState();
 }
 
 class _ScanningLineState extends State<_ScanningLine>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+  late AnimationController _c;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
+    _c = AnimationController(
+        vsync: this, duration: const Duration(seconds: 2))
+      ..repeat(reverse: true);
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  void dispose() { _c.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _controller,
+      animation: _c,
       builder: (_, __) {
-        final lineY =
-            widget.top + _controller.value * (widget.height - 2);
+        final y = widget.top + _c.value * (widget.height - 2);
         return Positioned(
-          top: lineY,
-          left: widget.left + 8,
+          top: y, left: widget.left + 8,
           child: Container(
-            width: widget.width - 16,
-            height: 2,
+            width: widget.width - 16, height: 2,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  AppColors.accentTeal.withValues(alpha: 0.8),
-                  AppColors.accentTeal,
-                  AppColors.accentTeal.withValues(alpha: 0.8),
-                  Colors.transparent,
-                ],
-              ),
+              gradient: LinearGradient(colors: [
+                Colors.transparent,
+                AppColors.accentTeal.withValues(alpha: 0.8),
+                AppColors.accentTeal,
+                AppColors.accentTeal.withValues(alpha: 0.8),
+                Colors.transparent,
+              ]),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.accentTeal.withValues(alpha: 0.4),
-                  blurRadius: 8,
-                  spreadRadius: 2,
-                ),
+                  blurRadius: 8, spreadRadius: 2),
               ],
             ),
           ),
