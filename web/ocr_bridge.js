@@ -90,7 +90,7 @@ async function captureAndRecognize(containerId) {
 
   try {
     const resp = await fetch(
-      'https://europe-west1-inventorymanager-dev-20262.cloudfunctions.net/scanCard',
+      'https://scancard-orjhcexzoa-ew.a.run.app',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
