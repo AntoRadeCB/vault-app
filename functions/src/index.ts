@@ -633,19 +633,15 @@ export const scanCard = onRequest(
         ? image
         : `data:image/jpeg;base64,${image}`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        max_completion_tokens: 2048,
-        messages: [
-          {
-            role: "system",
-            content: "You are a trading card identifier. You recognize cards by their artwork, name, and visual features. Reply in the EXACT format specified.",
-          },
+      const response = await openai.responses.create({
+        model: "gpt-5.2",
+        instructions: "You are a trading card identifier. You recognize cards by their artwork, name, and visual features. Reply in the EXACT format specified.",
+        input: [
           {
             role: "user",
             content: [
               {
-                type: "text",
+                type: "input_text",
                 text: `Identify this trading card. Tell me:
 1. The card name IN ENGLISH (translate if needed)
 2. Any extra info visible: set name, rarity, card type (e.g. "ex", "V", "VMAX", "GX")
@@ -662,8 +658,9 @@ Mewtwo VMAX|Pokemon GO
 If you see NO trading card, reply exactly: NONE`,
               },
               {
-                type: "image_url",
-                image_url: { url: imageUrl, detail: "high" },
+                type: "input_image",
+                image_url: imageUrl,
+                detail: "high",
               },
             ],
           },
@@ -671,12 +668,11 @@ If you see NO trading card, reply exactly: NONE`,
       });
 
       console.log("scanCard FULL response:", JSON.stringify({
-        message: response.choices[0]?.message,
-        finish_reason: response.choices[0]?.finish_reason,
-        usage: response.usage,
+        output: response.output,
         model: response.model,
+        usage: response.usage,
       }));
-      const rawAnswer = response.choices[0]?.message?.content;
+      const rawAnswer = response.output_text;
       const answer = (rawAnswer ?? "NONE").trim();
 
       if (!answer || answer === "NONE" || answer.toUpperCase() === "NONE") {
