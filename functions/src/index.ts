@@ -634,7 +634,7 @@ export const scanCard = onRequest(
         : `data:image/jpeg;base64,${image}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5.2",
+        model: "gpt-4o",
         max_completion_tokens: 2048,
         messages: [
           {
