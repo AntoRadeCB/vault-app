@@ -617,7 +617,7 @@ export const scanCard = onRequest(
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
     if (req.method !== "POST") { res.status(405).json({ error: "POST only" }); return; }
 
-    const { image } = req.body; // base64 image data (with or without data: prefix)
+    const { image } = req.body;
     if (!image || typeof image !== "string") {
       res.status(400).json({ error: "Missing 'image' (base64)" });
       return;
@@ -626,35 +626,41 @@ export const scanCard = onRequest(
     try {
       const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
 
-      // Ensure proper data URL format
       const imageUrl = image.startsWith("data:")
         ? image
         : `data:image/jpeg;base64,${image}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        max_tokens: 100,
+        model: "gpt-4o",
+        max_tokens: 150,
         messages: [
+          {
+            role: "system",
+            content: "You are a trading card scanner. You identify collector numbers and card names from card images. Cards can be in ANY language (English, Chinese, Japanese, Korean, etc). Always reply in the exact format specified.",
+          },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Look at this trading card image. Find the collector number (usually at the bottom of the card, format like "001/165", "SV049/SV100", "TG01/TG30", or just a number like "001").
+                text: `Identify this trading card. Find:
+1. The collector number (usually small text at the bottom, like "001/165", "SV049/SV100", "TG01", or just "042")
+2. The card name (the main title of the card, in whatever language it's printed)
 
-Reply with ONLY the collector number, nothing else. If you can also read the card name, reply in this format:
-NUMBER|CARD NAME
+Reply in EXACTLY this format:
+COLLECTOR_NUMBER|CARD_NAME
 
 Examples:
 001/165|Pikachu
-SV049|Charizard ex
-042
+SV049/SV100|リザードンex
+042/165|喷火龙
+TG01/TG30|Charizard
 
-If you cannot find a collector number, reply: NONE`,
+If you see NO trading card or cannot find a collector number, reply exactly: NONE`,
               },
               {
                 type: "image_url",
-                image_url: { url: imageUrl, detail: "low" },
+                image_url: { url: imageUrl, detail: "high" },
               },
             ],
           },
@@ -663,21 +669,22 @@ If you cannot find a collector number, reply: NONE`,
 
       const answer = response.choices[0]?.message?.content?.trim() ?? "NONE";
 
-      if (answer === "NONE") {
+      if (answer === "NONE" || answer.toUpperCase() === "NONE") {
         res.status(200).json({ found: false });
         return;
       }
 
-      // Parse response: "NUMBER|NAME" or just "NUMBER"
       const parts = answer.split("|");
-      const collectorNumber = parts[0].replace(/[/\\].*$/, "").trim(); // take part before /
-      const fullNumber = parts[0].trim(); // keep the full "001/165" format
-      const cardName = parts.length > 1 ? parts[1].trim() : null;
+      const fullNumber = parts[0].trim();
+      const cardName = parts.length > 1 ? parts.slice(1).join("|").trim() : null;
+
+      // Extract just the number part (before slash)
+      const numberOnly = fullNumber.replace(/\s*[/\\].*$/, "").trim();
 
       res.status(200).json({
         found: true,
         collectorNumber: fullNumber,
-        numberOnly: collectorNumber,
+        numberOnly,
         cardName,
       });
     } catch (error: any) {
