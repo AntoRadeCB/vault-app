@@ -91,9 +91,9 @@ class OcrService {
 
     if (numPart.isEmpty || numPart == 'NONE') return null;
 
-    // Strip set code prefix like "SFD. 196" → "196", "SV8. 042" → "042"
-    // Pattern: LETTERS + optional punctuation + space + actual number
-    final setPrefixMatch = RegExp(r'^[A-Za-z]+[\.\s]+(\d+.*)$').firstMatch(numPart);
+    // Strip set code prefix: "SFD. 196" / "SFD 196" / "SFD196" → "196"
+    // Pattern: 2+ letters + optional punctuation/space + digits
+    final setPrefixMatch = RegExp(r'^[A-Za-z]{2,}[\.\s\-_]*(\d+.*)$').firstMatch(numPart);
     if (setPrefixMatch != null) {
       numPart = setPrefixMatch.group(1)!.trim();
     }
