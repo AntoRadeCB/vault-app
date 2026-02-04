@@ -95,7 +95,7 @@ async function captureAndRecognize(containerId, contextJson) {
   try {
     const body = { image: base64 };
     if (scanContext.expansion) body.expansion = scanContext.expansion;
-    if (scanContext.cardNames) body.cardNames = scanContext.cardNames;
+    if (scanContext.cards) body.cards = scanContext.cards;
 
     const resp = await fetch(
       'https://scancard-orjhcexzoa-ew.a.run.app',
