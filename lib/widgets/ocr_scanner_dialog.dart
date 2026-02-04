@@ -100,7 +100,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 
   void _startPeriodicScan() {
     _scanTimer?.cancel();
-    _scanTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+    _scanTimer = Timer.periodic(const Duration(milliseconds: 2500), (_) {
       _performOcrScan();
     });
     // Also do an immediate first scan
