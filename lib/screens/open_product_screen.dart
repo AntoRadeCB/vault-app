@@ -4,6 +4,7 @@ import '../widgets/animated_widgets.dart';
 import '../widgets/glow_text_field.dart';
 import '../widgets/card_search_field.dart';
 import '../widgets/card_browser_sheet.dart';
+import '../widgets/ocr_scanner_dialog.dart';
 import '../models/product.dart';
 import '../models/card_pull.dart';
 import '../models/card_blueprint.dart';
@@ -271,6 +272,72 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
     }
   }
 
+  Future<void> _openOcrScanner() async {
+    final collectorNumber = await OcrScannerDialog.scan(context);
+    if (collectorNumber != null && mounted) {
+      await _handleOcrResult(collectorNumber);
+    }
+  }
+
+  /// Match OCR collector number to catalog card and add as pull.
+  Future<void> _handleOcrResult(String collectorNumber) async {
+    CardBlueprint? match;
+
+    // First try within current expansion (if loaded)
+    if (_expansionCards.isNotEmpty) {
+      match = _expansionCards
+          .where(
+              (c) => _matchesCollectorNumber(c.collectorNumber, collectorNumber))
+          .firstOrNull;
+    }
+
+    // Fallback to all cards
+    if (match == null) {
+      try {
+        final allCards = await _catalogService.getAllCards();
+        match = allCards
+            .where((c) =>
+                _matchesCollectorNumber(c.collectorNumber, collectorNumber))
+            .firstOrNull;
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
+    if (match != null) {
+      _addPull(card: match);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Aggiunta: ${match.name}'),
+          backgroundColor: AppColors.accentGreen,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Numero $collectorNumber non trovato nel catalogo'),
+          backgroundColor: AppColors.accentOrange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  /// Compare collector numbers with normalization (leading zeros, case).
+  bool _matchesCollectorNumber(String? cardNum, String ocrNum) {
+    if (cardNum == null) return false;
+    // Exact match
+    if (cardNum == ocrNum) return true;
+    // Case-insensitive
+    if (cardNum.toLowerCase() == ocrNum.toLowerCase()) return true;
+    // Numeric comparison (strip leading zeros)
+    final cardInt = int.tryParse(cardNum);
+    final ocrInt = int.tryParse(ocrNum);
+    if (cardInt != null && ocrInt != null) return cardInt == ocrInt;
+    return false;
+  }
+
   double get _totalPullValue {
     return _pulls.fold(0.0, (sum, p) => sum + (p.estimatedValue ?? 0));
   }
@@ -503,6 +570,36 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                           ),
                         ),
                         const Spacer(),
+                        ScaleOnPress(
+                          onTap: _openOcrScanner,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  AppColors.accentTeal,
+                                  Color(0xFF00ACC1),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.photo_camera,
+                                    color: Colors.white, size: 14),
+                                SizedBox(width: 4),
+                                Text('Scansiona',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
                         ScaleOnPress(
                           onTap: _openCardBrowser,
                           child: Container(
