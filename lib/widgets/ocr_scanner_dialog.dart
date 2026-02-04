@@ -99,7 +99,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 
   void _startPeriodicScan() {
     _scanTimer?.cancel();
-    _scanTimer = Timer.periodic(const Duration(milliseconds: 2500), (_) {
+    _scanTimer = Timer.periodic(const Duration(milliseconds: 3500), (_) {
       _performOcrScan();
     });
     _performOcrScan();
@@ -655,7 +655,14 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     );
   }
 
-  /// Horizontal scroll strip showing recently found cards
+  void _removeFoundCard(int index) {
+    setState(() {
+      _foundCards.removeAt(index);
+      _foundNumbers.removeAt(index);
+    });
+  }
+
+  /// Horizontal scroll strip showing recently found cards (tap to remove)
   Widget _buildFoundStrip() {
     return SizedBox(
       height: 56,
@@ -664,50 +671,60 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
         itemCount: _foundCards.length,
         reverse: true, // newest first
         itemBuilder: (_, i) {
-          final found = _foundCards[_foundCards.length - 1 - i];
+          final realIndex = _foundCards.length - 1 - i;
+          final found = _foundCards[realIndex];
           final card = found.card;
-          return Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.surface.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: AppColors.accentGreen.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (card?.imageUrl != null)
-                  Container(
-                    width: 28, height: 40,
-                    margin: const EdgeInsets.only(right: 6),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(3),
-                      child: Image.network(card!.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              const SizedBox.shrink()),
+          return GestureDetector(
+            onTap: () => _removeFoundCard(realIndex),
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.surface.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.accentGreen.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (card?.imageUrl != null)
+                    Container(
+                      width: 28, height: 40,
+                      margin: const EdgeInsets.only(right: 6),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: Image.network(card!.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const SizedBox.shrink()),
+                      ),
                     ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 100),
+                        child: Text(
+                          card?.name ?? '#${found.collectorNumber}',
+                          style: const TextStyle(color: Colors.white,
+                              fontSize: 11, fontWeight: FontWeight.w600),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (card?.marketPrice != null)
+                        Text(card!.formattedPrice,
+                            style: const TextStyle(
+                                color: AppColors.accentGreen,
+                                fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
                   ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      card?.name ?? '#${found.collectorNumber}',
-                      style: const TextStyle(color: Colors.white,
-                          fontSize: 11, fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                    ),
-                    if (card?.marketPrice != null)
-                      Text(card!.formattedPrice,
-                          style: const TextStyle(
-                              color: AppColors.accentGreen,
-                              fontSize: 10, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ],
+                  const SizedBox(width: 4),
+                  Icon(Icons.close,
+                      color: Colors.white.withValues(alpha: 0.4), size: 14),
+                ],
+              ),
             ),
           );
         },
