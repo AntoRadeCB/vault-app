@@ -107795,7 +107795,7 @@ OZ(a){var s,r,q,p,o
 if(B.c.cc(a).length===0)return null
 s=B.c.cc(a.split("|")[0])
 if(s.length===0||s==="NONE")return null
-r=A.cf("^[A-Za-z]+[\\.\\s]+(\\d+.*)$",!1).qq(s)
+r=A.cf("^[A-Za-z]{2,}[\\.\\s\\-_]*(\\d+.*)$",!1).qq(s)
 if(r!=null){q=r.b[1]
 q.toString
 s=B.c.cc(q)}p=A.cf("^([A-Za-z]*\\d+)\\s*[/\\\\]",!1).qq(s)
