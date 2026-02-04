@@ -105,22 +105,14 @@ async function captureAndRecognize(containerId) {
 
     const data = await resp.json();
 
-    if (data.found && data.cards && data.cards.length > 0) {
-      // Multi-card response
-      const lines = data.cards.map(c => c.collectorNumber + (c.cardName ? '|' + c.cardName : '')).join('\n');
+    if (data.found && data.cardName) {
       return JSON.stringify({
-        text: lines,
+        text: data.cardName,
+        cardName: data.cardName,
+        extraInfo: data.extraInfo || null,
         confidence: 95,
         aiResult: data,
-        cards: data.cards
-      });
-    } else if (data.found) {
-      // Legacy single-card response
-      return JSON.stringify({
-        text: data.collectorNumber + (data.cardName ? '|' + data.cardName : ''),
-        confidence: 95,
-        aiResult: data,
-        cards: [data]
+        cards: data.cards || [data]
       });
     } else {
       return JSON.stringify({ text: '', confidence: 0, cards: [] });
