@@ -140,29 +140,11 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
         return;
       }
 
-      // Handle multi-card response
-      final cards = result['cards'] as List<dynamic>?;
-      if (cards != null && cards.isNotEmpty) {
-        for (final cardData in cards) {
-          final map = cardData is Map<String, dynamic>
-              ? cardData
-              : <String, dynamic>{};
-          final cn = map['collectorNumber'] as String? ?? '';
-          final name = map['cardName'] as String?;
-          final text = '$cn${name != null ? '|$name' : ''}';
-          _processFoundCard(text);
-        }
-        return;
-      }
-
-      // Legacy single-card response
-      final text = result['text'] as String? ?? '';
-      if (text.isNotEmpty) {
-        // Could be multi-line (multiple cards)
-        final lines = text.split('\n').where((l) => l.trim().isNotEmpty);
-        for (final line in lines) {
-          _processFoundCard(line.trim());
-        }
+      // AI now returns card name instead of collector number
+      final cardName = result['cardName'] as String? ??
+          result['text'] as String? ?? '';
+      if (cardName.isNotEmpty && cardName != 'NONE') {
+        _processFoundCardByName(cardName);
       } else {
         // No card found — keep scanning
         if (_lastFound == null && _lastError == null) {
@@ -183,43 +165,53 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     }
   }
 
-  void _processFoundCard(String text) {
-    final collectorNumber = _ocrService.extractCollectorNumber(text);
-    if (collectorNumber == null) return;
-
+  void _processFoundCardByName(String aiCardName) {
     // Deduplicate: skip if just scanned this card
-    if (_recentlyFound.contains(collectorNumber)) return;
-    _recentlyFound.add(collectorNumber);
+    final dedupeKey = aiCardName.toLowerCase().trim();
+    if (_recentlyFound.contains(dedupeKey)) return;
+    _recentlyFound.add(dedupeKey);
 
     // Clear from dedup set after 10 seconds
     Future.delayed(const Duration(seconds: 10), () {
-      _recentlyFound.remove(collectorNumber);
+      _recentlyFound.remove(dedupeKey);
     });
 
-    // Try to match to a card in the expansion
+    // Match by name in the expansion cards
     CardBlueprint? matched;
-    if (widget.expansionCards.isNotEmpty) {
-      // Normalize: strip leading zeros, lowercase
-      final normNum = collectorNumber.replaceFirst(RegExp(r'^0+'), '').toLowerCase();
-      final numAsInt = int.tryParse(collectorNumber);
+    final aiName = aiCardName.toLowerCase().trim();
 
-      matched = widget.expansionCards.where((c) {
-        if (c.collectorNumber == null) return false;
-        // Exact match
-        if (c.collectorNumber == collectorNumber) return true;
-        // Case-insensitive
-        if (c.collectorNumber!.toLowerCase() == collectorNumber.toLowerCase()) return true;
-        // Numeric match (042 == 42)
-        final cNum = int.tryParse(c.collectorNumber!);
-        if (cNum != null && numAsInt != null && cNum == numAsInt) return true;
-        // Normalized match (strip leading zeros both sides)
-        final normCat = c.collectorNumber!.replaceFirst(RegExp(r'^0+'), '').toLowerCase();
-        if (normCat == normNum) return true;
-        return false;
-      }).firstOrNull;
+    if (widget.expansionCards.isNotEmpty) {
+      // 1. Exact name match
+      matched = widget.expansionCards.where((c) =>
+          c.name.toLowerCase() == aiName).firstOrNull;
+
+      // 2. Name contains (AI might add "ex", "V", etc.)
+      if (matched == null) {
+        matched = widget.expansionCards.where((c) =>
+            c.name.toLowerCase().contains(aiName) ||
+            aiName.contains(c.name.toLowerCase())).firstOrNull;
+      }
+
+      // 3. Fuzzy: split words and check overlap
+      if (matched == null) {
+        final aiWords = aiName.split(RegExp(r'[\s\-_]+'))
+            .where((w) => w.length > 1).toSet();
+        int bestScore = 0;
+        for (final c in widget.expansionCards) {
+          final cardWords = c.name.toLowerCase()
+              .split(RegExp(r'[\s\-_]+'))
+              .where((w) => w.length > 1).toSet();
+          final overlap = aiWords.intersection(cardWords).length;
+          if (overlap > bestScore && overlap >= 1) {
+            bestScore = overlap;
+            matched = c;
+          }
+        }
+      }
     }
 
     _ocrService.vibrate();
+    final collectorNumber = matched?.collectorNumber ?? aiCardName;
     _foundNumbers.add(collectorNumber);
 
     final found = _FoundCard(

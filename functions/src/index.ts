@@ -639,28 +639,25 @@ export const scanCard = onRequest(
         messages: [
           {
             role: "system",
-            content: "You are a trading card scanner. You identify collector numbers and card names. Cards can be in ANY language. Reply in the EXACT format specified. NEVER include set codes or abbreviations in the collector number — only the printed number.",
+            content: "You are a trading card identifier. You recognize cards by their artwork, name, and visual features. Reply in the EXACT format specified.",
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Look at this trading card image. Find:
-1. The collector number — the number printed on the card (usually at the bottom). Return ONLY the number with slash if present. Do NOT include set codes like "SFD", "SV", "MEW", etc. Just the raw number.
-2. The card name (the main title, in whatever language it's printed)
+                text: `Identify this trading card. Tell me:
+1. The card name IN ENGLISH (translate if needed)
+2. Any extra info visible: set name, rarity, card type (e.g. "ex", "V", "VMAX", "GX")
 
 Reply in EXACTLY this format:
-NUMBER/TOTAL|CARD_NAME
+CARD_NAME_EN|SET_OR_EXTRA_INFO
 
 Examples:
-001/165|Pikachu
-196/221|Charizard ex
-042/165|喷火龙
-01/30|リザードンex
-
-If no total is visible, just the number:
-042|Pikachu
+Charizard ex|Scarlet & Violet
+Pikachu|Base Set
+Lugia V|Silver Tempest
+Mewtwo VMAX|Pokemon GO
 
 If you see NO trading card, reply exactly: NONE`,
               },
@@ -682,17 +679,16 @@ If you see NO trading card, reply exactly: NONE`,
         return;
       }
 
-      // Parse multiple lines — one card per line
+      // Parse response: CARD_NAME|EXTRA_INFO
       const lines = answer.split("\n").map((l: string) => l.trim()).filter((l: string) => l && l !== "NONE");
-      const cards: Array<{ collectorNumber: string; numberOnly: string; cardName: string | null }> = [];
+      const cards: Array<{ cardName: string; extraInfo: string | null }> = [];
 
       for (const line of lines) {
         const parts = line.split("|");
-        const fullNumber = parts[0].trim();
-        if (!fullNumber || fullNumber === "NONE") continue;
-        const cardName = parts.length > 1 ? parts.slice(1).join("|").trim() : null;
-        const numberOnly = fullNumber.replace(/\s*[/\\].*$/, "").trim();
-        cards.push({ collectorNumber: fullNumber, numberOnly, cardName });
+        const cardName = parts[0].trim();
+        if (!cardName || cardName === "NONE") continue;
+        const extraInfo = parts.length > 1 ? parts.slice(1).join("|").trim() : null;
+        cards.push({ cardName, extraInfo });
       }
 
       if (cards.length === 0) {
@@ -700,12 +696,10 @@ If you see NO trading card, reply exactly: NONE`,
         return;
       }
 
-      // Backwards compatibility: top-level fields from first card
       res.status(200).json({
         found: true,
-        collectorNumber: cards[0].collectorNumber,
-        numberOnly: cards[0].numberOnly,
         cardName: cards[0].cardName,
+        extraInfo: cards[0].extraInfo,
         cards,
       });
     } catch (error: any) {
