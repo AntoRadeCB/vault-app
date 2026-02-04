@@ -624,6 +624,9 @@ export const scanCard = onRequest(
     }
 
     try {
+      const imageSize = image.length;
+      console.log(`scanCard: received image, size=${imageSize} chars, starts with: ${image.substring(0, 30)}`);
+
       const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
 
       const imageUrl = image.startsWith("data:")

@@ -199,14 +199,23 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     // Try to match to a card in the expansion
     CardBlueprint? matched;
     if (widget.expansionCards.isNotEmpty) {
+      // Normalize: strip leading zeros, lowercase
+      final normNum = collectorNumber.replaceFirst(RegExp(r'^0+'), '').toLowerCase();
+      final numAsInt = int.tryParse(collectorNumber);
+
       matched = widget.expansionCards.where((c) {
         if (c.collectorNumber == null) return false;
+        // Exact match
         if (c.collectorNumber == collectorNumber) return true;
-        if (c.collectorNumber!.toLowerCase() ==
-            collectorNumber.toLowerCase()) return true;
+        // Case-insensitive
+        if (c.collectorNumber!.toLowerCase() == collectorNumber.toLowerCase()) return true;
+        // Numeric match (042 == 42)
         final cNum = int.tryParse(c.collectorNumber!);
-        final oNum = int.tryParse(collectorNumber);
-        return cNum != null && oNum != null && cNum == oNum;
+        if (cNum != null && numAsInt != null && cNum == numAsInt) return true;
+        // Normalized match (strip leading zeros both sides)
+        final normCat = c.collectorNumber!.replaceFirst(RegExp(r'^0+'), '').toLowerCase();
+        if (normCat == normNum) return true;
+        return false;
       }).firstOrNull;
     }
 
@@ -438,10 +447,13 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                       icon: Icons.close,
                       onTap: _close,
                     ),
-                    const Expanded(
-                      child: Text('Scansiona Carte',
+                    Expanded(
+                      child: Text(
+                          widget.expansionCards.isEmpty
+                              ? 'Scansiona Carte'
+                              : 'Scansiona (${widget.expansionCards.length} carte)',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontSize: 18,
+                          style: const TextStyle(color: Colors.white, fontSize: 18,
                               fontWeight: FontWeight.bold)),
                     ),
                     // Scanned count badge
