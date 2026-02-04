@@ -106,25 +106,19 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     // Camera ready — wait for user to tap scan button
   }
 
+  bool _isBusy = false;
+
   Future<void> _performOcrScan() async {
-    if (_status == _ScanStatus.error) return;
-    if (_inflightScans >= _maxConcurrent) return;
+    if (_isBusy || _status == _ScanStatus.error || !_cameraReady) return;
 
-    _inflightScans++;
-
-    // Show processing indicator only if nothing else is showing
-    if (_status == _ScanStatus.scanning) {
-      setState(() => _status = _ScanStatus.processing);
-    }
+    _isBusy = true;
+    setState(() => _status = _ScanStatus.processing);
 
     try {
       // Build context from expansion cards to help AI identify
       String? contextJson;
       if (widget.expansionCards.isNotEmpty) {
         final names = widget.expansionCards.map((c) => c.name).toSet().toList();
-        final expansion = widget.expansionCards.first.collectorNumber != null
-            ? null // we don't have expansion name directly, AI will match by card list
-            : null;
         contextJson = jsonEncode({
           'cardNames': names,
         });
@@ -135,12 +129,10 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       // Check for API errors
       if (result.containsKey('error')) {
         final err = result['error'] as String? ?? 'Errore sconosciuto';
-        if (err == 'Video not ready') {
-          // Silent — camera not ready yet
-          return;
+        if (err != 'Video not ready') {
+          _showErrorBanner(err);
         }
-        // Show error banner
-        _showErrorBanner(err);
+        setState(() => _status = _ScanStatus.scanning);
         return;
       }
 
@@ -150,22 +142,16 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       if (cardName.isNotEmpty && cardName != 'NONE') {
         _processFoundCardByName(cardName);
       } else {
-        // No card found — keep scanning
-        if (_lastFound == null && _lastError == null) {
-          setState(() => _status = _ScanStatus.scanning);
-        }
+        // No card found — show brief feedback then ready again
+        setState(() => _status = _ScanStatus.scanning);
       }
     } catch (e) {
       if (mounted) {
         _showErrorBanner(e.toString());
-      }
-    } finally {
-      _inflightScans--;
-      // Reset to scanning if nothing is showing
-      if (mounted && _lastFound == null && _lastError == null &&
-          _status == _ScanStatus.processing) {
         setState(() => _status = _ScanStatus.scanning);
       }
+    } finally {
+      _isBusy = false;
     }
   }
 
@@ -532,9 +518,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                         ),
                         // Big scan button
                         GestureDetector(
-                          onTap: (_status == _ScanStatus.processing || !_cameraReady)
-                              ? null
-                              : _performOcrScan,
+                          onTap: _isBusy ? null : _performOcrScan,
                           child: Container(
                             width: 72, height: 72,
                             decoration: BoxDecoration(
@@ -545,11 +529,9 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                               margin: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: _status == _ScanStatus.processing
-                                    ? Colors.orange
-                                    : Colors.white,
+                                color: _isBusy ? Colors.orange : Colors.white,
                               ),
-                              child: _status == _ScanStatus.processing
+                              child: _isBusy
                                   ? const Padding(
                                       padding: EdgeInsets.all(18),
                                       child: CircularProgressIndicator(
