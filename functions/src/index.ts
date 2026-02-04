@@ -635,26 +635,31 @@ export const scanCard = onRequest(
         : `data:image/jpeg;base64,${image}`;
 
       // Build prompt with context if available
-      let prompt = `Identify this trading card from the photo.`;
+      let prompt = `Identify ALL trading cards visible in this photo. There may be one or multiple cards.`;
 
       if (expansion) {
-        prompt += `\nThis card is from the expansion/set: "${expansion}".`;
+        prompt += `\nThese cards are from the expansion/set: "${expansion}".`;
       }
 
       if (cards && Array.isArray(cards) && cards.length > 0) {
         // cards format: ["025|Pikachu", "026|Raichu", ...]
-        prompt += `\n\nThe card MUST be one from this list (format: COLLECTOR_NUMBER|NAME):\n${cards.join('\n')}`;
+        prompt += `\n\nEach card MUST be one from this list (format: COLLECTOR_NUMBER|NAME):\n${cards.join('\n')}`;
         prompt += `\n\nIMPORTANT: Many cards share the same name but are DIFFERENT variants. Use the COLLECTOR NUMBER printed on the card (usually bottom-left or bottom-right, format like "025/165") to identify the EXACT card.`;
         prompt += `\nAlso look at the artwork, colors, creature/character, and card type (ex, V, VMAX, GX, etc.) to distinguish variants.`;
       }
 
-      prompt += `\n\nReply in EXACTLY this format (no extra text):
+      prompt += `\n\nReply with ONE LINE PER CARD in EXACTLY this format (no extra text):
 COLLECTOR_NUMBER|CARD_NAME_EN
 
 Where COLLECTOR_NUMBER is the number from the card (e.g. "025" or "025/165").
 CARD_NAME_EN is the English card name matching one from the list.
 
-If you cannot identify the card or see NO trading card, reply exactly: NONE`;
+Example response for 3 cards:
+025|Pikachu
+042|Charizard ex
+101|Mewtwo V
+
+If you cannot identify any card or see NO trading cards, reply exactly: NONE`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5.2",

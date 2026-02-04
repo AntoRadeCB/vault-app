@@ -60,22 +60,16 @@ function captureFrame(containerId) {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
 
-  // Crop to card area (matching overlay: 72% width, 5:7 ratio, centered)
-  const cardW = vw * 0.72;
-  const cardH = Math.min(cardW * (7 / 5), vh * 0.50);
-  const cardX = (vw - cardW) / 2;
-  const cardY = (vh - cardH) / 2;
-
-  // Draw the card area at good resolution for AI vision
-  const maxDim = 768;
-  const scale = Math.min(1, maxDim / Math.max(cardW, cardH));
-  const dw = Math.round(cardW * scale);
-  const dh = Math.round(cardH * scale);
+  // Capture full frame (user can photograph multiple cards)
+  const maxDim = 1280;
+  const scale = Math.min(1, maxDim / Math.max(vw, vh));
+  const dw = Math.round(vw * scale);
+  const dh = Math.round(vh * scale);
 
   canvas.width = dw;
   canvas.height = dh;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, cardX, cardY, cardW, cardH, 0, 0, dw, dh);
+  ctx.drawImage(video, 0, 0, vw, vh, 0, 0, dw, dh);
 
   return canvas.toDataURL('image/jpeg', 0.85);
 }

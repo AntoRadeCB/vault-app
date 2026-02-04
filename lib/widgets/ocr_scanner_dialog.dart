@@ -142,17 +142,45 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
         return;
       }
 
-      // AI now returns card name instead of collector number
-      final cardName = result['cardName'] as String? ??
-          result['text'] as String? ?? '';
-      if (cardName.isNotEmpty && cardName != 'NONE') {
-        final matched = _processFoundCardByName(cardName);
-        if (!matched && widget.expansionCards.isNotEmpty) {
-          _showErrorBanner('⚠️ "$cardName" non trovata nell\'espansione');
+      // AI may return multiple cards
+      final aiCards = result['cards'] as List? ?? [];
+      final fullResponse = result['aiResult'] is Map 
+          ? (result['aiResult'] as Map)['fullResponse'] as String? ?? ''
+          : '';
+      
+      int matchedCount = 0;
+      int failedCount = 0;
+      String? lastFailedName;
+
+      if (aiCards.isNotEmpty || (result['cardName'] as String? ?? '').isNotEmpty) {
+        // Parse multi-card response from fullResponse
+        final lines = fullResponse.isNotEmpty
+            ? fullResponse.split('\n').where((l) => l.trim().isNotEmpty && l.trim() != 'NONE').toList()
+            : [(result['cardName'] as String? ?? '')];
+
+        for (final line in lines) {
+          if (line.isEmpty || line == 'NONE') continue;
+          final matched = _processFoundCardByName(line);
+          if (matched) {
+            matchedCount++;
+          } else {
+            failedCount++;
+            lastFailedName = line;
+          }
+        }
+
+        if (matchedCount == 0 && failedCount == 0) {
+          _showErrorBanner('📷 Carta non riconosciuta, riprova');
+        } else if (failedCount > 0 && matchedCount == 0) {
+          _showErrorBanner('⚠️ "${lastFailedName ?? 'carta'}" non trovata nell\'espansione');
+        } else if (matchedCount > 0) {
+          // At least some matched — success feedback is shown by _processFoundCardByName
+          if (failedCount > 0) {
+            // Partial success
+          }
         }
       } else {
-        // No card found
-        _showErrorBanner('📷 Carta non riconosciuta, riprova');
+        _showErrorBanner('📷 Nessuna carta riconosciuta, riprova');
       }
     } catch (e) {
       if (mounted) {
@@ -1010,22 +1038,18 @@ class _CardScanOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth * 0.72;
-        final maxHeight = constraints.maxHeight * 0.50;
-        double cardWidth = maxWidth;
-        double cardHeight = cardWidth * (7 / 5);
-        if (cardHeight > maxHeight) {
-          cardHeight = maxHeight;
-          cardWidth = cardHeight * (5 / 7);
-        }
-        final top = (constraints.maxHeight - cardHeight) / 2;
-        final left = (constraints.maxWidth - cardWidth) / 2;
+        // Wide open area — 90% width, 65% height for multi-card photos
+        final areaWidth = constraints.maxWidth * 0.90;
+        final areaHeight = constraints.maxHeight * 0.60;
+        final top = (constraints.maxHeight - areaHeight) / 2 - 20;
+        final left = (constraints.maxWidth - areaWidth) / 2;
 
         return Stack(
           children: [
+            // Subtle dark border around scan area
             ColorFiltered(
               colorFilter: ColorFilter.mode(
-                Colors.black.withValues(alpha: 0.55),
+                Colors.black.withValues(alpha: 0.45),
                 BlendMode.srcOut),
               child: Stack(
                 children: [
@@ -1036,19 +1060,14 @@ class _CardScanOverlay extends StatelessWidget {
                   Positioned(
                     top: top, left: left,
                     child: Container(
-                      width: cardWidth, height: cardHeight,
+                      width: areaWidth, height: areaHeight,
                       decoration: BoxDecoration(
                         color: Colors.red,
-                        borderRadius: BorderRadius.circular(12)))),
+                        borderRadius: BorderRadius.circular(16)))),
                 ],
               ),
             ),
-            ..._corners(top, left, cardWidth, cardHeight, constraints),
-            if (status == _ScanStatus.scanning ||
-                status == _ScanStatus.processing)
-              _ScanningLine(
-                  top: top, left: left,
-                  width: cardWidth, height: cardHeight),
+            ..._corners(top, left, areaWidth, areaHeight, constraints),
           ],
         );
       },
