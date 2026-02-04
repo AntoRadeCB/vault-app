@@ -631,8 +631,8 @@ export const scanCard = onRequest(
         : `data:image/jpeg;base64,${image}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        max_tokens: 150,
+        model: "gpt-5-mini",
+        max_completion_tokens: 2048,
         messages: [
           {
             role: "system",
@@ -667,9 +667,11 @@ If you see NO trading card or cannot find a collector number, reply exactly: NON
         ],
       });
 
-      const answer = response.choices[0]?.message?.content?.trim() ?? "NONE";
+      const rawAnswer = response.choices[0]?.message?.content;
+      console.log("scanCard raw response:", JSON.stringify(response.choices[0]?.message));
+      const answer = (rawAnswer ?? "NONE").trim();
 
-      if (answer === "NONE" || answer.toUpperCase() === "NONE") {
+      if (!answer || answer === "NONE" || answer.toUpperCase() === "NONE") {
         res.status(200).json({ found: false });
         return;
       }
