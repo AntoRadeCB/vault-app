@@ -87,9 +87,16 @@ class OcrService {
 
     // AI returns "NUMBER|NAME" — take the number part
     final parts = text.split('|');
-    final numPart = parts[0].trim();
+    var numPart = parts[0].trim();
 
     if (numPart.isEmpty || numPart == 'NONE') return null;
+
+    // Strip set code prefix like "SFD. 196" → "196", "SV8. 042" → "042"
+    // Pattern: LETTERS + optional punctuation + space + actual number
+    final setPrefixMatch = RegExp(r'^[A-Za-z]+[\.\s]+(\d+.*)$').firstMatch(numPart);
+    if (setPrefixMatch != null) {
+      numPart = setPrefixMatch.group(1)!.trim();
+    }
 
     // Extract just the collector number (before the slash if present)
     // e.g., "001/165" → "001", "SV049/SV100" → "SV049"
