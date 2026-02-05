@@ -94,7 +94,7 @@ class UserProfile {
         (e) => e.name == data['type'],
         orElse: () => ProfileType.other,
       ),
-      enabledTabs: List<String>.from(data['enabledTabs'] ?? _allTabs),
+      enabledTabs: _mergeNewTabs(List<String>.from(data['enabledTabs'] ?? _allTabs)),
       trackedGames: List<String>.from(data['trackedGames'] ?? []),
       budgetMonthly: (data['budgetMonthly'] as num?)?.toDouble(),
       budgetSpent: (data['budgetSpent'] as num?)?.toDouble(),
@@ -124,6 +124,19 @@ class UserProfile {
       budgetSpent: budgetSpent ?? this.budgetSpent,
       createdAt: createdAt ?? this.createdAt,
     );
+  }
+
+  /// Merge any new tabs from [_allTabs] into a saved list, preserving order.
+  static List<String> _mergeNewTabs(List<String> saved) {
+    final result = List<String>.from(saved);
+    for (var i = 0; i < _allTabs.length; i++) {
+      if (!result.contains(_allTabs[i])) {
+        // Insert at the canonical position (or end if beyond length)
+        final pos = i.clamp(0, result.length);
+        result.insert(pos, _allTabs[i]);
+      }
+    }
+    return result;
   }
 
   // ─── Tab identifiers used throughout the app ────
