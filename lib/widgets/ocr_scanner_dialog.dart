@@ -118,10 +118,13 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       // Build context from expansion cards to help AI identify
       String? contextJson;
       if (widget.expansionCards.isNotEmpty) {
-        // Pass name + collector number so AI can distinguish variants
+        // Pass name + collector number + rarity + version so AI can distinguish variants
         final cardList = widget.expansionCards.map((c) {
           final num = c.collectorNumber ?? '?';
-          return '$num|${c.name}';
+          final parts = [num, c.name];
+          if (c.rarity != null) parts.add(c.rarity!);
+          if (c.version != null && c.version!.isNotEmpty) parts.add(c.version!);
+          return parts.join('|');
         }).toList();
         final expName = widget.expansionCards.first.expansionName;
         contextJson = jsonEncode({

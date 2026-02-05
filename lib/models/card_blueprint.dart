@@ -13,10 +13,13 @@ class CardBlueprint {
   final String? collectorNumber;
   final String? rarity;
   final String? imageUrl;
+  final String? backImageUrl;
   final MarketPrice? marketPrice;
   final String? kind; // 'singleCard', 'boosterPack', 'boosterBox', 'display', 'bundle'
   final int? categoryId;
   final String? categoryName;
+  final List<String> availableLanguages; // e.g. ['en', 'zh-CN', 'fr']
+  final bool hasFoil;
 
   const CardBlueprint({
     required this.id,
@@ -30,10 +33,13 @@ class CardBlueprint {
     this.collectorNumber,
     this.rarity,
     this.imageUrl,
+    this.backImageUrl,
     this.marketPrice,
     this.kind,
     this.categoryId,
     this.categoryName,
+    this.availableLanguages = const [],
+    this.hasFoil = false,
   });
 
   factory CardBlueprint.fromFirestore(DocumentSnapshot doc) {
@@ -50,12 +56,18 @@ class CardBlueprint {
       collectorNumber: data['collectorNumber'],
       rarity: data['rarity'],
       imageUrl: data['imageUrl'],
+      backImageUrl: data['backImageUrl'] as String?,
       marketPrice: data['marketPrice'] != null
           ? MarketPrice.fromMap(data['marketPrice'] as Map<String, dynamic>)
           : null,
       kind: data['kind'] as String?,
       categoryId: data['categoryId'] as int?,
       categoryName: data['categoryName'] as String?,
+      availableLanguages: (data['availableLanguages'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      hasFoil: data['hasFoil'] as bool? ?? false,
     );
   }
 
@@ -84,6 +96,8 @@ class CardBlueprint {
         return const Color(0xFF78909C);
       case 'showcase':
         return const Color(0xFFE91E63);
+      case 'overnumbered':
+        return const Color(0xFFFF4081);
       default:
         return const Color(0xFF9E9E9E);
     }

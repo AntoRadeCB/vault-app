@@ -397,6 +397,21 @@ export const syncRiftboundCatalog = onRequest(
             ? `https://europe-west1-inventorymanager-dev-20262.cloudfunctions.net/imageProxy?url=${encodeURIComponent(rawImageUrl)}`
             : null;
 
+          // Back image URL (for double-faced cards)
+          let backImageUrl: string | null = null;
+          if (bp.back_image?.show?.url && !bp.back_image.show.url.includes("fallbacks/")) {
+            const rawBack = `https://www.cardtrader.com${bp.back_image.show.url}`;
+            backImageUrl = `https://europe-west1-inventorymanager-dev-20262.cloudfunctions.net/imageProxy?url=${encodeURIComponent(rawBack)}`;
+          }
+
+          // Extract available languages from editable_properties
+          const langProp = (bp.editable_properties || []).find((p: any) => p.name === "riftbound_language");
+          const availableLanguages: string[] = langProp?.possible_values || [];
+
+          // Check if foil variant exists
+          const foilProp = (bp.editable_properties || []).find((p: any) => p.name === "riftbound_foil");
+          const hasFoil = foilProp ? true : false;
+
           batch.set(docRef, {
             blueprintId: bp.id,
             name: bp.name,
@@ -412,8 +427,11 @@ export const syncRiftboundCatalog = onRequest(
             collectorNumber: bp.fixed_properties?.collector_number || null,
             rarity: bp.fixed_properties?.riftbound_rarity || null,
             imageUrl: imageUrl,
+            backImageUrl: backImageUrl,
             cardMarketIds: bp.card_market_ids || [],
             tcgPlayerId: bp.tcg_player_id || null,
+            availableLanguages: availableLanguages,
+            hasFoil: hasFoil,
             nameLower: (bp.name || "").toLowerCase(),
             updatedAt: FieldValue.serverTimestamp(),
           }, { merge: true });
@@ -626,7 +644,7 @@ export const scanCard = onRequest(
     try {
       const imageSize = image.length;
       const hasContext = !!(expansion || cards);
-      console.log(`scanCard v4: image=${imageSize} chars, expansion=${expansion || 'none'}, cards=${cards?.length || 0}`);
+      console.log(`scanCard v5: image=${imageSize} chars, expansion=${expansion || 'none'}, cards=${cards?.length || 0}`);
 
       const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
 
@@ -636,28 +654,36 @@ export const scanCard = onRequest(
 
       // Build prompt with context if available
       let prompt = `Identify ALL trading cards visible in this photo. There may be one or multiple cards.`;
+      prompt += `\nThis is a Riftbound (League of Legends TCG) card. Cards exist in English, Simplified Chinese (zh-CN), and French.`;
+      prompt += `\nThe card text might be in ANY of these languages, but always match it to the ENGLISH name from the list.`;
 
       if (expansion) {
         prompt += `\nThese cards are from the expansion/set: "${expansion}".`;
       }
 
       if (cards && Array.isArray(cards) && cards.length > 0) {
-        // cards format: ["025|Pikachu", "026|Raichu", ...]
-        prompt += `\n\nEach card MUST be one from this list (format: COLLECTOR_NUMBER|NAME):\n${cards.join('\n')}`;
-        prompt += `\n\nIMPORTANT: Many cards share the same name but are DIFFERENT variants. Use the COLLECTOR NUMBER printed on the card (usually bottom-left or bottom-right, format like "025/165") to identify the EXACT card.`;
-        prompt += `\nAlso look at the artwork, colors, creature/character, and card type (ex, V, VMAX, GX, etc.) to distinguish variants.`;
+        // cards format: ["025|Jinx - Loose Cannon|Rare", "025|Jinx - Loose Cannon|Rare|Alternate Art", ...]
+        prompt += `\n\nEach card MUST be one from this list (format: COLLECTOR_NUMBER|NAME or COLLECTOR_NUMBER|NAME|RARITY or COLLECTOR_NUMBER|NAME|RARITY|VERSION):`;
+        prompt += `\n${cards.join('\n')}`;
+        prompt += `\n\nIMPORTANT MATCHING RULES:`;
+        prompt += `\n- Many cards share the SAME NAME but are DIFFERENT variants (Alternate Art, Showcase, Showcase | Signed).`;
+        prompt += `\n- Use the COLLECTOR NUMBER printed on the card (usually bottom-left or bottom-right, format like "025/240" or "025a") to identify the EXACT variant.`;
+        prompt += `\n- Alternate Art variants often have suffix "a" on the collector number (e.g. "007a").`;
+        prompt += `\n- Showcase variants have higher numbers (e.g. "301" vs "251" for the same card name).`;
+        prompt += `\n- If the card text is in Chinese or French, still return the ENGLISH name from the list.`;
+        prompt += `\n- Look at the artwork style, border design, rarity symbol, and foil pattern to help distinguish variants.`;
       }
 
       prompt += `\n\nReply with ONE LINE PER CARD in EXACTLY this format (no extra text):
 COLLECTOR_NUMBER|CARD_NAME_EN
 
-Where COLLECTOR_NUMBER is the number from the card (e.g. "025" or "025/165").
+Where COLLECTOR_NUMBER is the number from the card (e.g. "025" or "025/240" or "025a").
 CARD_NAME_EN is the English card name matching one from the list.
 
 Example response for 3 cards:
-025|Pikachu
-042|Charizard ex
-101|Mewtwo V
+025|Jinx - Demolitionist
+042a|Calm Rune
+301|Jinx - Loose Cannon
 
 If you cannot identify any card or see NO trading cards, reply exactly: NONE`;
 
@@ -681,7 +707,7 @@ If you cannot identify any card or see NO trading cards, reply exactly: NONE`;
         ],
       });
 
-      console.log("scanCard v4 response:", JSON.stringify({
+      console.log("scanCard v5 response:", JSON.stringify({
         content: response.choices[0]?.message?.content,
         finish: response.choices[0]?.finish_reason,
         usage: response.usage,
