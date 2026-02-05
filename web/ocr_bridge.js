@@ -29,8 +29,8 @@ async function startOcrCamera(containerId) {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: 'environment' },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
       }
     });
     video.srcObject = stream;
@@ -60,8 +60,8 @@ function captureFrame(containerId) {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
 
-  // Capture full frame (user can photograph multiple cards)
-  const maxDim = 1280;
+  // Capture full frame — high-res for collector number readability
+  const maxDim = 1920;
   const scale = Math.min(1, maxDim / Math.max(vw, vh));
   const dw = Math.round(vw * scale);
   const dh = Math.round(vh * scale);
@@ -69,9 +69,13 @@ function captureFrame(containerId) {
   canvas.width = dw;
   canvas.height = dh;
   const ctx = canvas.getContext('2d');
+
+  // Slight sharpness boost for small text (collector numbers)
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(video, 0, 0, vw, vh, 0, 0, dw, dh);
 
-  return canvas.toDataURL('image/jpeg', 0.85);
+  return canvas.toDataURL('image/jpeg', 0.92);
 }
 
 /**

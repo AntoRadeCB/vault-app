@@ -644,7 +644,7 @@ export const scanCard = onRequest(
     try {
       const imageSize = image.length;
       const hasContext = !!(expansion || cards);
-      console.log(`scanCard v5: image=${imageSize} chars, expansion=${expansion || 'none'}, cards=${cards?.length || 0}`);
+      console.log(`scanCard v6: image=${imageSize} chars, expansion=${expansion || 'none'}, cards=${cards?.length || 0}`);
 
       const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
 
@@ -652,51 +652,60 @@ export const scanCard = onRequest(
         ? image
         : `data:image/jpeg;base64,${image}`;
 
-      // Build prompt with context if available
-      let prompt = `Identify ALL trading cards visible in this photo. There may be one or multiple cards.`;
-      prompt += `\nThis is a Riftbound (League of Legends TCG) card. Cards exist in English, Simplified Chinese (zh-CN), and French.`;
-      prompt += `\nThe card text might be in ANY of these languages, but always match it to the ENGLISH name from the list.`;
+      // ── Build system prompt for structured card identification ──
+      let systemPrompt = `You are a Riftbound (League of Legends TCG) card identification expert.
+Your job: identify every trading card visible in a photo with 100% accuracy.
+
+CRITICAL RULES:
+1. FIRST read the COLLECTOR NUMBER printed on each card. This is the MOST RELIABLE identifier.
+   - Located at bottom-left or bottom-right of the card
+   - Format examples: "025/240", "025", "007a", "301"
+   - Alternate Art variants have suffix "a" (e.g. "007a", "027a")
+   - Showcase variants have high numbers (e.g. 246+, 301+)
+2. THEN verify the card name matches what you see (champion name, artwork, card title).
+3. Cards exist in English, Simplified Chinese (zh-CN), and French — the text on the card may be in any language, but ALWAYS return the ENGLISH name.
+4. If you are NOT confident about a card, skip it — do NOT guess. Only return cards you are sure about.
+5. Analyze EACH card independently. Don't let one card's identification influence another.`;
+
+      let userPrompt = `Identify ALL Riftbound trading cards visible in this photo.`;
 
       if (expansion) {
-        prompt += `\nThese cards are from the expansion/set: "${expansion}".`;
+        userPrompt += `\nExpansion: "${expansion}".`;
       }
 
       if (cards && Array.isArray(cards) && cards.length > 0) {
-        // cards format: ["025|Jinx - Loose Cannon|Rare", "025|Jinx - Loose Cannon|Rare|Alternate Art", ...]
-        prompt += `\n\nEach card MUST be one from this list (format: COLLECTOR_NUMBER|NAME or COLLECTOR_NUMBER|NAME|RARITY or COLLECTOR_NUMBER|NAME|RARITY|VERSION):`;
-        prompt += `\n${cards.join('\n')}`;
-        prompt += `\n\nIMPORTANT MATCHING RULES:`;
-        prompt += `\n- Many cards share the SAME NAME but are DIFFERENT variants (Alternate Art, Showcase, Showcase | Signed).`;
-        prompt += `\n- Use the COLLECTOR NUMBER printed on the card (usually bottom-left or bottom-right, format like "025/240" or "025a") to identify the EXACT variant.`;
-        prompt += `\n- Alternate Art variants often have suffix "a" on the collector number (e.g. "007a").`;
-        prompt += `\n- Showcase variants have higher numbers (e.g. "301" vs "251" for the same card name).`;
-        prompt += `\n- If the card text is in Chinese or French, still return the ENGLISH name from the list.`;
-        prompt += `\n- Look at the artwork style, border design, rarity symbol, and foil pattern to help distinguish variants.`;
+        userPrompt += `\n\nREFERENCE LIST (COLLECTOR_NUMBER|NAME or COLLECTOR_NUMBER|NAME|RARITY or COLLECTOR_NUMBER|NAME|RARITY|VERSION):`;
+        userPrompt += `\n${cards.join('\n')}`;
+        userPrompt += `\n\nFor EACH card visible in the photo:`;
+        userPrompt += `\n1. Read the collector number printed on the card`;
+        userPrompt += `\n2. Find the matching entry in the list above by collector number`;
+        userPrompt += `\n3. Verify the card name/artwork matches`;
+        userPrompt += `\n4. If the collector number is unreadable, use the champion/character name + artwork to find the best match, but prefer to skip over guessing wrong`;
       }
 
-      prompt += `\n\nReply with ONE LINE PER CARD in EXACTLY this format (no extra text):
+      userPrompt += `\n\nOUTPUT FORMAT — one line per card, nothing else:
 COLLECTOR_NUMBER|CARD_NAME_EN
 
-Where COLLECTOR_NUMBER is the number from the card (e.g. "025" or "025/240" or "025a").
-CARD_NAME_EN is the English card name matching one from the list.
-
-Example response for 3 cards:
+Example:
 025|Jinx - Demolitionist
 042a|Calm Rune
-301|Jinx - Loose Cannon
 
-If you cannot identify any card or see NO trading cards, reply exactly: NONE`;
+If NO cards visible or NONE identifiable with confidence, reply: NONE`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5.2",
         max_completion_tokens: 4096,
         messages: [
           {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
             role: "user",
             content: [
               {
                 type: "text",
-                text: prompt,
+                text: userPrompt,
               },
               {
                 type: "image_url",
@@ -707,7 +716,7 @@ If you cannot identify any card or see NO trading cards, reply exactly: NONE`;
         ],
       });
 
-      console.log("scanCard v5 response:", JSON.stringify({
+      console.log("scanCard v6 response:", JSON.stringify({
         content: response.choices[0]?.message?.content,
         finish: response.choices[0]?.finish_reason,
         usage: response.usage,
