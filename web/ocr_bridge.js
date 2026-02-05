@@ -60,20 +60,21 @@ function captureFrame(containerId) {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
 
-  // Capture full frame — high-res for collector number readability
-  const maxDim = 1920;
-  const scale = Math.min(1, maxDim / Math.max(vw, vh));
-  const dw = Math.round(vw * scale);
-  const dh = Math.round(vh * scale);
+  // Crop to single-card area (matching the overlay cutout)
+  // Overlay: 60% height, width = height * 0.714, centered
+  const cardRatio = 0.714;
+  const cropH = Math.round(vh * 0.60);
+  const cropW = Math.round(Math.min(cropH * cardRatio, vw * 0.75));
+  const cropX = Math.round((vw - cropW) / 2);
+  const cropY = Math.round((vh - cropH) / 2 - vh * 0.03); // slight up offset matching overlay
 
-  canvas.width = dw;
-  canvas.height = dh;
+  // Output at native crop resolution (no downscale — card fills entire image)
+  canvas.width = cropW;
+  canvas.height = cropH;
   const ctx = canvas.getContext('2d');
-
-  // Slight sharpness boost for small text (collector numbers)
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(video, 0, 0, vw, vh, 0, 0, dw, dh);
+  ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
   return canvas.toDataURL('image/jpeg', 0.92);
 }

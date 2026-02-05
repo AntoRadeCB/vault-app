@@ -1208,9 +1208,10 @@ class _CardScanOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Wide open area — 90% width, 65% height for multi-card photos
-        final areaWidth = constraints.maxWidth * 0.90;
+        // Single card proportions (63.5×88.9mm ≈ 0.714 ratio)
+        const cardRatio = 0.714; // width / height
         final areaHeight = constraints.maxHeight * 0.60;
+        final areaWidth = (areaHeight * cardRatio).clamp(0.0, constraints.maxWidth * 0.75);
         final top = (constraints.maxHeight - areaHeight) / 2 - 20;
         final left = (constraints.maxWidth - areaWidth) / 2;
 
