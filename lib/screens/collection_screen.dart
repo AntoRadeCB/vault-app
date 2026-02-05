@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../models/product.dart';
 import '../models/card_blueprint.dart';
 import '../widgets/animated_widgets.dart';
+import '../widgets/ocr_scanner_dialog.dart';
 import '../services/firestore_service.dart';
 import '../services/card_catalog_service.dart';
 
@@ -330,6 +331,46 @@ class _GameExpansionViewState extends State<_GameExpansionView>
     super.dispose();
   }
 
+  Future<void> _scanCard(BuildContext context, List<CardBlueprint> gameCatalog, Map<String, Product> pMap) async {
+    final numbers = await OcrScannerDialog.scan(
+      context,
+      expansionCards: gameCatalog,
+    );
+    if (!mounted || numbers.isEmpty) return;
+
+    for (final num in numbers) {
+      // Look up the card in the current game's catalog
+      final match = gameCatalog
+          .where((c) =>
+              c.collectorNumber != null &&
+              c.collectorNumber!.replaceAll(RegExp(r'^0+'), '') ==
+                  num.replaceAll(RegExp(r'^0+'), ''))
+          .firstOrNull;
+      if (match != null) {
+        final existing = pMap[match.id];
+        if (existing != null && existing.id != null) {
+          // Increment quantity
+          await widget.fs.updateProduct(existing.id!, {'quantity': existing.quantity + 1});
+        } else {
+          // Add new card
+          await widget.fs.addProduct(Product(
+            name: match.name,
+            brand: widget.game.toUpperCase(),
+            quantity: 1,
+            price: match.marketPrice != null ? match.marketPrice!.cents / 100 : 0,
+            status: ProductStatus.inInventory,
+            kind: ProductKind.singleCard,
+            cardBlueprintId: match.id,
+            cardImageUrl: match.imageUrl,
+            cardExpansion: match.expansionName,
+            cardRarity: match.rarity,
+            marketPrice: match.marketPrice != null ? match.marketPrice!.cents / 100 : null,
+          ));
+        }
+      }
+    }
+  }
+
   /// Build map of blueprintId → Product, aggregating quantity from duplicates.
   /// Keeps the first product (for id/metadata) but sums quantities.
   Map<String, Product> _productMap() {
@@ -401,6 +442,13 @@ class _GameExpansionViewState extends State<_GameExpansionView>
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.camera_alt, color: _meta.color),
+            tooltip: 'Scansiona carta',
+            onPressed: () => _scanCard(context, gameCatalog, pMap),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(46),
           child: TabBar(

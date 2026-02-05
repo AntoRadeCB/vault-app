@@ -12,13 +12,11 @@ import '../models/purchase.dart';
 import '../l10n/app_localizations.dart';
 
 class DashboardScreen extends StatelessWidget {
-  final Function(Product)? onOpenProduct;
-  final VoidCallback? onGoToCollection;
   final FirestoreService _firestoreService = FirestoreService();
   // Temporary context reference for nested builders
   BuildContext? _contextRef;
 
-  DashboardScreen({super.key, this.onOpenProduct, this.onGoToCollection});
+  DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -33,23 +31,20 @@ class DashboardScreen extends StatelessWidget {
             // 1. Profile + Budget card
             StaggeredFadeSlide(index: 0, child: _buildProfileCard(context)),
             const SizedBox(height: 20),
-            // 2. Action buttons
-            StaggeredFadeSlide(index: 1, child: _buildActionButtons(context)),
-            const SizedBox(height: 20),
-            // 3. Inventory Value card
-            StaggeredFadeSlide(index: 2, child: _buildInventoryValueCard(context)),
+            // 2. Inventory Value card
+            StaggeredFadeSlide(index: 1, child: _buildInventoryValueCard(context)),
             const SizedBox(height: 16),
-            // 4. Quick stats row
+            // 3. Quick stats row
             _buildQuickStats(context),
             const SizedBox(height: 16),
-            // 4b. Sealed vs Opened stat
-            StaggeredFadeSlide(index: 3, child: _buildSealedVsOpenedStat(context)),
+            // 3b. Sealed vs Opened stat
+            StaggeredFadeSlide(index: 2, child: _buildSealedVsOpenedStat(context)),
             const SizedBox(height: 24),
-            // 5. Recent Activity (unified)
-            StaggeredFadeSlide(index: 4, child: _buildRecentActivity(context)),
+            // 4. Recent Activity (unified)
+            StaggeredFadeSlide(index: 3, child: _buildRecentActivity(context)),
             const SizedBox(height: 24),
-            // 6. Operational Status
-            StaggeredFadeSlide(index: 5, child: _buildOperationalStatus(context)),
+            // 5. Operational Status
+            StaggeredFadeSlide(index: 4, child: _buildOperationalStatus(context)),
           ],
         ),
       ),
@@ -226,320 +221,6 @@ class DashboardScreen extends StatelessWidget {
     if (progress < 0.7) return AppColors.accentGreen;
     if (progress < 0.9) return AppColors.accentOrange;
     return AppColors.accentRed;
-  }
-
-  // ════════════════════════════════════════════════════
-  //  ACTION BUTTONS
-  // ════════════════════════════════════════════════════
-
-  Widget _buildActionButtons(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: ShimmerButton(
-            baseGradient: AppColors.blueButtonGradient,
-            onTap: () => _showSbustaSheet(context),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inventory_2, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Sbusta',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ShimmerButton(
-            baseGradient: const LinearGradient(
-              colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
-            ),
-            onTap: () => onGoToCollection?.call(),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Aggiungi Carte',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showSbustaSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Expanded(
-                  child: Text('Sbusta', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showAddSealedProductDialog(context);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.blueButtonGradient,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add, color: Colors.white, size: 16),
-                        SizedBox(width: 4),
-                        Text('Aggiungi', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            const Text('Scegli un prodotto sigillato da aprire', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 300,
-              child: StreamBuilder<List<Product>>(
-                stream: _firestoreService.getProducts(),
-                builder: (context, snap) {
-                  final sealed = (snap.data ?? []).where((p) => p.canBeOpened && !p.isOpened).toList();
-                  if (sealed.isEmpty) {
-                    return const Center(
-                      child: Text('Nessun prodotto sigillato', style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
-                    );
-                  }
-                  return ListView.builder(
-                    itemCount: sealed.length,
-                    itemBuilder: (context, i) {
-                      final p = sealed[i];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            onOpenProduct?.call(p);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AppColors.cardDark,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 40, height: 40,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accentOrange.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(Icons.inventory_2, color: AppColors.accentOrange, size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      const SizedBox(height: 2),
-                                      Text('${p.kindLabel} • Qta: ${p.formattedQuantity}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showAddSealedProductDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    final priceController = TextEditingController();
-    final qtyController = TextEditingController(text: '1');
-    ProductKind selectedKind = ProductKind.boosterPack;
-    String brand = ProfileProvider.maybeOf(context)?.profile?.name.toUpperCase() ?? 'RIFTBOUND';
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Nuovo prodotto sigillato', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Nome prodotto',
-                    labelStyle: const TextStyle(color: AppColors.textMuted),
-                    filled: true,
-                    fillColor: AppColors.cardDark,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: priceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Prezzo di acquisto (€)',
-                    labelStyle: const TextStyle(color: AppColors.textMuted),
-                    filled: true,
-                    fillColor: AppColors.cardDark,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: qtyController,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Quantità',
-                    labelStyle: const TextStyle(color: AppColors.textMuted),
-                    filled: true,
-                    fillColor: AppColors.cardDark,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Kind selector
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardDark,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: DropdownButton<ProductKind>(
-                    value: selectedKind,
-                    isExpanded: true,
-                    dropdownColor: AppColors.surface,
-                    style: const TextStyle(color: Colors.white),
-                    underline: const SizedBox(),
-                    items: const [
-                      DropdownMenuItem(value: ProductKind.boosterPack, child: Text('Busta')),
-                      DropdownMenuItem(value: ProductKind.boosterBox, child: Text('Box')),
-                      DropdownMenuItem(value: ProductKind.display, child: Text('Display')),
-                      DropdownMenuItem(value: ProductKind.bundle, child: Text('Bundle')),
-                    ],
-                    onChanged: (v) => setDialogState(() => selectedKind = v!),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annulla', style: TextStyle(color: AppColors.textMuted)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accentBlue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () async {
-                final name = nameController.text.trim();
-                final price = double.tryParse(priceController.text.trim()) ?? 0;
-                final qty = double.tryParse(qtyController.text.trim()) ?? 1;
-                if (name.isEmpty) return;
-
-                final product = Product(
-                  name: name,
-                  brand: brand,
-                  quantity: qty,
-                  price: price,
-                  status: ProductStatus.inInventory,
-                  kind: selectedKind,
-                  createdAt: DateTime.now(),
-                );
-                await _firestoreService.addProduct(product);
-
-                // Also register as purchase
-                await _firestoreService.addPurchase(Purchase(
-                  productName: name,
-                  price: price * qty,
-                  quantity: qty,
-                  date: DateTime.now(),
-                  workspace: 'default',
-                ));
-
-                if (ctx.mounted) Navigator.pop(ctx);
-                // Re-open sbusta sheet to show the new product
-                if (context.mounted) _showSbustaSheet(context);
-              },
-              child: const Text('Aggiungi', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   // ════════════════════════════════════════════════════

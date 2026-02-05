@@ -590,12 +590,14 @@ class _CountUpTextState extends State<CountUpText>
 }
 
 // ──────────────────────────────────────────────────
-// Animated FAB with rotation
+// Expandable FAB menu with 3 options
 // ──────────────────────────────────────────────────
 class AnimatedFab extends StatefulWidget {
-  final VoidCallback? onTap;
+  final VoidCallback? onSbusta;
+  final VoidCallback? onAdd;
+  final VoidCallback? onScan;
 
-  const AnimatedFab({super.key, this.onTap});
+  const AnimatedFab({super.key, this.onSbusta, this.onAdd, this.onScan});
 
   @override
   State<AnimatedFab> createState() => _AnimatedFabState();
@@ -604,13 +606,14 @@ class AnimatedFab extends StatefulWidget {
 class _AnimatedFabState extends State<AnimatedFab>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  bool _isOpen = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 280),
     );
   }
 
@@ -620,39 +623,184 @@ class _AnimatedFabState extends State<AnimatedFab>
     super.dispose();
   }
 
-  void _handleTap() {
-    _controller.forward().then((_) => _controller.reverse());
-    widget.onTap?.call();
+  void _toggle() {
+    if (_isOpen) {
+      _controller.reverse();
+    } else {
+      _controller.forward();
+    }
+    setState(() => _isOpen = !_isOpen);
+  }
+
+  void _close() {
+    if (_isOpen) {
+      _controller.reverse();
+      setState(() => _isOpen = false);
+    }
+  }
+
+  void _onOption(VoidCallback? callback) {
+    _close();
+    callback?.call();
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _handleTap,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (_, child) {
-          return Transform.rotate(
-            angle: _controller.value * math.pi / 4,
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                gradient: AppColors.blueButtonGradient,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.accentBlue.withValues(alpha: 0.4),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+    return SizedBox(
+      width: 180,
+      height: 280,
+      child: Stack(
+        alignment: Alignment.bottomRight,
+        children: [
+          // Dark overlay behind menu items — only when open
+          if (_isOpen)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _close,
+                behavior: HitTestBehavior.opaque,
+                child: const SizedBox.expand(),
               ),
-              child: const Icon(Icons.add, color: Colors.white, size: 28),
             ),
-          );
-        },
+
+          // Mini buttons — fan out upward
+          _buildMiniButton(
+            index: 0,
+            icon: Icons.camera_alt,
+            label: 'Scan',
+            onTap: () => _onOption(widget.onScan),
+          ),
+          _buildMiniButton(
+            index: 1,
+            icon: Icons.add,
+            label: 'Aggiungi',
+            onTap: () => _onOption(widget.onAdd),
+          ),
+          _buildMiniButton(
+            index: 2,
+            icon: Icons.inventory_2,
+            label: 'Sbusta',
+            onTap: () => _onOption(widget.onSbusta),
+          ),
+
+          // Main FAB
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: _toggle,
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (_, __) {
+                  return Transform.rotate(
+                    angle: _controller.value * math.pi / 4,
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.blueButtonGradient,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.accentBlue.withValues(alpha: 0.4),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.add, color: Colors.white, size: 28),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildMiniButton({
+    required int index,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    // Each button spaced 60px above previous, starting 66px above main FAB
+    final bottomOffset = 66.0 + index * 58.0;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) {
+        final t = CurvedAnimation(
+          parent: _controller,
+          curve: Interval(index * 0.1, 0.6 + index * 0.1, curve: Curves.easeOutBack),
+        ).value;
+
+        return Positioned(
+          bottom: bottomOffset * t,
+          right: 0,
+          child: Opacity(
+            opacity: t.clamp(0.0, 1.0),
+            child: Transform.scale(
+              scale: 0.5 + t * 0.5,
+              child: GestureDetector(
+                onTap: t > 0.5 ? onTap : null,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Label
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                          ),
+                          child: Text(
+                            label,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Circular icon
+                    ClipOval(
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.accentBlue.withValues(alpha: 0.2),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: Icon(icon, color: Colors.white, size: 20),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

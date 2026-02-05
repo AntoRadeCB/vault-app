@@ -17,6 +17,11 @@ import '../screens/open_product_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../widgets/animated_widgets.dart';
 import '../widgets/coach_mark_overlay.dart';
+import '../widgets/ocr_scanner_dialog.dart';
+import '../services/firestore_service.dart';
+import '../services/card_catalog_service.dart';
+import '../models/product.dart';
+import '../models/card_blueprint.dart';
 
 import 'navigation_state.dart';
 import 'coach_steps_builder.dart';
@@ -189,6 +194,154 @@ class _MainShellState extends State<MainShell> {
     _nav.showAddSale();
   }
 
+  void _showSbustaSheet(BuildContext context) {
+    final fs = FirestoreService();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Sbusta', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text('Scegli un prodotto sigillato da aprire', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 300,
+              child: StreamBuilder<List<Product>>(
+                stream: fs.getProducts(),
+                builder: (context, snap) {
+                  final sealed = (snap.data ?? []).where((p) => p.canBeOpened && !p.isOpened).toList();
+                  if (sealed.isEmpty) {
+                    return const Center(
+                      child: Text('Nessun prodotto sigillato', style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
+                    );
+                  }
+                  return ListView.builder(
+                    itemCount: sealed.length,
+                    itemBuilder: (context, i) {
+                      final p = sealed[i];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _nav.showOpenProduct(p);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardDark,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40, height: 40,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentOrange.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.inventory_2, color: AppColors.accentOrange, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      const SizedBox(height: 2),
+                                      Text('${p.kindLabel} • Qta: ${p.formattedQuantity}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openScanFromFab(BuildContext context) async {
+    // Load all cards for expansion matching
+    final catalogService = CardCatalogService();
+    List<CardBlueprint> allCards = [];
+    try {
+      allCards = await catalogService.getAllCards();
+    } catch (_) {}
+
+    if (!mounted) return;
+    final numbers = await OcrScannerDialog.scan(
+      context,
+      expansionCards: allCards,
+    );
+    if (!mounted || numbers.isEmpty) return;
+
+    // For each scanned number, try to find and add the card
+    final fs = FirestoreService();
+    for (final num in numbers) {
+      final match = allCards
+          .where((c) =>
+              c.collectorNumber != null &&
+              c.collectorNumber!.replaceAll(RegExp(r'^0+'), '') ==
+                  num.replaceAll(RegExp(r'^0+'), ''))
+          .firstOrNull;
+      if (match != null) {
+        // Check if already owned
+        final products = await fs.getProducts().first;
+        final existing = products
+            .where((p) => p.cardBlueprintId == match.id)
+            .firstOrNull;
+        if (existing != null && existing.id != null) {
+          await fs.updateProduct(existing.id!, {'quantity': existing.quantity + 1});
+        } else {
+          await fs.addProduct(Product(
+            name: match.name,
+            brand: (match.game ?? 'unknown').toUpperCase(),
+            quantity: 1,
+            price: match.marketPrice != null ? match.marketPrice!.cents / 100 : 0,
+            status: ProductStatus.inInventory,
+            kind: ProductKind.singleCard,
+            cardBlueprintId: match.id,
+            cardImageUrl: match.imageUrl,
+            cardExpansion: match.expansionName,
+            cardRarity: match.rarity,
+            marketPrice: match.marketPrice != null ? match.marketPrice!.cents / 100 : null,
+          ));
+        }
+      }
+    }
+  }
+
   void _handleProfileSwitch() {
     showProfileSwitcher(context, onSwitched: () {
       _nav.navigateTo(0);
@@ -234,10 +387,7 @@ class _MainShellState extends State<MainShell> {
 
     switch (tabId) {
       case 'dashboard':
-        return DashboardScreen(
-          onOpenProduct: _nav.showOpenProduct,
-          onGoToCollection: () => _nav.navigateTo(1),
-        );
+        return DashboardScreen();
       case 'collection':
         return const CollectionScreen();
       case 'inventory':
@@ -252,10 +402,7 @@ class _MainShellState extends State<MainShell> {
       case 'settings':
         return const SettingsScreen();
       default:
-        return DashboardScreen(
-          onOpenProduct: _nav.showOpenProduct,
-          onGoToCollection: () => _nav.navigateTo(1),
-        );
+        return DashboardScreen();
     }
   }
 
@@ -300,7 +447,12 @@ class _MainShellState extends State<MainShell> {
       floatingActionButton: !isWide
           ? IgnorePointer(
               ignoring: _showTutorial,
-              child: AnimatedFab(key: _keyFab, onTap: _guardedAddItem),
+              child: AnimatedFab(
+                key: _keyFab,
+                onAdd: _guardedAddItem,
+                onSbusta: () => _showSbustaSheet(context),
+                onScan: () => _openScanFromFab(context),
+              ),
             )
           : null,
     );
