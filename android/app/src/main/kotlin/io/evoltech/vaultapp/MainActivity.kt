@@ -1,4 +1,4 @@
-package com.vault.vault_app
+package io.evoltech.vaultapp
 
 import io.flutter.embedding.android.FlutterActivity
 
