@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../providers/profile_provider.dart';
 import '../screens/dashboard_screen.dart';
+import '../screens/collection_screen.dart';
 import '../screens/inventory_screen.dart';
 import '../screens/add_item_screen.dart';
 import '../screens/reports_screen.dart';
@@ -47,6 +48,7 @@ class _MainShellState extends State<MainShell> {
 
   // ─── GlobalKeys for interactive coach marks ──────
   final _keyDashboardNav = GlobalKey();
+  final _keyCollectionNav = GlobalKey();
   final _keyInventoryNav = GlobalKey();
   final _keyShipmentsNav = GlobalKey();
   final _keyReportsNav = GlobalKey();
@@ -55,6 +57,7 @@ class _MainShellState extends State<MainShell> {
   final _keyNotifications = GlobalKey();
   // Desktop sidebar keys
   final _keySidebarDashboard = GlobalKey();
+  final _keySidebarCollection = GlobalKey();
   final _keySidebarInventory = GlobalKey();
   final _keySidebarShipments = GlobalKey();
   final _keySidebarReports = GlobalKey();
@@ -147,23 +150,25 @@ class _MainShellState extends State<MainShell> {
   // ─── Coach-mark key resolvers ───────────────────
   GlobalKey _mobileNavKey(String id) {
     switch (id) {
-      case 'dashboard': return _keyDashboardNav;
-      case 'inventory': return _keyInventoryNav;
-      case 'shipments': return _keyShipmentsNav;
-      case 'reports':   return _keyReportsNav;
-      case 'settings':  return _keySettingsNav;
-      default:          return GlobalKey();
+      case 'dashboard':  return _keyDashboardNav;
+      case 'collection': return _keyCollectionNav;
+      case 'inventory':  return _keyInventoryNav;
+      case 'shipments':  return _keyShipmentsNav;
+      case 'reports':    return _keyReportsNav;
+      case 'settings':   return _keySettingsNav;
+      default:           return GlobalKey();
     }
   }
 
   GlobalKey _sidebarKey(String id) {
     switch (id) {
-      case 'dashboard': return _keySidebarDashboard;
-      case 'inventory': return _keySidebarInventory;
-      case 'shipments': return _keySidebarShipments;
-      case 'reports':   return _keySidebarReports;
-      case 'settings':  return _keySidebarSettings;
-      default:          return GlobalKey();
+      case 'dashboard':  return _keySidebarDashboard;
+      case 'collection': return _keySidebarCollection;
+      case 'inventory':  return _keySidebarInventory;
+      case 'shipments':  return _keySidebarShipments;
+      case 'reports':    return _keySidebarReports;
+      case 'settings':   return _keySidebarSettings;
+      default:           return GlobalKey();
     }
   }
 
@@ -233,6 +238,8 @@ class _MainShellState extends State<MainShell> {
           onNewPurchase: _guardedAddItem,
           onNewSale: _guardedAddSale,
         );
+      case 'collection':
+        return const CollectionScreen();
       case 'inventory':
         return InventoryScreen(
           onEditProduct: _nav.showEditProduct,

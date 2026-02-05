@@ -129,6 +129,7 @@ class UserProfile {
   // ─── Tab identifiers used throughout the app ────
   static const List<String> _allTabs = [
     'dashboard',
+    'collection',
     'inventory',
     'shipments',
     'reports',

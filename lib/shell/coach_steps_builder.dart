@@ -24,6 +24,11 @@ const List<TabDef> allTabDefs = <TabDef>[
     selectedIcon: Icons.dashboard,
   ),
   TabDef(
+    id: 'collection',
+    icon: Icons.collections_bookmark_outlined,
+    selectedIcon: Icons.collections_bookmark,
+  ),
+  TabDef(
     id: 'inventory',
     icon: Icons.inventory_2_outlined,
     selectedIcon: Icons.inventory_2,
@@ -56,6 +61,8 @@ class CoachStepsBuilder {
     switch (id) {
       case 'dashboard':
         return l.home;
+      case 'collection':
+        return 'Collezione';
       case 'inventory':
         return l.inventory;
       case 'shipments':
@@ -74,6 +81,8 @@ class CoachStepsBuilder {
     switch (id) {
       case 'dashboard':
         return AppColors.accentBlue;
+      case 'collection':
+        return const Color(0xFF667eea);
       case 'inventory':
         return AppColors.accentPurple;
       case 'shipments':
@@ -93,6 +102,9 @@ class CoachStepsBuilder {
       case 'dashboard':
         return 'Il tuo centro di controllo. Qui vedi il riepilogo della collezione: '
             'valore carte, budget e attività recente.';
+      case 'collection':
+        return 'Sfoglia la tua collezione come un raccoglitore di carte. '
+            'Vedi il progresso per ogni espansione e il valore delle tue carte.';
       case 'inventory':
         return 'Tutta la tua collezione in un posto. Carte singole, buste sigillate, '
             'box e display. Apri le buste e registra le pulls!';

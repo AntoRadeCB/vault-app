@@ -1082,7 +1082,7 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                   ),
                 ),
               ),
-              // Scan button (Gemini OCR — free/cheap)
+              // Scan button (Gemini OCR)
               ScaleOnPress(
                 onTap: () => _openScan(mode: 'ocr'),
                 child: Container(
@@ -1101,34 +1101,6 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                           color: Colors.white, size: 13),
                       SizedBox(width: 3),
                       Text('Scan',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 5),
-              // Scan Premium button (GPT-5.2 — accurate)
-              ScaleOnPress(
-                onTap: () => _openScan(mode: 'premium'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 5),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFf093fb), Color(0xFFf5576c)],
-                    ),
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.auto_awesome,
-                          color: Colors.white, size: 13),
-                      SizedBox(width: 3),
-                      Text('Scan Pro',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 10,
