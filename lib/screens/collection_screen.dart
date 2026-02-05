@@ -58,7 +58,9 @@ class _CollectionScreenState extends State<CollectionScreen> {
   }
 
   Future<void> _loadCatalog() async {
-    final cards = await _catalogService.getAllCards();
+    final all = await _catalogService.getAllCards();
+    // Only show single cards in collection (no boxes, packs, etc.)
+    final cards = all.where((c) => c.kind == null || c.kind == 'singleCard').toList();
     if (mounted) setState(() { _catalog = cards; _catalogLoading = false; });
   }
 
