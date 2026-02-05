@@ -135,29 +135,138 @@ class _InventoryScreenState extends State<InventoryScreen>
     );
   }
 
-  /// Compute effective collection target for a product
-  int _effectiveTarget(Product p, int profileTarget) {
-    return p.collectionTargetOverride ?? profileTarget;
-  }
-
   /// Filter products for inventory view:
   /// - Non-singleCard: show as-is
-  /// - SingleCard: only show if qty > effectiveTarget, display excess qty
-  List<Product> _applyInventoryLogic(List<Product> products, int profileTarget) {
+  /// - SingleCard: show only if inventoryQty > 0 (manual mode)
+  ///   OR if autoInventory is on and qty > collectionTarget (auto excess)
+  List<Product> _applyInventoryLogic(List<Product> products, bool autoInventory, int profileTarget) {
     final result = <Product>[];
     for (final p in products) {
       if (p.kind != ProductKind.singleCard) {
         result.add(p);
       } else {
-        final target = _effectiveTarget(p, profileTarget);
-        final excess = p.quantity - target;
-        if (excess > 0) {
-          // Show card with excess quantity
-          result.add(p.copyWith(quantity: excess));
+        if (p.inventoryQty > 0) {
+          // Manual inventory: show with inventoryQty as display quantity
+          result.add(p.copyWith(quantity: p.inventoryQty));
+        } else if (autoInventory) {
+          final target = p.collectionTargetOverride ?? profileTarget;
+          final excess = p.quantity - target;
+          if (excess > 0) {
+            result.add(p.copyWith(quantity: excess));
+          }
         }
       }
     }
     return result;
+  }
+
+  void _showEditSellPrice(Product product) {
+    final controller = TextEditingController(
+      text: product.sellPrice?.toStringAsFixed(2) ?? '',
+    );
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Prezzo di vendita', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(
+                'Prezzo di mercato: ${product.formattedMarketPrice.isNotEmpty ? product.formattedMarketPrice : "N/A"}',
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  hintText: product.marketPrice?.toStringAsFixed(2) ?? '0.00',
+                  hintStyle: const TextStyle(color: AppColors.textMuted),
+                  prefixText: '€ ',
+                  prefixStyle: const TextStyle(color: AppColors.accentGreen, fontSize: 20, fontWeight: FontWeight.bold),
+                  filled: true,
+                  fillColor: AppColors.cardDark,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.accentGreen, width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(child: Text('Annulla', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600, fontSize: 15))),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        final value = double.tryParse(controller.text.trim());
+                        if (product.id != null) {
+                          _firestoreService.updateProduct(product.id!, {'sellPrice': value});
+                        }
+                        Navigator.pop(ctx);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF43A047), Color(0xFF2E7D32)]),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(child: Text('Salva', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15))),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -165,13 +274,14 @@ class _InventoryScreenState extends State<InventoryScreen>
     final l = AppLocalizations.of(context)!;
     final provider = ProfileProvider.maybeOf(context);
     final profileTarget = provider?.profile?.collectionTarget ?? 1;
+    final autoInventory = provider?.profile?.autoInventory ?? false;
 
     return StreamBuilder<List<Product>>(
       stream: _firestoreService.getProducts(),
       builder: (context, snapshot) {
         final allProducts = snapshot.data ?? [];
-        // Apply inventory logic: only show excess for single cards
-        final inventoryProducts = _applyInventoryLogic(allProducts, profileTarget);
+        // Apply inventory logic: manual inventoryQty + optional auto excess
+        final inventoryProducts = _applyInventoryLogic(allProducts, autoInventory, profileTarget);
         final products = _applyFilters(inventoryProducts);
 
         return Column(
@@ -833,6 +943,8 @@ class _InventoryScreenState extends State<InventoryScreen>
         : null;
     final displayMarketPrice = livePrice ?? product.marketPrice;
     final hasMarketPrice = displayMarketPrice != null;
+    // Is this an auto-excess card (no manual inventoryQty)?
+    final isAutoExcess = product.inventoryQty <= 0;
 
     String formatMktPrice(double p) {
       if (p >= 1000) return '€${p.toStringAsFixed(0)}';
@@ -882,15 +994,32 @@ class _InventoryScreenState extends State<InventoryScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  product.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        product.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isAutoExcess)
+                      Container(
+                        margin: const EdgeInsets.only(left: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentOrange.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppColors.accentOrange.withValues(alpha: 0.3)),
+                        ),
+                        child: const Text('auto', style: TextStyle(color: AppColors.accentOrange, fontSize: 8, fontWeight: FontWeight.w700)),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Row(
@@ -948,25 +1077,39 @@ class _InventoryScreenState extends State<InventoryScreen>
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Purchase price
-              Text(
-                product.formattedPrice,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
+              // Sell price (tappable to edit)
+              GestureDetector(
+                onTap: () => _showEditSellPrice(product),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      product.sellPrice != null
+                          ? '€${product.sellPrice!.toStringAsFixed(2)}'
+                          : (hasMarketPrice ? formatMktPrice(displayMarketPrice) : product.formattedPrice),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(Icons.edit, color: AppColors.textMuted, size: 11),
+                  ],
                 ),
               ),
-              if (hasMarketPrice) ...[
-                const SizedBox(height: 2),
-                // Live market price (prominent)
+              // Market price reference (greyed out) if sell price is custom
+              if (hasMarketPrice && product.sellPrice != null) ...[
+                const SizedBox(height: 1),
                 Text(
                   formatMktPrice(displayMarketPrice),
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                    decoration: TextDecoration.lineThrough,
                   ),
                 ),
+              ] else if (hasMarketPrice && product.sellPrice == null) ...[
                 const SizedBox(height: 1),
                 // P&L indicator
                 Builder(builder: (context) {
@@ -991,15 +1134,6 @@ class _InventoryScreenState extends State<InventoryScreen>
                     ],
                   );
                 }),
-              ] else ...[
-                Text(
-                  product.formattedPrice,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
               ],
               const SizedBox(height: 4),
               _buildStatusBadge(product.status, product.statusLabel),

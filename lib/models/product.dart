@@ -30,6 +30,10 @@ class Product {
   final String? parentProductId;
   // Collection target override (null = use profile default)
   final int? collectionTargetOverride;
+  // Manual inventory: how many copies moved to inventory
+  final double inventoryQty;
+  // Custom selling price for inventory (null = use marketPrice)
+  final double? sellPrice;
 
   const Product({
     this.id,
@@ -52,7 +56,11 @@ class Product {
     this.pullIds,
     this.parentProductId,
     this.collectionTargetOverride,
+    this.inventoryQty = 0,
+    this.sellPrice,
   });
+
+  double get effectiveSellPrice => sellPrice ?? marketPrice ?? price;
 
   String get statusLabel {
     switch (status) {
@@ -178,6 +186,8 @@ class Product {
           : null,
       parentProductId: data['parentProductId'],
       collectionTargetOverride: (data['collectionTargetOverride'] as num?)?.toInt(),
+      inventoryQty: (data['inventoryQty'] as num?)?.toDouble() ?? 0,
+      sellPrice: (data['sellPrice'] as num?)?.toDouble(),
     );
   }
 
@@ -204,6 +214,8 @@ class Product {
       if (pullIds != null) 'pullIds': pullIds,
       if (parentProductId != null) 'parentProductId': parentProductId,
       if (collectionTargetOverride != null) 'collectionTargetOverride': collectionTargetOverride,
+      'inventoryQty': inventoryQty,
+      if (sellPrice != null) 'sellPrice': sellPrice,
     };
   }
 
@@ -228,6 +240,8 @@ class Product {
     List<String>? pullIds,
     String? parentProductId,
     int? collectionTargetOverride,
+    double? inventoryQty,
+    double? sellPrice,
   }) {
     return Product(
       id: id ?? this.id,
@@ -250,6 +264,8 @@ class Product {
       pullIds: pullIds ?? this.pullIds,
       parentProductId: parentProductId ?? this.parentProductId,
       collectionTargetOverride: collectionTargetOverride ?? this.collectionTargetOverride,
+      inventoryQty: inventoryQty ?? this.inventoryQty,
+      sellPrice: sellPrice ?? this.sellPrice,
     );
   }
 

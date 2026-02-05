@@ -16,6 +16,7 @@ class UserProfile {
   final double? budgetMonthly;
   final double? budgetSpent;
   final int collectionTarget;
+  final bool autoInventory;
   final DateTime createdAt;
 
   const UserProfile({
@@ -27,6 +28,7 @@ class UserProfile {
     this.budgetMonthly,
     this.budgetSpent,
     this.collectionTarget = 1,
+    this.autoInventory = false,
     required this.createdAt,
   });
 
@@ -84,6 +86,7 @@ class UserProfile {
       'budgetMonthly': budgetMonthly,
       'budgetSpent': budgetSpent,
       'collectionTarget': collectionTarget,
+      'autoInventory': autoInventory,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
@@ -102,6 +105,7 @@ class UserProfile {
       budgetMonthly: (data['budgetMonthly'] as num?)?.toDouble(),
       budgetSpent: (data['budgetSpent'] as num?)?.toDouble(),
       collectionTarget: (data['collectionTarget'] as num?)?.toInt() ?? 1,
+      autoInventory: data['autoInventory'] ?? false,
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -117,6 +121,7 @@ class UserProfile {
     double? budgetMonthly,
     double? budgetSpent,
     int? collectionTarget,
+    bool? autoInventory,
     DateTime? createdAt,
   }) {
     return UserProfile(
@@ -128,6 +133,7 @@ class UserProfile {
       budgetMonthly: budgetMonthly ?? this.budgetMonthly,
       budgetSpent: budgetSpent ?? this.budgetSpent,
       collectionTarget: collectionTarget ?? this.collectionTarget,
+      autoInventory: autoInventory ?? this.autoInventory,
       createdAt: createdAt ?? this.createdAt,
     );
   }

@@ -235,8 +235,8 @@ class _MainShellState extends State<MainShell> {
     switch (tabId) {
       case 'dashboard':
         return DashboardScreen(
-          onNewPurchase: _guardedAddItem,
-          onNewSale: _guardedAddSale,
+          onOpenProduct: _nav.showOpenProduct,
+          onGoToCollection: () => _nav.navigateTo(1),
         );
       case 'collection':
         return const CollectionScreen();
@@ -253,8 +253,8 @@ class _MainShellState extends State<MainShell> {
         return const SettingsScreen();
       default:
         return DashboardScreen(
-          onNewPurchase: _guardedAddItem,
-          onNewSale: _guardedAddSale,
+          onOpenProduct: _nav.showOpenProduct,
+          onGoToCollection: () => _nav.navigateTo(1),
         );
     }
   }

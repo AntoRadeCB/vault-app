@@ -787,10 +787,173 @@ class _CardSlot extends StatelessWidget {
     }
   }
 
-  Future<void> _onLongPress() async {
-    if (isOwned && product != null) {
-      await fs.decrementProductQuantity(product!.id!, 1);
-    }
+  void _onLongPress(BuildContext context) {
+    if (!isOwned || product == null) return;
+    _showCardOptionsSheet(context);
+  }
+
+  void _showCardOptionsSheet(BuildContext context) {
+    final p = product!;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(p.name, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('Quantità: ${p.quantity.toInt()} • Inventario: ${p.inventoryQty.toInt()}',
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const SizedBox(height: 20),
+            // Move to inventory
+            _OptionTile(
+              icon: Icons.inventory_2_outlined,
+              label: 'Sposta in inventario',
+              color: AppColors.accentBlue,
+              onTap: () {
+                Navigator.pop(ctx);
+                _showMoveToInventorySheet(context, p);
+              },
+            ),
+            const SizedBox(height: 8),
+            // Remove from collection
+            _OptionTile(
+              icon: Icons.remove_circle_outline,
+              label: 'Rimuovi dalla collezione',
+              color: AppColors.accentRed,
+              onTap: () async {
+                Navigator.pop(ctx);
+                final newQty = p.quantity - 1;
+                if (newQty <= 0) {
+                  if (p.id != null) await fs.deleteProduct(p.id!);
+                } else {
+                  final newInv = p.inventoryQty > newQty ? newQty : p.inventoryQty;
+                  await fs.updateProduct(p.id!, {
+                    'quantity': newQty,
+                    'inventoryQty': newInv,
+                  });
+                }
+              },
+            ),
+            // Remove from inventory (only if inventoryQty > 0)
+            if (p.inventoryQty > 0) ...[
+              const SizedBox(height: 8),
+              _OptionTile(
+                icon: Icons.outbox_outlined,
+                label: 'Rimuovi da inventario',
+                color: AppColors.accentOrange,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final newInv = (p.inventoryQty - 1).clamp(0.0, p.quantity);
+                  await fs.updateProduct(p.id!, {'inventoryQty': newInv});
+                },
+              ),
+            ],
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMoveToInventorySheet(BuildContext context, Product p) {
+    final maxMove = (p.quantity - p.inventoryQty).clamp(0.0, p.quantity);
+    if (maxMove <= 0) return;
+    int moveCount = 1;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('Sposta in inventario', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('Max: ${maxMove.toInt()} copie disponibili', style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: () { if (moveCount > 1) setSheetState(() => moveCount--); },
+                    child: Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.remove, color: AppColors.textSecondary),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text('$moveCount', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                  ),
+                  GestureDetector(
+                    onTap: () { if (moveCount < maxMove.toInt()) setSheetState(() => moveCount++); },
+                    child: Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(color: AppColors.accentBlue.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.add, color: AppColors.accentBlue),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final newInv = (p.inventoryQty + moveCount).clamp(0.0, p.quantity);
+                  await fs.updateProduct(p.id!, {'inventoryQty': newInv});
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.blueButtonGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(
+                    child: Text('Conferma', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -820,7 +983,7 @@ class _CardSlot extends StatelessWidget {
 
     return GestureDetector(
       onTap: _onTap,
-      onLongPress: _onLongPress,
+      onLongPress: () => _onLongPress(context),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
@@ -864,6 +1027,24 @@ class _CardSlot extends StatelessWidget {
                   child: Text(
                     'x${product!.quantity.toInt()}',
                     style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+
+            // Inventory badge (below count badge) — if inventoryQty > 0
+            if (isOwned && product!.inventoryQty > 0)
+              Positioned(
+                top: product!.quantity > 1 ? 20 : 3, right: 3,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.accentOrange.withValues(alpha: 0.5), width: 0.5),
+                  ),
+                  child: Text(
+                    '📦 ${product!.inventoryQty.toInt()}',
+                    style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -920,6 +1101,36 @@ class _CardSlot extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: AppColors.textMuted, fontSize: 9),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OptionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _OptionTile({required this.icon, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 12),
+            Text(label, style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w600)),
+          ],
         ),
       ),
     );

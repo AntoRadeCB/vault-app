@@ -1432,59 +1432,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     iconColor: AppColors.accentGreen,
                   ),
                   _buildSettingsRow(
-                    icon: Icons.copy_all,
-                    title: 'Copie per collezione',
-                    subtitle: 'Copie da tenere prima di contare come inventario',
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            final newVal = (activeProfile.collectionTarget - 1).clamp(1, 10);
-                            _firestoreService.updateProfile(activeProfile.id, {
-                              'collectionTarget': newVal,
-                            });
-                          },
-                          child: Container(
-                            width: 32, height: 32,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.06),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.remove, color: AppColors.textSecondary, size: 18),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Text(
-                            '${activeProfile.collectionTarget}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            final newVal = (activeProfile.collectionTarget + 1).clamp(1, 10);
-                            _firestoreService.updateProfile(activeProfile.id, {
-                              'collectionTarget': newVal,
-                            });
-                          },
-                          child: Container(
-                            width: 32, height: 32,
-                            decoration: BoxDecoration(
-                              color: AppColors.accentBlue.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.add, color: AppColors.accentBlue, size: 18),
-                          ),
-                        ),
-                      ],
+                    icon: Icons.inventory_2_outlined,
+                    title: 'Inventario automatico',
+                    subtitle: 'Sposta automaticamente l\'eccesso in inventario',
+                    trailing: _buildSwitch(
+                      activeProfile.autoInventory,
+                      (v) {
+                        _firestoreService.updateProfile(activeProfile.id, {
+                          'autoInventory': v,
+                        });
+                      },
                     ),
                     iconColor: AppColors.accentTeal,
                   ),
+                  if (activeProfile.autoInventory)
+                    _buildSettingsRow(
+                      icon: Icons.copy_all,
+                      title: 'Copie per collezione',
+                      subtitle: 'Copie da tenere prima di contare come inventario',
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              final newVal = (activeProfile.collectionTarget - 1).clamp(1, 10);
+                              _firestoreService.updateProfile(activeProfile.id, {
+                                'collectionTarget': newVal,
+                              });
+                            },
+                            child: Container(
+                              width: 32, height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.remove, color: AppColors.textSecondary, size: 18),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              '${activeProfile.collectionTarget}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              final newVal = (activeProfile.collectionTarget + 1).clamp(1, 10);
+                              _firestoreService.updateProfile(activeProfile.id, {
+                                'collectionTarget': newVal,
+                              });
+                            },
+                            child: Container(
+                              width: 32, height: 32,
+                              decoration: BoxDecoration(
+                                color: AppColors.accentBlue.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.add, color: AppColors.accentBlue, size: 18),
+                            ),
+                          ),
+                        ],
+                      ),
+                      iconColor: AppColors.accentTeal,
+                    ),
                   _buildSettingsRow(
                     icon: Icons.bar_chart,
                     title: 'Report',

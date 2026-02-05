@@ -12,13 +12,13 @@ import '../models/purchase.dart';
 import '../l10n/app_localizations.dart';
 
 class DashboardScreen extends StatelessWidget {
-  final VoidCallback? onNewPurchase;
-  final VoidCallback? onNewSale;
+  final Function(Product)? onOpenProduct;
+  final VoidCallback? onGoToCollection;
   final FirestoreService _firestoreService = FirestoreService();
   // Temporary context reference for nested builders
   BuildContext? _contextRef;
 
-  DashboardScreen({super.key, this.onNewPurchase, this.onNewSale});
+  DashboardScreen({super.key, this.onOpenProduct, this.onGoToCollection});
 
   @override
   Widget build(BuildContext context) {
@@ -233,23 +233,22 @@ class DashboardScreen extends StatelessWidget {
   // ════════════════════════════════════════════════════
 
   Widget _buildActionButtons(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
     return Row(
       children: [
         Expanded(
           child: ShimmerButton(
             baseGradient: AppColors.blueButtonGradient,
-            onTap: () => onNewPurchase?.call(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+            onTap: () => _showSbustaSheet(context),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.add_shopping_cart, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
+                  Icon(Icons.inventory_2, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
                   Text(
-                    l.newPurchase,
-                    style: const TextStyle(
+                    'Sbusta',
+                    style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
@@ -266,17 +265,17 @@ class DashboardScreen extends StatelessWidget {
             baseGradient: const LinearGradient(
               colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
             ),
-            onTap: () => onNewSale?.call(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+            onTap: () => onGoToCollection?.call(),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.sell_outlined, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
+                  Icon(Icons.add, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
                   Text(
-                    l.registerSale,
-                    style: const TextStyle(
+                    'Aggiungi Carte',
+                    style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
@@ -288,6 +287,102 @@ class DashboardScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  void _showSbustaSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Sbusta', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text('Scegli un prodotto sigillato da aprire', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 300,
+              child: StreamBuilder<List<Product>>(
+                stream: _firestoreService.getProducts(),
+                builder: (context, snap) {
+                  final sealed = (snap.data ?? []).where((p) => p.canBeOpened && !p.isOpened).toList();
+                  if (sealed.isEmpty) {
+                    return const Center(
+                      child: Text('Nessun prodotto sigillato', style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
+                    );
+                  }
+                  return ListView.builder(
+                    itemCount: sealed.length,
+                    itemBuilder: (context, i) {
+                      final p = sealed[i];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            onOpenProduct?.call(p);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardDark,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40, height: 40,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentOrange.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.inventory_2, color: AppColors.accentOrange, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      const SizedBox(height: 2),
+                                      Text('${p.kindLabel} • Qta: ${p.formattedQuantity}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 
@@ -304,9 +399,13 @@ class DashboardScreen extends StatelessWidget {
         _contextRef = context;
         final products = productSnap.data ?? [];
         final cardProducts = products.where((p) => p.isCard).toList();
+        // Non-singleCard products value for inventory
+        final nonCardValue = products
+            .where((p) => p.kind != ProductKind.singleCard)
+            .fold<double>(0, (sum, p) => sum + (p.price * p.quantity));
 
         if (cardProducts.isNotEmpty) {
-          return _buildCardMarketValueContent(catalogService, cardProducts);
+          return _buildCardMarketValueContent(catalogService, cardProducts, nonCardValue: nonCardValue);
         } else {
           return _buildTotalInventoryContent(products);
         }
@@ -316,8 +415,7 @@ class DashboardScreen extends StatelessWidget {
 
   /// Card market value (when card products exist)
   Widget _buildCardMarketValueContent(
-      CardCatalogService catalogService, List<Product> cardProducts) {
-    final profileTarget = _getProfileTarget(cardProducts);
+      CardCatalogService catalogService, List<Product> cardProducts, {double nonCardValue = 0}) {
     final totalPaidCost = cardProducts.fold<double>(
         0, (sum, p) => sum + (p.price * p.quantity));
     final totalMarketValue = cardProducts.fold<double>(
@@ -340,26 +438,23 @@ class DashboardScreen extends StatelessWidget {
                 priceMap[p.cardBlueprintId] ?? p.marketPrice ?? p.price;
             return sum + (livePrice * p.quantity);
           });
-          // Inventory value = excess only
-          final provider = _contextRef != null ? ProfileProvider.maybeOf(_contextRef!) : null;
-          final profTarget = provider?.profile?.collectionTarget ?? 1;
+          // Inventory value = inventoryQty × effectiveSellPrice
           liveInventoryValue = cardProducts.fold<double>(0, (sum, p) {
+            if (p.inventoryQty <= 0) return sum;
             final livePrice =
                 priceMap[p.cardBlueprintId] ?? p.marketPrice ?? p.price;
-            final target = p.collectionTargetOverride ?? profTarget;
-            final excess = math.max(0.0, p.quantity - target);
-            return sum + (livePrice * excess);
+            final sellPrice = p.sellPrice ?? livePrice;
+            return sum + (sellPrice * p.inventoryQty);
           });
         } else {
-          final provider = _contextRef != null ? ProfileProvider.maybeOf(_contextRef!) : null;
-          final profTarget = provider?.profile?.collectionTarget ?? 1;
           liveInventoryValue = cardProducts.fold<double>(0, (sum, p) {
-            final price = p.marketPrice ?? p.price;
-            final target = p.collectionTargetOverride ?? profTarget;
-            final excess = math.max(0.0, p.quantity - target);
-            return sum + (price * excess);
+            if (p.inventoryQty <= 0) return sum;
+            final sellPrice = p.sellPrice ?? p.marketPrice ?? p.price;
+            return sum + (sellPrice * p.inventoryQty);
           });
         }
+        // Add non-card products value to inventory total
+        liveInventoryValue += nonCardValue;
 
         final livePnl = liveMarketValue - totalPaidCost;
         final livePnlPercent =
@@ -530,8 +625,6 @@ class DashboardScreen extends StatelessWidget {
       },
     );
   }
-
-  int _getProfileTarget(List<Product> _) => 1; // resolved via context
 
   /// Total inventory value (when no card products exist)
   Widget _buildTotalInventoryContent(List<Product> products) {
