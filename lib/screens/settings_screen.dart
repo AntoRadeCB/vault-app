@@ -1278,6 +1278,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 24),
 
+          // Demo mode banner
+          if (FirestoreService.demoMode) ...[
+            GestureDetector(
+              onTap: () => _showLogoutDialog(),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.accentBlue.withValues(alpha: 0.15), AppColors.accentPurple.withValues(alpha: 0.1)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.accentBlue.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: AppColors.accentBlue),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Modalità Demo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                          SizedBox(height: 2),
+                          Text('Registrati per salvare i tuoi dati e sbloccare tutte le funzionalità', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, color: AppColors.accentBlue),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
           // ══════════════════════════════════════════
           //  USER CARD (always visible, top)
           // ══════════════════════════════════════════

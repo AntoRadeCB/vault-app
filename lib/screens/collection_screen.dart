@@ -332,6 +332,7 @@ class _GameExpansionViewState extends State<_GameExpansionView>
   }
 
   Future<void> _scanCard(BuildContext context, List<CardBlueprint> gameCatalog, Map<String, Product> pMap) async {
+    if (FirestoreService.demoMode) return;
     final numbers = await OcrScannerDialog.scan(
       context,
       expansionCards: gameCatalog,

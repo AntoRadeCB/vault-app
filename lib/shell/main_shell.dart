@@ -21,6 +21,7 @@ import '../widgets/ocr_scanner_dialog.dart';
 import '../services/firestore_service.dart';
 import '../services/card_catalog_service.dart';
 import '../models/product.dart';
+import '../models/purchase.dart';
 import '../models/card_blueprint.dart';
 
 import 'navigation_state.dart';
@@ -219,7 +220,34 @@ class _MainShellState extends State<MainShell> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Sbusta', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('Sbusta', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showAddSealedProductDialog(context);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.blueButtonGradient,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, color: Colors.white, size: 16),
+                        SizedBox(width: 4),
+                        Text('Aggiungi', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             const Text('Scegli un prodotto sigillato da aprire', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
             const SizedBox(height: 16),
@@ -291,7 +319,181 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  void _showAddSealedProductDialog(BuildContext parentContext) {
+    final nameController = TextEditingController();
+    final priceController = TextEditingController();
+    final quantityController = TextEditingController(text: '1');
+    ProductKind selectedKind = ProductKind.boosterPack;
+
+    showModalBottomSheet(
+      context: parentContext,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Aggiungi Prodotto Sigillato', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: 'Nome prodotto',
+                    hintStyle: const TextStyle(color: AppColors.textMuted),
+                    filled: true,
+                    fillColor: AppColors.cardDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accentBlue, width: 1.5)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: priceController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: const TextStyle(color: Colors.white, fontSize: 15),
+                        decoration: InputDecoration(
+                          hintText: 'Prezzo €',
+                          hintStyle: const TextStyle(color: AppColors.textMuted),
+                          filled: true,
+                          fillColor: AppColors.cardDark,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accentBlue, width: 1.5)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: quantityController,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.white, fontSize: 15),
+                        decoration: InputDecoration(
+                          hintText: 'Quantità',
+                          hintStyle: const TextStyle(color: AppColors.textMuted),
+                          filled: true,
+                          fillColor: AppColors.cardDark,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accentBlue, width: 1.5)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text('TIPO', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [ProductKind.boosterPack, ProductKind.boosterBox, ProductKind.display, ProductKind.bundle].map((kind) {
+                    final isSelected = kind == selectedKind;
+                    final label = switch (kind) {
+                      ProductKind.boosterPack => 'Busta',
+                      ProductKind.boosterBox => 'Box',
+                      ProductKind.display => 'Display',
+                      ProductKind.bundle => 'Bundle',
+                      _ => '',
+                    };
+                    return GestureDetector(
+                      onTap: () => setSheetState(() => selectedKind = kind),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.accentBlue.withValues(alpha: 0.15) : AppColors.cardDark,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: isSelected ? AppColors.accentBlue.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.06)),
+                        ),
+                        child: Text(label, style: TextStyle(color: isSelected ? Colors.white : AppColors.textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+                GestureDetector(
+                  onTap: () async {
+                    final name = nameController.text.trim();
+                    final price = double.tryParse(priceController.text.trim()) ?? 0;
+                    final quantity = double.tryParse(quantityController.text.trim()) ?? 1;
+                    if (name.isEmpty) return;
+                    Navigator.pop(ctx);
+                    final fs = FirestoreService();
+                    final product = Product(
+                      name: name,
+                      brand: 'CUSTOM',
+                      quantity: quantity,
+                      price: price,
+                      status: ProductStatus.inInventory,
+                      kind: selectedKind,
+                    );
+                    await fs.addProduct(product);
+                    await fs.addPurchase(Purchase(
+                      productName: name,
+                      price: price,
+                      quantity: quantity,
+                      date: DateTime.now(),
+                      workspace: 'default',
+                    ));
+                    if (mounted) {
+                      _showSbustaSheet(parentContext);
+                    }
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.blueButtonGradient,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(color: AppColors.accentBlue.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Text('Aggiungi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openScanFromFab(BuildContext context) async {
+    if (widget.isDemoMode) {
+      widget.onAuthRequired?.call();
+      return;
+    }
     // Load all cards for expansion matching
     final catalogService = CardCatalogService();
     List<CardBlueprint> allCards = [];
@@ -387,7 +589,7 @@ class _MainShellState extends State<MainShell> {
 
     switch (tabId) {
       case 'dashboard':
-        return DashboardScreen();
+        return DashboardScreen(onAuthRequired: widget.onAuthRequired);
       case 'collection':
         return const CollectionScreen();
       case 'inventory':
@@ -402,7 +604,7 @@ class _MainShellState extends State<MainShell> {
       case 'settings':
         return const SettingsScreen();
       default:
-        return DashboardScreen();
+        return DashboardScreen(onAuthRequired: widget.onAuthRequired);
     }
   }
 
