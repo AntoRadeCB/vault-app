@@ -662,6 +662,8 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     final price = card?.marketPrice != null
         ? card!.formattedPrice
         : null;
+    final foundIndex = _foundCards.indexOf(found);
+    final hasVariants = hasCard && _getVariantsFor(card).isNotEmpty;
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
@@ -760,6 +762,21 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                     style: const TextStyle(color: Colors.white,
                         fontSize: 15, fontWeight: FontWeight.bold)),
               ),
+            // Swap variant button
+            if (hasVariants && foundIndex >= 0) ...[
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () => _showVariantPicker(foundIndex),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.swap_horiz,
+                      color: Colors.white, size: 18),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -889,7 +906,138 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     });
   }
 
-  /// Horizontal scroll strip showing recently found cards (tap to remove)
+  /// Find variant cards (same name, different id)
+  List<CardBlueprint> _getVariantsFor(CardBlueprint card) {
+    return widget.expansionCards
+        .where((c) => c.name == card.name && c.id != card.id)
+        .toList();
+  }
+
+  /// Swap a found card at [index] with a different variant
+  void _swapFoundCard(int index, CardBlueprint newCard) {
+    setState(() {
+      _foundCards[index] = _FoundCard(
+        collectorNumber: newCard.collectorNumber ?? _foundCards[index].collectorNumber,
+        card: newCard,
+      );
+      _foundNumbers[index] = newCard.collectorNumber ?? _foundNumbers[index];
+      // Update banner if this was the last found
+      if (_lastFound?.card?.id == _foundCards[index].card?.id || 
+          index == _foundCards.length - 1) {
+        _lastFound = _foundCards[index];
+      }
+    });
+  }
+
+  /// Show variant picker bottom sheet for a found card
+  void _showVariantPicker(int index) {
+    final found = _foundCards[index];
+    final card = found.card;
+    if (card == null) return;
+
+    final variants = _getVariantsFor(card);
+    if (variants.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(ctx).size.height * 0.5,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Varianti di ${card.name}',
+                style: const TextStyle(
+                  color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  // Current card
+                  _buildVariantTile(card, isCurrent: true, onTap: () => Navigator.pop(ctx)),
+                  const Divider(color: Colors.white12, height: 1),
+                  // Other variants
+                  ...variants.map((v) => _buildVariantTile(v, isCurrent: false, onTap: () {
+                    Navigator.pop(ctx);
+                    _swapFoundCard(index, v);
+                  })),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVariantTile(CardBlueprint card, {required bool isCurrent, required VoidCallback onTap}) {
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          width: 40, height: 56,
+          child: card.imageUrl != null
+              ? Image.network(card.imageUrl!, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: card.rarityColor.withValues(alpha: 0.15),
+                    child: Icon(Icons.style, color: card.rarityColor, size: 18),
+                  ))
+              : Container(
+                  color: card.rarityColor.withValues(alpha: 0.15),
+                  child: Icon(Icons.style, color: card.rarityColor, size: 18),
+                ),
+        ),
+      ),
+      title: Text(
+        '#${card.collectorNumber ?? '?'} — ${card.name}',
+        style: TextStyle(
+          color: isCurrent ? AppColors.accentGreen : Colors.white,
+          fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        [
+          if (card.rarity != null) card.rarity!,
+          if (card.version != null && card.version!.isNotEmpty) card.version!,
+        ].join(' · '),
+        style: TextStyle(
+          color: isCurrent
+              ? AppColors.accentGreen.withValues(alpha: 0.7)
+              : AppColors.textMuted,
+          fontSize: 11),
+      ),
+      trailing: isCurrent
+          ? const Icon(Icons.check_circle, color: AppColors.accentGreen, size: 20)
+          : Icon(Icons.swap_horiz, color: Colors.white.withValues(alpha: 0.4), size: 20),
+    );
+  }
+
+  /// Horizontal scroll strip showing recently found cards
+  /// Tap = open variant picker (if variants exist), Long press = remove
   Widget _buildFoundStrip() {
     return SizedBox(
       height: 56,
@@ -901,8 +1049,12 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
           final realIndex = _foundCards.length - 1 - i;
           final found = _foundCards[realIndex];
           final card = found.card;
+          final hasVariants = card != null && _getVariantsFor(card).isNotEmpty;
           return GestureDetector(
-            onTap: () => _removeFoundCard(realIndex),
+            onTap: hasVariants
+                ? () => _showVariantPicker(realIndex)
+                : () => _removeFoundCard(realIndex),
+            onLongPress: () => _removeFoundCard(realIndex),
             child: Container(
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -940,16 +1092,31 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                           maxLines: 1, overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (card?.marketPrice != null)
-                        Text(card!.formattedPrice,
-                            style: const TextStyle(
-                                color: AppColors.accentGreen,
-                                fontSize: 10, fontWeight: FontWeight.bold)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (card?.marketPrice != null)
+                            Text(card!.formattedPrice,
+                                style: const TextStyle(
+                                    color: AppColors.accentGreen,
+                                    fontSize: 10, fontWeight: FontWeight.bold)),
+                          if (card?.version != null && card!.version!.isNotEmpty) ...[
+                            if (card.marketPrice != null) const SizedBox(width: 4),
+                            Text(card.version!,
+                                style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 9)),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
                   const SizedBox(width: 4),
-                  Icon(Icons.close,
-                      color: Colors.white.withValues(alpha: 0.4), size: 14),
+                  hasVariants
+                    ? Icon(Icons.swap_horiz,
+                        color: AppColors.accentBlue.withValues(alpha: 0.8), size: 16)
+                    : Icon(Icons.close,
+                        color: Colors.white.withValues(alpha: 0.4), size: 14),
                 ],
               ),
             ),
