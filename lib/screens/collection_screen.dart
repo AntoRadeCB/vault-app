@@ -60,10 +60,15 @@ class _CollectionScreenState extends State<CollectionScreen> {
   }
 
   Future<void> _loadCatalog() async {
-    final all = await _catalogService.getAllCards();
-    // Only show single cards in collection (no boxes, packs, etc.)
-    final cards = all.where((c) => c.kind == null || c.kind == 'singleCard').toList();
-    if (mounted) setState(() { _catalog = cards; _catalogLoading = false; });
+    try {
+      final all = await _catalogService.getAllCards();
+      // Only show single cards in collection (no boxes, packs, etc.)
+      final cards = all.where((c) => c.kind == null || c.kind == 'singleCard').toList();
+      if (mounted) setState(() { _catalog = cards; _catalogLoading = false; });
+    } catch (_) {
+      // If catalog fails (e.g. no auth), still show what we have
+      if (mounted) setState(() { _catalogLoading = false; });
+    }
   }
 
   // Normalize game key from catalog
