@@ -80,30 +80,34 @@ function captureFrame(containerId) {
 }
 
 /**
- * Legacy: Capture current frame + call API (synchronous flow).
- * Still works but the Dart side now uses captureFrame + sendToApi separately.
+ * Capture current frame + call API.
+ * contextJson may contain: { expansion, cards, mode }
+ * mode: "premium" (GPT-5.2 + card list) or "ocr" (Gemini Flash OCR, default)
  */
 async function captureAndRecognize(containerId, contextJson) {
   const base64 = captureFrame(containerId);
   if (base64.startsWith('{')) return base64; // error JSON
 
-  // Parse context from Dart (expansion name, card list)
   let scanContext = {};
   try { if (contextJson) scanContext = JSON.parse(contextJson); } catch(e) {}
 
+  const isPremium = scanContext.mode === 'premium';
+  const apiUrl = isPremium
+    ? 'https://scancard-orjhcexzoa-ew.a.run.app'
+    : 'https://scancardocr-orjhcexzoa-ew.a.run.app';
+
   try {
     const body = { image: base64 };
-    if (scanContext.expansion) body.expansion = scanContext.expansion;
-    if (scanContext.cards) body.cards = scanContext.cards;
+    if (isPremium) {
+      if (scanContext.expansion) body.expansion = scanContext.expansion;
+      if (scanContext.cards) body.cards = scanContext.cards;
+    }
 
-    const resp = await fetch(
-      'https://scancard-orjhcexzoa-ew.a.run.app',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      }
-    );
+    const resp = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
 
     if (!resp.ok) {
       const errText = await resp.text();
