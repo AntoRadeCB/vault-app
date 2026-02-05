@@ -2,11 +2,117 @@ import '../models/product.dart';
 import '../models/purchase.dart';
 import '../models/sale.dart';
 import '../models/shipment.dart';
+import '../models/card_blueprint.dart';
+import '../services/card_catalog_service.dart';
 
-/// Provides static sample data for demo mode (no auth needed).
-/// All data is in-memory — nothing touches Firestore.
+/// Provides sample data for demo mode (no auth needed).
+/// Call [init] once at startup to populate demo cards from the real catalog.
+/// All data is in-memory — nothing touches Firestore user collections.
 class DemoDataService {
-  static final List<Product> products = [
+  // Mutable lists — replaced by init() with real catalog data
+  static List<Product> products = List<Product>.from(_defaultProducts);
+  static List<Purchase> purchases = List<Purchase>.from(_defaultPurchases);
+
+  /// Call once at startup to populate demo single-card data from real catalog.
+  /// Falls back to static data on failure.
+  static Future<void> init() async {
+    try {
+      final catalog = CardCatalogService();
+      final allCards = await catalog.getAllCards();
+      final riftboundCards = allCards
+          .where((c) =>
+              c.game?.toLowerCase() == 'riftbound' &&
+              (c.kind == null || c.kind == 'singleCard'))
+          .toList();
+
+      if (riftboundCards.length >= 5) {
+        // Pick cards from different rarities for variety
+        final byRarity = <String, List<CardBlueprint>>{};
+        for (final c in riftboundCards) {
+          byRarity.putIfAbsent(c.rarity ?? 'common', () => []).add(c);
+        }
+
+        final picked = <CardBlueprint>[];
+        for (final rarity in [
+          'epic',
+          'alternate art',
+          'rare',
+          'uncommon',
+          'common'
+        ]) {
+          final cards = byRarity[rarity];
+          if (cards != null && cards.isNotEmpty) {
+            picked.add(cards.first);
+            if (picked.length >= 5) break;
+          }
+        }
+        // Fill rest if needed
+        while (picked.length < 5) {
+          for (final c in riftboundCards) {
+            if (!picked.contains(c)) {
+              picked.add(c);
+              break;
+            }
+          }
+          if (picked.length >= 5) break;
+          break; // safety
+        }
+
+        // Build demo products from real catalog cards
+        final demoCards = <Product>[];
+        for (var i = 0; i < picked.length; i++) {
+          final c = picked[i];
+          final priceVal = c.marketPrice != null
+              ? c.marketPrice!.cents / 100
+              : 2.0;
+          final qty = (i % 3) + 1; // 1, 2, 3 copies
+          demoCards.add(Product(
+            id: 'demo-${c.id}',
+            name: c.name,
+            brand: 'RIFTBOUND',
+            quantity: qty.toDouble(),
+            price: priceVal,
+            status: i == 1 ? ProductStatus.listed : ProductStatus.inInventory,
+            kind: ProductKind.singleCard,
+            cardBlueprintId: c.id,
+            cardImageUrl: c.imageUrl,
+            cardExpansion: c.expansionName,
+            cardRarity: c.rarity,
+            marketPrice: c.marketPrice != null
+                ? c.marketPrice!.cents / 100
+                : null,
+            createdAt:
+                DateTime.now().subtract(Duration(days: i + 1)),
+          ));
+        }
+
+        // Replace single-card products, keep sealed products
+        products = [
+          ...demoCards,
+          ..._defaultProducts
+              .where((p) => p.kind != ProductKind.singleCard),
+        ];
+
+        // Rebuild purchases to match
+        purchases = products
+            .map((p) => Purchase(
+                  id: 'demo-p-${p.id}',
+                  productName: p.name,
+                  price: p.price * p.quantity,
+                  quantity: p.quantity,
+                  date: p.createdAt ?? DateTime.now(),
+                  workspace: 'default',
+                ))
+            .toList();
+      }
+    } catch (_) {
+      // Keep default static data on failure — catalog may not be reachable
+    }
+  }
+
+  // ── Static fallback data ──
+
+  static final List<Product> _defaultProducts = [
     Product(
       id: 'demo-1',
       name: 'Lyra, Keeper of the Veil',
@@ -93,7 +199,7 @@ class DemoDataService {
     ),
   ];
 
-  static final List<Purchase> purchases = [
+  static final List<Purchase> _defaultPurchases = [
     Purchase(
       id: 'demo-p1',
       productName: 'Lyra, Keeper of the Veil',

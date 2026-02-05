@@ -7,6 +7,7 @@ import '../widgets/animated_widgets.dart';
 import '../widgets/ocr_scanner_dialog.dart';
 import '../services/firestore_service.dart';
 import '../services/card_catalog_service.dart';
+import '../services/demo_data_service.dart';
 
 // ──────────────────────────────────────────────────
 // Game metadata
@@ -332,7 +333,6 @@ class _GameExpansionViewState extends State<_GameExpansionView>
   }
 
   Future<void> _scanCard(BuildContext context, List<CardBlueprint> gameCatalog, Map<String, Product> pMap) async {
-    if (FirestoreService.demoMode) return;
     final numbers = await OcrScannerDialog.scan(
       context,
       expansionCards: gameCatalog,
@@ -825,6 +825,34 @@ class _CardSlot extends StatelessWidget {
   });
 
   Future<void> _onTap() async {
+    if (FirestoreService.demoMode) {
+      // In demo mode, update local list instead of Firestore
+      if (isOwned && product != null) {
+        final idx = DemoDataService.products.indexWhere((p) => p.id == product!.id);
+        if (idx >= 0) {
+          DemoDataService.products[idx] = DemoDataService.products[idx].copyWith(
+            quantity: product!.quantity + 1,
+          );
+        }
+      } else {
+        final priceVal = card.marketPrice != null ? card.marketPrice!.cents / 100 : 0.0;
+        DemoDataService.products.add(Product(
+          id: 'demo-${card.id}',
+          name: card.name,
+          brand: game.toUpperCase(),
+          quantity: 1,
+          price: priceVal,
+          status: ProductStatus.inInventory,
+          kind: ProductKind.singleCard,
+          cardBlueprintId: card.id,
+          cardImageUrl: card.imageUrl,
+          cardExpansion: card.expansionName,
+          cardRarity: card.rarity,
+          marketPrice: card.marketPrice != null ? card.marketPrice!.cents / 100 : null,
+        ));
+      }
+      return;
+    }
     if (isOwned && product != null) {
       // Increment
       final newQty = product!.quantity + 1;

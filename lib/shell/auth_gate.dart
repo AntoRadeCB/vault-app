@@ -5,6 +5,7 @@ import '../screens/auth_screen.dart';
 import '../screens/onboarding_screen.dart';
 import '../providers/profile_provider.dart';
 import '../services/firestore_service.dart';
+import '../services/demo_data_service.dart';
 import 'main_shell.dart';
 
 /// AuthGate: loads app immediately in demo mode.
@@ -75,6 +76,8 @@ class _DemoModeWrapperState extends State<DemoModeWrapper> {
   void initState() {
     super.initState();
     FirestoreService.demoMode = true;
+    // Load real catalog data for demo products (async, non-blocking)
+    DemoDataService.init();
   }
 
   @override

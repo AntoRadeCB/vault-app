@@ -17,12 +17,9 @@ import '../screens/open_product_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../widgets/animated_widgets.dart';
 import '../widgets/coach_mark_overlay.dart';
-import '../widgets/ocr_scanner_dialog.dart';
 import '../services/firestore_service.dart';
-import '../services/card_catalog_service.dart';
 import '../models/product.dart';
 import '../models/purchase.dart';
-import '../models/card_blueprint.dart';
 
 import 'navigation_state.dart';
 import 'coach_steps_builder.dart';
@@ -489,59 +486,9 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Future<void> _openScanFromFab(BuildContext context) async {
-    if (widget.isDemoMode) {
-      widget.onAuthRequired?.call();
-      return;
-    }
-    // Load all cards for expansion matching
-    final catalogService = CardCatalogService();
-    List<CardBlueprint> allCards = [];
-    try {
-      allCards = await catalogService.getAllCards();
-    } catch (_) {}
-
-    if (!mounted) return;
-    final numbers = await OcrScannerDialog.scan(
-      context,
-      expansionCards: allCards,
-    );
-    if (!mounted || numbers.isEmpty) return;
-
-    // For each scanned number, try to find and add the card
-    final fs = FirestoreService();
-    for (final num in numbers) {
-      final match = allCards
-          .where((c) =>
-              c.collectorNumber != null &&
-              c.collectorNumber!.replaceAll(RegExp(r'^0+'), '') ==
-                  num.replaceAll(RegExp(r'^0+'), ''))
-          .firstOrNull;
-      if (match != null) {
-        // Check if already owned
-        final products = await fs.getProducts().first;
-        final existing = products
-            .where((p) => p.cardBlueprintId == match.id)
-            .firstOrNull;
-        if (existing != null && existing.id != null) {
-          await fs.updateProduct(existing.id!, {'quantity': existing.quantity + 1});
-        } else {
-          await fs.addProduct(Product(
-            name: match.name,
-            brand: (match.game ?? 'unknown').toUpperCase(),
-            quantity: 1,
-            price: match.marketPrice != null ? match.marketPrice!.cents / 100 : 0,
-            status: ProductStatus.inInventory,
-            kind: ProductKind.singleCard,
-            cardBlueprintId: match.id,
-            cardImageUrl: match.imageUrl,
-            cardExpansion: match.expansionName,
-            cardRarity: match.rarity,
-            marketPrice: match.marketPrice != null ? match.marketPrice!.cents / 100 : null,
-          ));
-        }
-      }
-    }
+  void _openScanFromFab(BuildContext context) {
+    // Scan opens the same AddItem screen as "Aggiungi"
+    _nav.showAddItem();
   }
 
   void _handleProfileSwitch() {
