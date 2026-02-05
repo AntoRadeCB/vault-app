@@ -314,7 +314,34 @@ class DashboardScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Sbusta', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('Sbusta', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showAddSealedProductDialog(context);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.blueButtonGradient,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, color: Colors.white, size: 16),
+                        SizedBox(width: 4),
+                        Text('Aggiungi', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             const Text('Scegli un prodotto sigillato da aprire', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
             const SizedBox(height: 16),
@@ -380,6 +407,135 @@ class DashboardScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddSealedProductDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final priceController = TextEditingController();
+    final qtyController = TextEditingController(text: '1');
+    ProductKind selectedKind = ProductKind.boosterPack;
+    String brand = ProfileProvider.maybeOf(context)?.profile?.name.toUpperCase() ?? 'RIFTBOUND';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Nuovo prodotto sigillato', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Nome prodotto',
+                    labelStyle: const TextStyle(color: AppColors.textMuted),
+                    filled: true,
+                    fillColor: AppColors.cardDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Prezzo di acquisto (€)',
+                    labelStyle: const TextStyle(color: AppColors.textMuted),
+                    filled: true,
+                    fillColor: AppColors.cardDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: qtyController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Quantità',
+                    labelStyle: const TextStyle(color: AppColors.textMuted),
+                    filled: true,
+                    fillColor: AppColors.cardDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Kind selector
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardDark,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: DropdownButton<ProductKind>(
+                    value: selectedKind,
+                    isExpanded: true,
+                    dropdownColor: AppColors.surface,
+                    style: const TextStyle(color: Colors.white),
+                    underline: const SizedBox(),
+                    items: const [
+                      DropdownMenuItem(value: ProductKind.boosterPack, child: Text('Busta')),
+                      DropdownMenuItem(value: ProductKind.boosterBox, child: Text('Box')),
+                      DropdownMenuItem(value: ProductKind.display, child: Text('Display')),
+                      DropdownMenuItem(value: ProductKind.bundle, child: Text('Bundle')),
+                    ],
+                    onChanged: (v) => setDialogState(() => selectedKind = v!),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annulla', style: TextStyle(color: AppColors.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accentBlue,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                final name = nameController.text.trim();
+                final price = double.tryParse(priceController.text.trim()) ?? 0;
+                final qty = double.tryParse(qtyController.text.trim()) ?? 1;
+                if (name.isEmpty) return;
+
+                final product = Product(
+                  name: name,
+                  brand: brand,
+                  quantity: qty,
+                  price: price,
+                  status: ProductStatus.inInventory,
+                  kind: selectedKind,
+                  createdAt: DateTime.now(),
+                );
+                await _firestoreService.addProduct(product);
+
+                // Also register as purchase
+                await _firestoreService.addPurchase(Purchase(
+                  productName: name,
+                  price: price * qty,
+                  quantity: qty,
+                  date: DateTime.now(),
+                  workspace: 'default',
+                ));
+
+                if (ctx.mounted) Navigator.pop(ctx);
+                // Re-open sbusta sheet to show the new product
+                if (context.mounted) _showSbustaSheet(context);
+              },
+              child: const Text('Aggiungi', style: TextStyle(color: Colors.white)),
+            ),
           ],
         ),
       ),

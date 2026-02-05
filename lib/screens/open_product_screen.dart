@@ -236,24 +236,44 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
           }
         }
 
-        // 2. Add pulled cards as new Product items in inventory
+        // 2. Add pulled cards — merge into existing product if same blueprintId
+        // Fetch current products once to check for duplicates
+        final currentProducts = await _fs.getProducts().first;
+        final existingByBlueprint = <String, Product>{};
+        for (final p in currentProducts) {
+          if (p.kind == ProductKind.singleCard && p.cardBlueprintId != null) {
+            existingByBlueprint[p.cardBlueprintId!] = p;
+          }
+        }
+
         for (final pull in _pulls) {
-          final newProduct = Product(
-            name: pull.cardName,
-            brand: widget.product.brand,
-            quantity: pull.quantity.toDouble(),
-            price: pull.estimatedValue ?? 0,
-            status: ProductStatus.inInventory,
-            kind: ProductKind.singleCard,
-            cardBlueprintId: pull.cardBlueprintId,
-            cardImageUrl: pull.cardImageUrl,
-            cardExpansion: pull.cardExpansion,
-            cardRarity: pull.rarity,
-            marketPrice: pull.estimatedValue,
-            parentProductId: productId,
-            createdAt: DateTime.now(),
-          );
-          await _fs.addProduct(newProduct);
+          final existing = pull.cardBlueprintId != null
+              ? existingByBlueprint[pull.cardBlueprintId!]
+              : null;
+          if (existing != null && existing.id != null) {
+            // Increment existing product quantity
+            await _fs.updateProduct(existing.id!, {
+              'quantity': existing.quantity + pull.quantity,
+            });
+          } else {
+            // Create new product
+            final newProduct = Product(
+              name: pull.cardName,
+              brand: widget.product.brand,
+              quantity: pull.quantity.toDouble(),
+              price: pull.estimatedValue ?? 0,
+              status: ProductStatus.inInventory,
+              kind: ProductKind.singleCard,
+              cardBlueprintId: pull.cardBlueprintId,
+              cardImageUrl: pull.cardImageUrl,
+              cardExpansion: pull.cardExpansion,
+              cardRarity: pull.rarity,
+              marketPrice: pull.estimatedValue,
+              parentProductId: productId,
+              createdAt: DateTime.now(),
+            );
+            await _fs.addProduct(newProduct);
+          }
         }
 
         // 3. Decrement source product quantity by the number opened

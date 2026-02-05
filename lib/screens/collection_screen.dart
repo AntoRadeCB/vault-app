@@ -330,11 +330,22 @@ class _GameExpansionViewState extends State<_GameExpansionView>
     super.dispose();
   }
 
+  /// Build map of blueprintId → Product, aggregating quantity from duplicates.
+  /// Keeps the first product (for id/metadata) but sums quantities.
   Map<String, Product> _productMap() {
     final m = <String, Product>{};
     for (final p in widget.products) {
       if (p.brand.toLowerCase() == widget.game && p.cardBlueprintId != null) {
-        m[p.cardBlueprintId!] = p;
+        final existing = m[p.cardBlueprintId!];
+        if (existing != null) {
+          // Aggregate: sum quantities and inventoryQty, keep first product's id
+          m[p.cardBlueprintId!] = existing.copyWith(
+            quantity: existing.quantity + p.quantity,
+            inventoryQty: existing.inventoryQty + p.inventoryQty,
+          );
+        } else {
+          m[p.cardBlueprintId!] = p;
+        }
       }
     }
     return m;
