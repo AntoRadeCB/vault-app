@@ -111,6 +111,21 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
         }
       }
 
+      // Strategy 4: Infer expansion from product name (e.g., "Riftbound Booster Pack" → look for "Riftbound" expansion)
+      if (expansionId == null) {
+        final expansions = await _catalogService.getExpansions();
+        final productNameLower = widget.product.name.toLowerCase();
+        final brandLower = widget.product.brand.toLowerCase();
+        for (final exp in expansions) {
+          final eName = (exp['name'] as String? ?? '').toLowerCase();
+          if (eName.isNotEmpty &&
+              (productNameLower.contains(eName) || brandLower.contains(eName))) {
+            expansionId = exp['id'] as int?;
+            break;
+          }
+        }
+      }
+
       if (expansionId != null) {
         final cards = await _catalogService.getCardsByExpansion(expansionId);
         // Filter to only single cards (not packs/boxes)

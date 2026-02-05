@@ -13,66 +13,99 @@ class DemoDataService {
   static List<Product> products = List<Product>.from(_defaultProducts);
   static List<Purchase> purchases = List<Purchase>.from(_defaultPurchases);
 
-  /// Call once at startup to populate demo single-card data from real catalog.
+  /// Call once at startup to populate demo data from real catalog.
+  /// Picks cards from multiple expansions (Origins + Spiritforged).
   /// Falls back to static data on failure.
   static Future<void> init() async {
     try {
       final catalog = CardCatalogService();
       final allCards = await catalog.getAllCards();
-      final riftboundCards = allCards
+      final riftboundSingles = allCards
           .where((c) =>
               c.game?.toLowerCase() == 'riftbound' &&
               (c.kind == null || c.kind == 'singleCard'))
           .toList();
 
-      if (riftboundCards.length >= 5) {
-        // Pick cards from different rarities for variety
-        final byRarity = <String, List<CardBlueprint>>{};
-        for (final c in riftboundCards) {
-          byRarity.putIfAbsent(c.rarity ?? 'common', () => []).add(c);
+      if (riftboundSingles.length >= 10) {
+        // ── 1. Group cards by expansion ──
+        final byExpansion = <String, List<CardBlueprint>>{};
+        for (final c in riftboundSingles) {
+          final exp = (c.expansionName ?? 'Unknown').toLowerCase();
+          byExpansion.putIfAbsent(exp, () => []).add(c);
         }
 
-        final picked = <CardBlueprint>[];
-        for (final rarity in [
-          'epic',
-          'alternate art',
-          'rare',
-          'uncommon',
-          'common'
-        ]) {
-          final cards = byRarity[rarity];
-          if (cards != null && cards.isNotEmpty) {
-            picked.add(cards.first);
-            if (picked.length >= 5) break;
+        // Find Origins and Spiritforged expansions (case-insensitive)
+        List<CardBlueprint> originsCards = [];
+        List<CardBlueprint> spiritforgedCards = [];
+        String originsName = 'Origins';
+        String spiritforgedName = 'Spiritforged';
+
+        for (final entry in byExpansion.entries) {
+          if (entry.key.contains('origin')) {
+            originsCards = entry.value;
+            originsName = entry.value.first.expansionName ?? originsName;
+          } else if (entry.key.contains('spiritforge')) {
+            spiritforgedCards = entry.value;
+            spiritforgedName = entry.value.first.expansionName ?? spiritforgedName;
           }
         }
-        // Fill rest if needed
-        while (picked.length < 5) {
-          for (final c in riftboundCards) {
-            if (!picked.contains(c)) {
-              picked.add(c);
-              break;
+
+        // ── 2. Pick cards from each expansion by rarity ──
+        List<CardBlueprint> _pickFromExpansion(List<CardBlueprint> cards, int target) {
+          final byRarity = <String, List<CardBlueprint>>{};
+          for (final c in cards) {
+            byRarity.putIfAbsent((c.rarity ?? 'common').toLowerCase(), () => []).add(c);
+          }
+          final picked = <CardBlueprint>[];
+          for (final rarity in ['epic', 'alternate art', 'overnumbered', 'rare', 'uncommon', 'common']) {
+            final pool = byRarity[rarity];
+            if (pool == null) continue;
+            final take = rarity == 'common' ? 3 : (rarity == 'uncommon' ? 2 : 1);
+            for (var i = 0; i < take && i < pool.length && picked.length < target; i++) {
+              picked.add(pool[i]);
             }
           }
-          if (picked.length >= 5) break;
-          break; // safety
+          // Fill up if needed
+          if (picked.length < target) {
+            for (final c in cards) {
+              if (!picked.contains(c)) {
+                picked.add(c);
+                if (picked.length >= target) break;
+              }
+            }
+          }
+          return picked;
         }
 
-        // Build demo products from real catalog cards
+        // Pick ~10 from Origins, ~8 from Spiritforged
+        final originsSelected = originsCards.isNotEmpty ? _pickFromExpansion(originsCards, 10) : <CardBlueprint>[];
+        final spiritforgedSelected = spiritforgedCards.isNotEmpty ? _pickFromExpansion(spiritforgedCards, 8) : <CardBlueprint>[];
+        final allPicked = [...originsSelected, ...spiritforgedSelected];
+
+        // Fallback: if neither expansion found, pick from all singles
+        if (allPicked.isEmpty) {
+          allPicked.addAll(_pickFromExpansion(riftboundSingles, 15));
+        }
+
+        // ── 3. Build demo single-card products ──
         final demoCards = <Product>[];
-        for (var i = 0; i < picked.length; i++) {
-          final c = picked[i];
+        for (var i = 0; i < allPicked.length; i++) {
+          final c = allPicked[i];
           final priceVal = c.marketPrice != null
               ? c.marketPrice!.cents / 100
               : 2.0;
-          final qty = (i % 3) + 1; // 1, 2, 3 copies
+          // Vary quantities: 1-4 copies
+          final qty = [1, 2, 1, 3, 1, 2, 4, 1, 2, 1, 3, 1, 2, 1, 1, 2, 3, 1][i % 18];
+          // Some in inventory (inventoryQty > 0)
+          final hasInventory = i % 3 == 0; // every 3rd card
+          final isListed = i == 2 || i == 11;
           demoCards.add(Product(
             id: 'demo-${c.id}',
             name: c.name,
             brand: 'RIFTBOUND',
             quantity: qty.toDouble(),
             price: priceVal,
-            status: i == 1 ? ProductStatus.listed : ProductStatus.inInventory,
+            status: isListed ? ProductStatus.listed : ProductStatus.inInventory,
             kind: ProductKind.singleCard,
             cardBlueprintId: c.id,
             cardImageUrl: c.imageUrl,
@@ -81,19 +114,82 @@ class DemoDataService {
             marketPrice: c.marketPrice != null
                 ? c.marketPrice!.cents / 100
                 : null,
-            createdAt:
-                DateTime.now().subtract(Duration(days: i + 1)),
+            inventoryQty: hasInventory ? 1 : 0,
+            createdAt: DateTime.now().subtract(Duration(days: i + 1)),
           ));
         }
 
-        // Replace single-card products, keep sealed products
-        products = [
-          ...demoCards,
-          ..._defaultProducts
-              .where((p) => p.kind != ProductKind.singleCard),
+        // ── 4. Find sealed products — prefer Spiritforged expansion ──
+        final sealedFromCatalog = allCards.where((c) =>
+            c.game?.toLowerCase() == 'riftbound' &&
+            c.kind != null &&
+            c.kind != 'singleCard').toList();
+
+        // Prefer sealed from Spiritforged, fallback to any
+        final sealedExpName = spiritforgedCards.isNotEmpty
+            ? spiritforgedName
+            : (originsCards.isNotEmpty ? originsName : 'Riftbound');
+
+        CardBlueprint? findSealed(String kind, [String? preferExpansion]) {
+          if (preferExpansion != null) {
+            final match = sealedFromCatalog.where((c) =>
+                c.kind == kind &&
+                c.expansionName?.toLowerCase() == preferExpansion.toLowerCase()).firstOrNull;
+            if (match != null) return match;
+          }
+          return sealedFromCatalog.where((c) => c.kind == kind).firstOrNull;
+        }
+
+        final catalogPack = findSealed('boosterPack', sealedExpName);
+        final catalogBox = findSealed('boosterBox', sealedExpName);
+
+        final sealedProducts = <Product>[
+          Product(
+            id: 'demo-sealed-box',
+            name: catalogBox?.name ?? 'Riftbound Booster Box',
+            brand: 'RIFTBOUND',
+            quantity: 2,
+            price: 35,
+            status: ProductStatus.inInventory,
+            kind: ProductKind.boosterBox,
+            cardExpansion: catalogBox?.expansionName ?? sealedExpName,
+            cardImageUrl: catalogBox?.imageUrl,
+            cardBlueprintId: catalogBox?.id,
+            createdAt: DateTime.now().subtract(const Duration(days: 7)),
+          ),
+          Product(
+            id: 'demo-sealed-pack',
+            name: catalogPack?.name ?? 'Riftbound Booster Pack',
+            brand: 'RIFTBOUND',
+            quantity: 6,
+            price: 4.50,
+            status: ProductStatus.inInventory,
+            kind: ProductKind.boosterPack,
+            cardExpansion: catalogPack?.expansionName ?? sealedExpName,
+            cardImageUrl: catalogPack?.imageUrl,
+            cardBlueprintId: catalogPack?.id,
+            createdAt: DateTime.now().subtract(const Duration(days: 4)),
+          ),
+          Product(
+            id: 'demo-sealed-opened',
+            name: catalogPack?.name ?? 'Riftbound Booster Pack',
+            brand: 'RIFTBOUND',
+            quantity: 10,
+            price: 4.50,
+            status: ProductStatus.inInventory,
+            kind: ProductKind.boosterPack,
+            cardExpansion: catalogPack?.expansionName ?? sealedExpName,
+            cardImageUrl: catalogPack?.imageUrl,
+            isOpened: true,
+            openedAt: DateTime.now().subtract(const Duration(days: 2)),
+            createdAt: DateTime.now().subtract(const Duration(days: 6)),
+          ),
         ];
 
-        // Rebuild purchases to match
+        // ── 5. Combine ──
+        products = [...demoCards, ...sealedProducts];
+
+        // Rebuild purchases from actual products
         purchases = products
             .map((p) => Purchase(
                   id: 'demo-p-${p.id}',
@@ -104,6 +200,58 @@ class DemoDataService {
                   workspace: 'default',
                 ))
             .toList();
+
+        // Generate realistic sales from listed products
+        final listedCards = demoCards.where((p) => p.status == ProductStatus.listed).toList();
+        sales = listedCards.map((p) {
+          final salePrice = (p.marketPrice ?? p.price) * 1.1; // sold at +10%
+          return Sale(
+            id: 'demo-s-${p.id}',
+            productName: p.name,
+            salePrice: double.parse(salePrice.toStringAsFixed(2)),
+            purchasePrice: p.price,
+            fees: double.parse((salePrice * 0.08).toStringAsFixed(2)), // ~8% fees
+            date: DateTime.now().subtract(Duration(days: listedCards.indexOf(p) + 3)),
+          );
+        }).toList();
+
+        // Generate shipments from actual products
+        final sealedName = sealedProducts.isNotEmpty ? sealedProducts.first.name : 'Riftbound Box';
+        final listedName = listedCards.isNotEmpty ? listedCards.first.name : 'Riftbound Card';
+        shipments = [
+          Shipment(
+            id: 'demo-sh1',
+            trackingCode: 'BRT-123456789',
+            carrier: 'brt',
+            carrierName: 'BRT',
+            type: ShipmentType.purchase,
+            status: ShipmentStatus.inTransit,
+            createdAt: DateTime.now().subtract(const Duration(days: 2)),
+            productName: sealedName,
+            trackingHistory: [
+              TrackingEvent(
+                status: 'Pacco ritirato',
+                location: 'Milano',
+                timestamp: DateTime.now().subtract(const Duration(days: 2)),
+              ),
+              TrackingEvent(
+                status: 'In transito',
+                location: 'Bologna Hub',
+                timestamp: DateTime.now().subtract(const Duration(days: 1)),
+              ),
+            ],
+          ),
+          Shipment(
+            id: 'demo-sh2',
+            trackingCode: 'GLS-987654321',
+            carrier: 'gls',
+            carrierName: 'GLS',
+            type: ShipmentType.sale,
+            status: ShipmentStatus.pending,
+            createdAt: DateTime.now().subtract(const Duration(days: 1)),
+            productName: listedName,
+          ),
+        ];
       }
     } catch (_) {
       // Keep default static data on failure — catalog may not be reachable
@@ -173,6 +321,7 @@ class DemoDataService {
       price: 35,
       status: ProductStatus.inInventory,
       kind: ProductKind.boosterBox,
+      cardExpansion: 'Riftbound',
       createdAt: DateTime.now().subtract(const Duration(days: 7)),
     ),
     Product(
@@ -183,6 +332,7 @@ class DemoDataService {
       price: 4.50,
       status: ProductStatus.inInventory,
       kind: ProductKind.boosterPack,
+      cardExpansion: 'Riftbound',
       createdAt: DateTime.now().subtract(const Duration(days: 4)),
     ),
     Product(
@@ -193,6 +343,7 @@ class DemoDataService {
       price: 4.50,
       status: ProductStatus.inInventory,
       kind: ProductKind.boosterPack,
+      cardExpansion: 'Riftbound',
       isOpened: true,
       openedAt: DateTime.now().subtract(const Duration(days: 2)),
       createdAt: DateTime.now().subtract(const Duration(days: 6)),
@@ -242,75 +393,13 @@ class DemoDataService {
     ),
   ];
 
-  static final List<Sale> sales = [
-    Sale(
-      id: 'demo-s1',
-      productName: 'Aetheris, Planar Sovereign',
-      salePrice: 45,
-      purchasePrice: 18,
-      fees: 4,
-      date: DateTime.now().subtract(const Duration(days: 8)),
-    ),
-    Sale(
-      id: 'demo-s2',
-      productName: 'Riftbound Collector Bundle',
-      salePrice: 120,
-      purchasePrice: 75,
-      fees: 10,
-      date: DateTime.now().subtract(const Duration(days: 12)),
-    ),
-    Sale(
-      id: 'demo-s3',
-      productName: 'Void Shard Elemental (Foil)',
-      salePrice: 8.50,
-      purchasePrice: 3,
-      fees: 1,
-      date: DateTime.now().subtract(const Duration(days: 4)),
-    ),
-    Sale(
-      id: 'demo-s4',
-      productName: 'Riftbound Promo Pack',
-      salePrice: 28,
-      purchasePrice: 12,
-      fees: 2,
-      date: DateTime.now().subtract(const Duration(days: 6)),
-    ),
-  ];
+  static List<Sale> sales = List<Sale>.from(_defaultSales);
 
-  static final List<Shipment> shipments = [
-    Shipment(
-      id: 'demo-sh1',
-      trackingCode: 'BRT-123456789',
-      carrier: 'brt',
-      carrierName: 'BRT',
-      type: ShipmentType.purchase,
-      status: ShipmentStatus.inTransit,
-      createdAt: DateTime.now().subtract(const Duration(days: 2)),
-      productName: 'Riftbound Starter Box',
-      trackingHistory: [
-        TrackingEvent(
-          status: 'Pacco ritirato',
-          location: 'Milano',
-          timestamp: DateTime.now().subtract(const Duration(days: 2)),
-        ),
-        TrackingEvent(
-          status: 'In transito',
-          location: 'Bologna Hub',
-          timestamp: DateTime.now().subtract(const Duration(days: 1)),
-        ),
-      ],
-    ),
-    Shipment(
-      id: 'demo-sh2',
-      trackingCode: 'GLS-987654321',
-      carrier: 'gls',
-      carrierName: 'GLS',
-      type: ShipmentType.sale,
-      status: ShipmentStatus.pending,
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      productName: 'Drakar, the Riftwalker',
-    ),
-  ];
+  static final List<Sale> _defaultSales = [];
+
+  static List<Shipment> shipments = List<Shipment>.from(_defaultShipments);
+
+  static final List<Shipment> _defaultShipments = [];
 
   // ── Computed stats (mirrors FirestoreService API) ──
 

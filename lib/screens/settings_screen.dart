@@ -10,7 +10,8 @@ import '../l10n/app_localizations.dart';
 import '../screens/reports_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onAuthRequired;
+  const SettingsScreen({super.key, this.onAuthRequired});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -1281,7 +1282,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Demo mode banner
           if (FirestoreService.demoMode) ...[
             GestureDetector(
-              onTap: () => _showLogoutDialog(),
+              onTap: () => widget.onAuthRequired?.call(),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 margin: const EdgeInsets.only(bottom: 16),

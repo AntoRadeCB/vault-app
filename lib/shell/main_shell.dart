@@ -17,7 +17,9 @@ import '../screens/open_product_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../widgets/animated_widgets.dart';
 import '../widgets/coach_mark_overlay.dart';
+import '../widgets/ocr_scanner_dialog.dart';
 import '../services/firestore_service.dart';
+import '../services/card_catalog_service.dart';
 import '../models/product.dart';
 import '../models/purchase.dart';
 
@@ -279,14 +281,24 @@ class _MainShellState extends State<MainShell> {
                             ),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 40, height: 40,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accentOrange.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(Icons.inventory_2, color: AppColors.accentOrange, size: 20),
-                                ),
+                                Builder(builder: (_) {
+                                  final pImg = p.displayImageUrl;
+                                  final hasImg = pImg.isNotEmpty;
+                                  return Container(
+                                    width: 40, height: hasImg ? 56 : 40,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.accentOrange.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(hasImg ? 6 : 10),
+                                    ),
+                                    child: hasImg
+                                        ? ClipRRect(
+                                            borderRadius: BorderRadius.circular(5),
+                                            child: Image.network(pImg, fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => const Icon(Icons.inventory_2, color: AppColors.accentOrange, size: 20)),
+                                          )
+                                        : const Icon(Icons.inventory_2, color: AppColors.accentOrange, size: 20),
+                                  );
+                                }),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
@@ -486,9 +498,81 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  void _openScanFromFab(BuildContext context) {
-    // Scan opens the same AddItem screen as "Aggiungi"
-    _nav.showAddItem();
+  Future<void> _openScanFromFab(BuildContext context) async {
+    if (_nav.guardAuth(widget.isDemoMode)) {
+      showDemoAuthPrompt(context, onAuthRequired: widget.onAuthRequired ?? () {});
+      return;
+    }
+
+    // Load catalog for matching
+    final catalogService = CardCatalogService();
+    final allCards = await catalogService.getAllCards();
+    final singleCards = allCards.where((c) => c.kind == null || c.kind == 'singleCard').toList();
+
+    if (!mounted) return;
+
+    // Open scanner
+    final numbers = await OcrScannerDialog.scan(
+      context,
+      expansionCards: singleCards,
+    );
+    if (!mounted || numbers.isEmpty) return;
+
+    // Match and add each scanned card
+    final fs = FirestoreService();
+    final currentProducts = await fs.getProducts().first;
+    final existingByBlueprint = <String, Product>{};
+    for (final p in currentProducts) {
+      if (p.kind == ProductKind.singleCard && p.cardBlueprintId != null) {
+        existingByBlueprint[p.cardBlueprintId!] = p;
+      }
+    }
+
+    int added = 0;
+    for (final num in numbers) {
+      final match = singleCards.where((c) {
+        if (c.collectorNumber == null) return false;
+        if (c.collectorNumber == num) return true;
+        if (c.collectorNumber!.toLowerCase() == num.toLowerCase()) return true;
+        final cInt = int.tryParse(c.collectorNumber!);
+        final nInt = int.tryParse(num);
+        return cInt != null && nInt != null && cInt == nInt;
+      }).firstOrNull;
+
+      if (match != null) {
+        final existing = existingByBlueprint[match.id];
+        if (existing != null && existing.id != null) {
+          await fs.updateProduct(existing.id!, {'quantity': existing.quantity + 1});
+        } else {
+          await fs.addProduct(Product(
+            name: match.name,
+            brand: (match.game ?? 'riftbound').toUpperCase(),
+            quantity: 1,
+            price: match.marketPrice != null ? match.marketPrice!.cents / 100 : 0,
+            status: ProductStatus.inInventory,
+            kind: ProductKind.singleCard,
+            cardBlueprintId: match.id,
+            cardImageUrl: match.imageUrl,
+            cardExpansion: match.expansionName,
+            cardRarity: match.rarity,
+            marketPrice: match.marketPrice != null ? match.marketPrice!.cents / 100 : null,
+          ));
+        }
+        added++;
+      }
+    }
+
+    if (mounted && added > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ $added ${added == 1 ? "carta aggiunta" : "carte aggiunte"} alla collezione'),
+          backgroundColor: AppColors.accentGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
   }
 
   void _handleProfileSwitch() {
@@ -549,7 +633,7 @@ class _MainShellState extends State<MainShell> {
       case 'reports':
         return const ReportsScreen();
       case 'settings':
-        return const SettingsScreen();
+        return SettingsScreen(onAuthRequired: widget.onAuthRequired);
       default:
         return DashboardScreen(onAuthRequired: widget.onAuthRequired);
     }

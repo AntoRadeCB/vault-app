@@ -72,12 +72,18 @@ class DemoModeWrapper extends StatefulWidget {
 }
 
 class _DemoModeWrapperState extends State<DemoModeWrapper> {
+  bool _demoReady = false;
+
   @override
   void initState() {
     super.initState();
     FirestoreService.demoMode = true;
-    // Load real catalog data for demo products (async, non-blocking)
-    DemoDataService.init();
+    _initDemo();
+  }
+
+  Future<void> _initDemo() async {
+    await DemoDataService.init();
+    if (mounted) setState(() => _demoReady = true);
   }
 
   @override
@@ -88,6 +94,15 @@ class _DemoModeWrapperState extends State<DemoModeWrapper> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_demoReady) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.accentBlue),
+        ),
+      );
+    }
+
     return Stack(
       children: [
         ProfileProviderWrapper(
