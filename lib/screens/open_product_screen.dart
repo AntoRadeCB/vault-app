@@ -1253,8 +1253,164 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
     );
   }
 
+  /// Find variant cards (same name, different id/collector number)
+  List<CardBlueprint> _getVariants(CardBlueprint card) {
+    return _expansionCards
+        .where((c) => c.name == card.name && c.id != card.id)
+        .toList();
+  }
+
+  /// Swap a checked card with one of its variants
+  void _swapCardVariant(CardBlueprint oldCard, CardBlueprint newCard) {
+    setState(() {
+      final count = _checkedCardCounts[oldCard.id] ?? 0;
+      if (count <= 0) return;
+
+      // Remove old card from checklist counts
+      _checkedCardCounts.remove(oldCard.id);
+      // Add new card with same count
+      _checkedCardCounts[newCard.id] = (_checkedCardCounts[newCard.id] ?? 0) + count;
+
+      // Update pulls
+      final pullIdx = _pulls.indexWhere((p) => p.cardBlueprintId == oldCard.id);
+      if (pullIdx >= 0) {
+        final existingNew = _pulls.indexWhere((p) => p.cardBlueprintId == newCard.id);
+        if (existingNew >= 0) {
+          // New card already in pulls — merge quantities
+          _pulls[existingNew].quantity += _pulls[pullIdx].quantity;
+          _pulls.removeAt(pullIdx);
+        } else {
+          // Replace pull entry
+          _pulls[pullIdx] = _PullEntry(
+            cardName: newCard.name,
+            cardBlueprintId: newCard.id,
+            cardImageUrl: newCard.imageUrl,
+            cardExpansion: newCard.expansionName,
+            rarity: newCard.rarity,
+            estimatedValue: newCard.marketPrice != null
+                ? newCard.marketPrice!.cents / 100
+                : null,
+            quantity: count,
+          );
+        }
+      }
+    });
+  }
+
+  /// Show bottom sheet to pick a variant
+  void _showVariantPicker(CardBlueprint card) {
+    final variants = _getVariants(card);
+    if (variants.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(ctx).size.height * 0.5,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Varianti di ${card.name}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  // Current card
+                  _buildVariantTile(card, isCurrent: true, onTap: () => Navigator.pop(ctx)),
+                  const Divider(color: Colors.white12, height: 1),
+                  // Other variants
+                  ...variants.map((v) => _buildVariantTile(v, isCurrent: false, onTap: () {
+                    Navigator.pop(ctx);
+                    _swapCardVariant(card, v);
+                  })),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVariantTile(CardBlueprint card, {required bool isCurrent, required VoidCallback onTap}) {
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          width: 40,
+          height: 56,
+          child: card.imageUrl != null
+              ? Image.network(card.imageUrl!, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: card.rarityColor.withValues(alpha: 0.15),
+                    child: Icon(Icons.style, color: card.rarityColor, size: 18),
+                  ))
+              : Container(
+                  color: card.rarityColor.withValues(alpha: 0.15),
+                  child: Icon(Icons.style, color: card.rarityColor, size: 18),
+                ),
+        ),
+      ),
+      title: Text(
+        '#${card.collectorNumber ?? '?'} — ${card.name}',
+        style: TextStyle(
+          color: isCurrent ? AppColors.accentGreen : Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        [
+          if (card.rarity != null) card.rarity!,
+          if (card.version != null && card.version!.isNotEmpty) card.version!,
+        ].join(' · '),
+        style: TextStyle(
+          color: isCurrent
+              ? AppColors.accentGreen.withValues(alpha: 0.7)
+              : AppColors.textMuted,
+          fontSize: 11,
+        ),
+      ),
+      trailing: isCurrent
+          ? const Icon(Icons.check_circle, color: AppColors.accentGreen, size: 20)
+          : Icon(Icons.swap_horiz, color: Colors.white.withValues(alpha: 0.4), size: 20),
+    );
+  }
+
   Widget _buildChecklistCard(CardBlueprint card, int count) {
     final isChecked = count > 0;
+    final hasVariants = isChecked && _getVariants(card).isNotEmpty;
     return GestureDetector(
       onTap: () => _incrementChecklistCard(card),
       onLongPress: count > 0 ? () => _decrementChecklistCard(card) : null,
@@ -1416,6 +1572,30 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                     ),
+                  ),
+                ),
+              ),
+
+            // Swap variant badge (top-left, only when checked & has variants)
+            if (hasVariants)
+              Positioned(
+                top: 4,
+                left: 4,
+                child: GestureDetector(
+                  onTap: () => _showVariantPicker(card),
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: AppColors.accentBlue.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Icon(Icons.swap_horiz,
+                        color: Colors.white, size: 14),
                   ),
                 ),
               ),
