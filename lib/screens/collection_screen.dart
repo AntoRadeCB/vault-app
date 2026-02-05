@@ -7,35 +7,49 @@ import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
 import '../services/card_catalog_service.dart';
 
-/// Binder-based collection view.
-///
-/// Flow: Game selection → Expansion binders → Card grid
+// ──────────────────────────────────────────────────
+// Game metadata
+// ──────────────────────────────────────────────────
+class _GameMeta {
+  final String key; // lowercase
+  final String label;
+  final Color color;
+  final IconData icon;
+  const _GameMeta(this.key, this.label, this.color, this.icon);
+}
+
+const List<_GameMeta> _knownGames = [
+  _GameMeta('riftbound', 'RIFTBOUND', Color(0xFF667eea), Icons.bolt),
+  _GameMeta('pokemon', 'POKÉMON', Color(0xFFFFCB05), Icons.catching_pokemon),
+  _GameMeta('mtg', 'MTG', Color(0xFF764ba2), Icons.auto_awesome),
+  _GameMeta('yugioh', 'YU-GI-OH', Color(0xFFE53935), Icons.flash_on),
+  _GameMeta('one-piece', 'ONE PIECE', Color(0xFFFF7043), Icons.sailing),
+];
+
+_GameMeta _metaFor(String gameKey) {
+  final k = gameKey.toLowerCase().trim();
+  return _knownGames.firstWhere(
+    (m) => m.key == k,
+    orElse: () => _GameMeta(k, k.toUpperCase(), AppColors.accentBlue, Icons.style),
+  );
+}
+
+// ──────────────────────────────────────────────────
+// Main screen
+// ──────────────────────────────────────────────────
 class CollectionScreen extends StatefulWidget {
   const CollectionScreen({super.key});
-
   @override
   State<CollectionScreen> createState() => _CollectionScreenState();
 }
 
-enum _CollectionView { games, expansions, binderDetail }
-
 class _CollectionScreenState extends State<CollectionScreen> {
-  _CollectionView _currentView = _CollectionView.games;
-  String? _selectedGame; // brand name
-  String? _selectedExpansionName;
-  int? _selectedExpansionId;
-
   final FirestoreService _fs = FirestoreService();
   final CardCatalogService _catalogService = CardCatalogService();
 
-  List<CardBlueprint> _catalogCards = [];
-  bool _catalogLoaded = false;
-
-  // Precomputed catalog structures
-  // expansionName → list of singleCard blueprints
-  Map<String, List<CardBlueprint>> _expansionCatalog = {};
-  // normalised game name → set of expansion names
-  Map<String, Set<String>> _gameExpansionMap = {};
+  List<CardBlueprint> _catalog = [];
+  bool _catalogLoading = true;
+  String? _selectedGame; // null = game selection
 
   @override
   void initState() {
@@ -44,1431 +58,808 @@ class _CollectionScreenState extends State<CollectionScreen> {
   }
 
   Future<void> _loadCatalog() async {
-    try {
-      _catalogCards = await _catalogService.getAllCards();
-      _buildCatalogMaps();
-    } catch (_) {}
-    if (mounted) setState(() => _catalogLoaded = true);
+    final cards = await _catalogService.getAllCards();
+    if (mounted) setState(() { _catalog = cards; _catalogLoading = false; });
   }
 
-  void _buildCatalogMaps() {
-    _expansionCatalog.clear();
-    _gameExpansionMap.clear();
-
-    for (final card in _catalogCards) {
-      // Only count single cards (not sealed products in catalog)
-      if (card.kind != null && card.kind != 'singleCard') continue;
-      final expName = card.expansionName ?? 'Unknown';
-      _expansionCatalog.putIfAbsent(expName, () => []).add(card);
-
-      if (card.game != null) {
-        final normGame = _normalizeGameName(card.game!);
-        _gameExpansionMap.putIfAbsent(normGame, () => {}).add(expName);
-      }
-    }
-  }
-
-  // ─── Navigation ─────────────────────────────────
-
-  void _selectGame(String game) {
-    setState(() {
-      _selectedGame = game;
-      _currentView = _CollectionView.expansions;
-    });
-  }
-
-  void _selectExpansion(String name, int? expansionId) {
-    setState(() {
-      _selectedExpansionName = name;
-      _selectedExpansionId = expansionId;
-      _currentView = _CollectionView.binderDetail;
-    });
-  }
-
-  void _goBack() {
-    setState(() {
-      switch (_currentView) {
-        case _CollectionView.binderDetail:
-          _currentView = _CollectionView.expansions;
-          _selectedExpansionName = null;
-          _selectedExpansionId = null;
-        case _CollectionView.expansions:
-          _currentView = _CollectionView.games;
-          _selectedGame = null;
-        case _CollectionView.games:
-          break;
-      }
-    });
-  }
-
-  // ─── Helpers ────────────────────────────────────
-
-  static String _normalizeGameName(String name) {
-    return name
-        .toLowerCase()
-        .replaceAll('é', 'e')
-        .replaceAll('!', '')
-        .replaceAll('-', ' ')
-        .trim();
-  }
-
-  bool _gamesMatch(String catalogGame, String userBrand) {
-    final a = _normalizeGameName(catalogGame);
-    final b = _normalizeGameName(userBrand);
-    return a == b || a.contains(b) || b.contains(a);
-  }
-
-  Color _gameColor(String brand) {
-    switch (brand.toUpperCase()) {
-      case 'POKÉMON':
-      case 'POKEMON':
-        return const Color(0xFFFFCB05);
-      case 'MTG':
-      case 'MAGIC':
-        return const Color(0xFF764ba2);
-      case 'YU-GI-OH!':
-      case 'YUGIOH':
-        return const Color(0xFFE53935);
-      case 'RIFTBOUND':
-        return const Color(0xFF667eea);
-      case 'ONE PIECE':
-        return const Color(0xFFFF7043);
-      case 'DIGIMON':
-        return const Color(0xFF2196F3);
-      case 'DRAGON BALL':
-        return const Color(0xFFFF9800);
-      default:
-        return AppColors.accentBlue;
-    }
-  }
-
-  IconData _gameIcon(String brand) {
-    switch (brand.toUpperCase()) {
-      case 'POKÉMON':
-      case 'POKEMON':
-        return Icons.catching_pokemon;
-      case 'MTG':
-      case 'MAGIC':
-        return Icons.auto_awesome;
-      case 'RIFTBOUND':
-        return Icons.bolt;
-      case 'YU-GI-OH!':
-      case 'YUGIOH':
-        return Icons.flash_on;
-      case 'ONE PIECE':
-        return Icons.sailing;
-      default:
-        return Icons.style;
-    }
-  }
-
-  Color _rarityColor(String? rarity) {
-    switch (rarity?.toLowerCase()) {
-      case 'common':
-        return const Color(0xFF9E9E9E);
-      case 'uncommon':
-        return const Color(0xFF4CAF50);
-      case 'rare':
-        return const Color(0xFF2196F3);
-      case 'epic':
-        return const Color(0xFFAB47BC);
-      case 'alternate art':
-        return const Color(0xFFFFD700);
-      case 'promo':
-        return const Color(0xFFFF6B35);
-      case 'token':
-        return const Color(0xFF78909C);
-      case 'showcase':
-        return const Color(0xFFE91E63);
-      case 'overnumbered':
-        return const Color(0xFFFF4081);
-      default:
-        return const Color(0xFF9E9E9E);
-    }
-  }
-
-  /// Get catalog cards matching a user brand + expansion name.
-  List<CardBlueprint> _getCatalogCardsForExpansion(String expansionName) {
-    return _expansionCatalog[expansionName] ?? [];
-  }
-
-  /// Find the expansionId for a given expansion name from catalog.
-  int? _findExpansionId(String expansionName) {
-    final cards = _expansionCatalog[expansionName];
-    if (cards == null || cards.isEmpty) return null;
-    return cards.first.expansionId;
-  }
-
-  /// Get expansion code for display.
-  String? _findExpansionCode(String expansionName) {
-    final cards = _expansionCatalog[expansionName];
-    if (cards == null || cards.isEmpty) return null;
-    return cards.first.expansionCode;
-  }
-
-  // ─── Build ──────────────────────────────────────
+  // Normalize game key from catalog
+  String _normalizeGame(String? g) => (g ?? 'unknown').toLowerCase().trim();
 
   @override
   Widget build(BuildContext context) {
+    if (_catalogLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return StreamBuilder<List<Product>>(
       stream: _fs.getProducts(),
-      builder: (context, snapshot) {
-        final allProducts = snapshot.data ?? [];
-        final singleCards = allProducts
+      builder: (ctx, snap) {
+        final products = (snap.data ?? [])
             .where((p) => p.kind == ProductKind.singleCard)
             .toList();
 
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !_catalogLoaded) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.accentBlue),
-          );
-        }
-
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.03, 0),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              ),
-            );
-          },
-          child: KeyedSubtree(
-            key: ValueKey('${_currentView}_$_selectedGame\_$_selectedExpansionName'),
-            child: _buildCurrentView(singleCards),
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 350),
+            child: _selectedGame == null
+                ? _GameSelectionView(
+                    key: const ValueKey('games'),
+                    catalog: _catalog,
+                    products: products,
+                    onSelect: (g) => setState(() => _selectedGame = g),
+                    normalizeGame: _normalizeGame,
+                  )
+                : _GameExpansionView(
+                    key: ValueKey('game-$_selectedGame'),
+                    game: _selectedGame!,
+                    catalog: _catalog,
+                    products: products,
+                    fs: _fs,
+                    normalizeGame: _normalizeGame,
+                    onBack: () => setState(() => _selectedGame = null),
+                  ),
           ),
         );
       },
     );
   }
+}
 
-  Widget _buildCurrentView(List<Product> singleCards) {
-    switch (_currentView) {
-      case _CollectionView.games:
-        return _buildGameSelection(singleCards);
-      case _CollectionView.expansions:
-        return _buildExpansionBinders(singleCards);
-      case _CollectionView.binderDetail:
-        return _buildBinderDetail(singleCards);
-    }
-  }
+// ──────────────────────────────────────────────────
+// Level 1 — Game Selection
+// ──────────────────────────────────────────────────
+class _GameSelectionView extends StatelessWidget {
+  final List<CardBlueprint> catalog;
+  final List<Product> products;
+  final ValueChanged<String> onSelect;
+  final String Function(String?) normalizeGame;
 
-  // ═══════════════════════════════════════════════════
-  //  GAME SELECTION VIEW
-  // ═══════════════════════════════════════════════════
+  const _GameSelectionView({
+    super.key,
+    required this.catalog,
+    required this.products,
+    required this.onSelect,
+    required this.normalizeGame,
+  });
 
-  Widget _buildGameSelection(List<Product> singleCards) {
-    // Group by brand (game)
-    final gameMap = <String, List<Product>>{};
-    for (final card in singleCards) {
-      gameMap.putIfAbsent(card.brand, () => []).add(card);
-    }
-
-    // Also include games that exist in catalog but user has no cards for
-    for (final entry in _gameExpansionMap.entries) {
-      final normGame = entry.key;
-      final alreadyExists = gameMap.keys.any(
-        (brand) => _normalizeGameName(brand) == normGame,
-      );
-      if (!alreadyExists) {
-        // Find a display name from catalog
-        final firstCard = _catalogCards.firstWhere(
-          (c) => c.game != null && _normalizeGameName(c.game!) == normGame,
-        );
-        gameMap[firstCard.game!.toUpperCase()] = [];
-      }
+  @override
+  Widget build(BuildContext context) {
+    // Group catalog by game
+    final Map<String, List<CardBlueprint>> catalogByGame = {};
+    for (final c in catalog) {
+      final g = normalizeGame(c.game);
+      catalogByGame.putIfAbsent(g, () => []).add(c);
     }
 
-    final gameEntries = gameMap.entries.toList()
-      ..sort((a, b) => b.value.length.compareTo(a.value.length));
+    // Group products by game (brand is uppercase)
+    final Map<String, List<Product>> productsByGame = {};
+    for (final p in products) {
+      final g = p.brand.toLowerCase().trim();
+      productsByGame.putIfAbsent(g, () => []).add(p);
+    }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-          child: StaggeredFadeSlide(
-            index: 0,
-            child: Row(
-              children: [
-                const Text(
-                  'Collezione',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.accentPurple.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppColors.accentPurple.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Text(
-                    '${singleCards.length} carte',
-                    style: const TextStyle(
-                      color: AppColors.accentPurple,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+    // Order: known games first, then any others
+    final gameKeys = <String>{};
+    for (final m in _knownGames) {
+      if (catalogByGame.containsKey(m.key)) gameKeys.add(m.key);
+    }
+    for (final k in catalogByGame.keys) {
+      gameKeys.add(k);
+    }
+
+    return CustomScrollView(
+      slivers: [
+        SliverAppBar(
+          pinned: true,
+          backgroundColor: AppColors.background,
+          title: const Text('Collezione',
+              style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 24)),
+          centerTitle: false,
         ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: StaggeredFadeSlide(
-            index: 1,
-            child: Text(
-              'Seleziona un gioco per sfogliare i raccoglitori',
-              style: TextStyle(
-                color: AppColors.textMuted.withValues(alpha: 0.8),
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        Expanded(
-          child: gameEntries.isEmpty
-              ? _buildEmptyCollection()
-              : ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  itemCount: gameEntries.length,
-                  itemBuilder: (context, index) {
-                    final entry = gameEntries[index];
-                    return StaggeredFadeSlide(
-                      index: index + 2,
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: _buildGameTile(entry.key, entry.value),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (ctx, i) {
+                final game = gameKeys.elementAt(i);
+                final meta = _metaFor(game);
+                final catCards = catalogByGame[game] ?? [];
+                final owned = productsByGame[game] ?? [];
+                final uniqueOwned = owned.map((p) => p.cardBlueprintId).toSet().length;
+                final totalCopies = owned.fold<double>(0, (s, p) => s + p.quantity);
+                final totalValue = owned.fold<double>(0, (s, p) => s + (p.marketPrice ?? 0) * p.quantity);
+                final progress = catCards.isEmpty ? 0.0 : uniqueOwned / catCards.length;
 
-  Widget _buildGameTile(String brand, List<Product> cards) {
-    final color = _gameColor(brand);
-    final icon = _gameIcon(brand);
-
-    // Compute stats
-    final uniqueCards =
-        cards.map((c) => c.cardBlueprintId ?? c.name).toSet().length;
-    final totalCopies =
-        cards.fold<int>(0, (sum, c) => sum + c.quantity.toInt());
-
-    // Total value from market prices
-    double totalValue = 0;
-    for (final card in cards) {
-      final price = card.marketPrice ?? card.price;
-      totalValue += price * card.quantity;
-    }
-
-    // Total cards available in catalog for this game
-    final normGame = _normalizeGameName(brand);
-    int catalogTotal = 0;
-    for (final entry in _expansionCatalog.entries) {
-      final sampleCard = entry.value.firstOrNull;
-      if (sampleCard?.game != null &&
-          _normalizeGameName(sampleCard!.game!) == normGame) {
-        catalogTotal += entry.value.length;
-      }
-    }
-
-    final progress = catalogTotal > 0 ? uniqueCards / catalogTotal : 0.0;
-
-    return ScaleOnPress(
-      onTap: () => _selectGame(brand),
-      child: HoverLiftCard(
-        liftAmount: 4,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              colors: [
-                color.withValues(alpha: 0.12),
-                color.withValues(alpha: 0.04),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(
-              color: color.withValues(alpha: 0.25),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.15),
-                blurRadius: 24,
-                spreadRadius: -4,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                color.withValues(alpha: 0.3),
-                                color.withValues(alpha: 0.1),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: color.withValues(alpha: 0.2),
-                                blurRadius: 12,
-                              ),
-                            ],
-                          ),
-                          child: Icon(icon, color: color, size: 26),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                brand,
-                                style: TextStyle(
-                                  color: color,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '$uniqueCards carte uniche · $totalCopies copie',
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
+                return StaggeredFadeSlide(
+                  index: i,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: ScaleOnPress(
+                      onTap: () => onSelect(game),
+                      child: GlassCard(
+                        glowColor: meta.color,
+                        child: Row(
                           children: [
-                            Text(
-                              '€${totalValue.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                            Container(
+                              width: 56, height: 56,
+                              decoration: BoxDecoration(
+                                color: meta.color.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(14),
                               ),
+                              child: Icon(meta.icon, color: meta.color, size: 28),
                             ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'valore',
-                              style: TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    if (catalogTotal > 0) ...[
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: progress.clamp(0.0, 1.0),
-                                minHeight: 6,
-                                backgroundColor:
-                                    Colors.white.withValues(alpha: 0.06),
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(color),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            '$uniqueCards / $catalogTotal',
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyCollection() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.collections_bookmark_outlined,
-            color: AppColors.textMuted.withValues(alpha: 0.4),
-            size: 72,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Nessuna carta in collezione',
-            style: TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Apri buste o aggiungi carte singole\nper iniziare la tua collezione',
-            style: TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 14,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════
-  //  EXPANSION BINDERS VIEW
-  // ═══════════════════════════════════════════════════
-
-  Widget _buildExpansionBinders(List<Product> singleCards) {
-    final game = _selectedGame!;
-    final color = _gameColor(game);
-
-    // Filter cards for this game
-    final gameCards =
-        singleCards.where((c) => c.brand == game).toList();
-
-    // Group by expansion
-    final expansionMap = <String, List<Product>>{};
-    for (final card in gameCards) {
-      final exp = card.cardExpansion ?? 'Sconosciuta';
-      expansionMap.putIfAbsent(exp, () => []).add(card);
-    }
-
-    // Also include catalog expansions for this game that user hasn't collected yet
-    final normGame = _normalizeGameName(game);
-    for (final entry in _expansionCatalog.entries) {
-      final sampleCard = entry.value.firstOrNull;
-      if (sampleCard?.game != null &&
-          _normalizeGameName(sampleCard!.game!) == normGame) {
-        expansionMap.putIfAbsent(entry.key, () => []);
-      }
-    }
-
-    // Sort: expansions with most owned cards first
-    final expansionEntries = expansionMap.entries.toList()
-      ..sort((a, b) => b.value.length.compareTo(a.value.length));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header with back
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-          child: StaggeredFadeSlide(
-            index: 0,
-            child: Row(
-              children: [
-                ScaleOnPress(
-                  onTap: _goBack,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.06),
-                      ),
-                    ),
-                    child: const Icon(Icons.arrow_back,
-                        color: Colors.white, size: 22),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(_gameIcon(game), color: color, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        game,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      Text(
-                        '${expansionEntries.length} espansioni',
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        Expanded(
-          child: expansionEntries.isEmpty
-              ? Center(
-                  child: Text(
-                    'Nessuna espansione disponibile',
-                    style: TextStyle(
-                      color: AppColors.textMuted.withValues(alpha: 0.6),
-                      fontSize: 14,
-                    ),
-                  ),
-                )
-              : ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24),
-                  itemCount: expansionEntries.length,
-                  itemBuilder: (context, index) {
-                    final entry = expansionEntries[index];
-                    return StaggeredFadeSlide(
-                      index: index + 1,
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _buildBinderCard(
-                          game,
-                          entry.key,
-                          entry.value,
-                          color,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBinderCard(
-    String game,
-    String expansionName,
-    List<Product> ownedCards,
-    Color gameColor,
-  ) {
-    final catalogCards = _getCatalogCardsForExpansion(expansionName);
-    final totalInExpansion = catalogCards.length;
-    final expansionCode = _findExpansionCode(expansionName);
-    final expansionId = _findExpansionId(expansionName);
-
-    // Unique cards owned (by blueprintId)
-    final ownedBlueprintIds = <String>{};
-    for (final card in ownedCards) {
-      if (card.cardBlueprintId != null) {
-        ownedBlueprintIds.add(card.cardBlueprintId!);
-      }
-    }
-    final uniqueOwned = ownedBlueprintIds.length;
-
-    // Binder value: sum market prices of owned cards from catalog
-    double binderValue = 0;
-    for (final card in ownedCards) {
-      final price = card.marketPrice ?? card.price;
-      binderValue += price * card.quantity;
-    }
-
-    final progress =
-        totalInExpansion > 0 ? uniqueOwned / totalInExpansion : 0.0;
-    final isComplete = totalInExpansion > 0 && uniqueOwned >= totalInExpansion;
-
-    // Accent color: slightly shift the game color for variety
-    final accentColor = isComplete ? AppColors.accentGreen : gameColor;
-
-    return ScaleOnPress(
-      onTap: () => _selectExpansion(expansionName, expansionId),
-      child: HoverLiftCard(
-        liftAmount: 3,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              colors: [
-                accentColor.withValues(alpha: 0.08),
-                Colors.white.withValues(alpha: 0.02),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(
-              color: accentColor.withValues(alpha: 0.2),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: accentColor.withValues(alpha: 0.08),
-                blurRadius: 16,
-                spreadRadius: -2,
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        // Binder icon
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                accentColor.withValues(alpha: 0.25),
-                                accentColor.withValues(alpha: 0.08),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            isComplete
-                                ? Icons.emoji_events
-                                : Icons.menu_book,
-                            color: accentColor,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                expansionName,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (expansionCode != null) ...[
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 1,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.06),
-                                        borderRadius:
-                                            BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        expansionCode,
-                                        style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                  ],
+                                  Text(meta.label,
+                                      style: TextStyle(
+                                          color: meta.color,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18)),
+                                  const SizedBox(height: 4),
                                   Text(
-                                    totalInExpansion > 0
-                                        ? '$uniqueOwned / $totalInExpansion carte'
-                                        : '${ownedCards.length} carte',
-                                    style: TextStyle(
-                                      color: accentColor,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                                    '$uniqueOwned / ${catCards.length} carte  •  ${totalCopies.toInt()} copie  •  €${totalValue.toStringAsFixed(2)}',
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: progress,
+                                      backgroundColor: Colors.white.withValues(alpha: 0.08),
+                                      valueColor: AlwaysStoppedAnimation(meta.color),
+                                      minHeight: 5,
                                     ),
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '€${binderValue.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
                             ),
-                            if (isComplete)
-                              Container(
-                                margin: const EdgeInsets.only(top: 4),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.accentGreen
-                                      .withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Text(
-                                  '✨ COMPLETA',
-                                  style: TextStyle(
-                                    color: AppColors.accentGreen,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
+                            const SizedBox(width: 8),
+                            Icon(Icons.chevron_right, color: AppColors.textMuted),
                           ],
                         ),
-                      ],
-                    ),
-                    if (totalInExpansion > 0) ...[
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: LinearProgressIndicator(
-                          value: progress.clamp(0.0, 1.0),
-                          minHeight: 4,
-                          backgroundColor:
-                              Colors.white.withValues(alpha: 0.06),
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(accentColor),
-                        ),
                       ),
-                    ],
-                  ],
-                ),
-              ),
+                    ),
+                  ),
+                );
+              },
+              childCount: gameKeys.length,
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────
+// Level 2 — Expansion Tabs
+// ──────────────────────────────────────────────────
+class _GameExpansionView extends StatefulWidget {
+  final String game;
+  final List<CardBlueprint> catalog;
+  final List<Product> products;
+  final FirestoreService fs;
+  final String Function(String?) normalizeGame;
+  final VoidCallback onBack;
+
+  const _GameExpansionView({
+    super.key,
+    required this.game,
+    required this.catalog,
+    required this.products,
+    required this.fs,
+    required this.normalizeGame,
+    required this.onBack,
+  });
+
+  @override
+  State<_GameExpansionView> createState() => _GameExpansionViewState();
+}
+
+class _GameExpansionViewState extends State<_GameExpansionView>
+    with TickerProviderStateMixin {
+  TabController? _tabController;
+  late _GameMeta _meta;
+
+  // Big expansions get their own tab, small ones go in "Altro"
+  List<_ExpansionData> _bigExpansions = [];
+  List<_ExpansionData> _smallExpansions = [];
+
+  // For "Altro" sub-navigation
+  String? _altroSelectedExpansion;
+
+  @override
+  void initState() {
+    super.initState();
+    _meta = _metaFor(widget.game);
+    _buildTabs();
+  }
+
+  @override
+  void didUpdateWidget(covariant _GameExpansionView old) {
+    super.didUpdateWidget(old);
+    if (old.game != widget.game || old.catalog.length != widget.catalog.length) {
+      _buildTabs();
+    }
+  }
+
+  void _buildTabs() {
+    final gameCatalog = widget.catalog
+        .where((c) => widget.normalizeGame(c.game) == widget.game)
+        .toList();
+
+    // Group by expansion
+    final Map<String, List<CardBlueprint>> byExp = {};
+    for (final c in gameCatalog) {
+      final exp = c.expansionName ?? 'Sconosciuta';
+      byExp.putIfAbsent(exp, () => []).add(c);
+    }
+
+    _bigExpansions = [];
+    _smallExpansions = [];
+    for (final e in byExp.entries) {
+      final data = _ExpansionData(e.key, e.value);
+      if (e.value.length >= 100) {
+        _bigExpansions.add(data);
+      } else {
+        _smallExpansions.add(data);
+      }
+    }
+
+    // Sort alphabetically
+    _bigExpansions.sort((a, b) => a.name.compareTo(b.name));
+    _smallExpansions.sort((a, b) => a.name.compareTo(b.name));
+
+    final tabCount = _bigExpansions.length + (_smallExpansions.isNotEmpty ? 1 : 0);
+    _tabController?.dispose();
+    _tabController = TabController(length: tabCount, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController?.dispose();
+    super.dispose();
+  }
+
+  Map<String, Product> _productMap() {
+    final m = <String, Product>{};
+    for (final p in widget.products) {
+      if (p.brand.toLowerCase() == widget.game && p.cardBlueprintId != null) {
+        m[p.cardBlueprintId!] = p;
+      }
+    }
+    return m;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pMap = _productMap();
+
+    // Calculate game-level stats
+    final gameCatalog = widget.catalog
+        .where((c) => widget.normalizeGame(c.game) == widget.game)
+        .toList();
+    final gameProducts = widget.products
+        .where((p) => p.brand.toLowerCase() == widget.game)
+        .toList();
+    final uniqueOwned = gameProducts.map((p) => p.cardBlueprintId).toSet().length;
+    final totalValue = gameProducts.fold<double>(0, (s, p) => s + (p.marketPrice ?? 0) * p.quantity);
+
+    if (_tabController == null || _tabController!.length == 0) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          leading: IconButton(icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary), onPressed: widget.onBack),
+          title: Text(_meta.label, style: TextStyle(color: _meta.color, fontWeight: FontWeight.bold)),
+        ),
+        body: const Center(child: Text('Nessuna espansione trovata', style: TextStyle(color: AppColors.textSecondary))),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () {
+            if (_altroSelectedExpansion != null) {
+              setState(() => _altroSelectedExpansion = null);
+            } else {
+              widget.onBack();
+            }
+          },
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_meta.label, style: TextStyle(color: _meta.color, fontWeight: FontWeight.bold, fontSize: 18)),
+            Text(
+              '$uniqueOwned / ${gameCatalog.length} carte  •  €${totalValue.toStringAsFixed(2)}',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+            ),
+          ],
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(46),
+          child: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            indicatorColor: _meta.color,
+            indicatorWeight: 3,
+            labelColor: _meta.color,
+            unselectedLabelColor: AppColors.textMuted,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            tabAlignment: TabAlignment.start,
+            tabs: [
+              for (final exp in _bigExpansions)
+                Tab(text: exp.name),
+              if (_smallExpansions.isNotEmpty)
+                const Tab(text: 'Altro'),
+            ],
+          ),
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          for (final exp in _bigExpansions)
+            _CardGridView(
+              cards: exp.cards,
+              productMap: pMap,
+              fs: widget.fs,
+              game: widget.game,
+              meta: _meta,
+            ),
+          if (_smallExpansions.isNotEmpty)
+            _AltroTab(
+              expansions: _smallExpansions,
+              productMap: pMap,
+              fs: widget.fs,
+              game: widget.game,
+              meta: _meta,
+              selectedExpansion: _altroSelectedExpansion,
+              onSelectExpansion: (e) => setState(() => _altroSelectedExpansion = e),
+            ),
+        ],
       ),
     );
   }
+}
 
-  // ═══════════════════════════════════════════════════
-  //  BINDER DETAIL VIEW (Card Grid)
-  // ═══════════════════════════════════════════════════
+class _ExpansionData {
+  final String name;
+  final List<CardBlueprint> cards;
+  const _ExpansionData(this.name, this.cards);
+}
 
-  Widget _buildBinderDetail(List<Product> singleCards) {
-    final game = _selectedGame!;
-    final expansion = _selectedExpansionName!;
-    final color = _gameColor(game);
+// ──────────────────────────────────────────────────
+// "Altro" tab — list of small expansions
+// ──────────────────────────────────────────────────
+class _AltroTab extends StatelessWidget {
+  final List<_ExpansionData> expansions;
+  final Map<String, Product> productMap;
+  final FirestoreService fs;
+  final String game;
+  final _GameMeta meta;
+  final String? selectedExpansion;
+  final ValueChanged<String?> onSelectExpansion;
 
-    // Get all catalog cards for this expansion
-    final catalogCards = _getCatalogCardsForExpansion(expansion);
+  const _AltroTab({
+    required this.expansions,
+    required this.productMap,
+    required this.fs,
+    required this.game,
+    required this.meta,
+    required this.selectedExpansion,
+    required this.onSelectExpansion,
+  });
 
-    // Sort by collector number
-    final sortedCatalog = List<CardBlueprint>.from(catalogCards)
-      ..sort((a, b) {
-        final aNum = int.tryParse(a.collectorNumber ?? '') ?? 9999;
-        final bNum = int.tryParse(b.collectorNumber ?? '') ?? 9999;
-        return aNum.compareTo(bNum);
-      });
-
-    // Build ownership map: blueprintId → list of owned products
-    final gameCards = singleCards
-        .where((c) => c.brand == game && c.cardExpansion == expansion)
-        .toList();
-
-    final ownershipMap = <String, List<Product>>{};
-    for (final card in gameCards) {
-      if (card.cardBlueprintId != null) {
-        ownershipMap
-            .putIfAbsent(card.cardBlueprintId!, () => [])
-            .add(card);
-      }
+  @override
+  Widget build(BuildContext context) {
+    if (selectedExpansion != null) {
+      final exp = expansions.firstWhere(
+        (e) => e.name == selectedExpansion,
+        orElse: () => expansions.first,
+      );
+      return Column(
+        children: [
+          // Back header
+          InkWell(
+            onTap: () => onSelectExpansion(null),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: AppColors.surface,
+              child: Row(
+                children: [
+                  Icon(Icons.arrow_back_ios, size: 16, color: meta.color),
+                  const SizedBox(width: 8),
+                  Text(exp.name,
+                      style: TextStyle(color: meta.color, fontWeight: FontWeight.w600, fontSize: 15)),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: _CardGridView(
+              cards: exp.cards,
+              productMap: productMap,
+              fs: fs,
+              game: game,
+              meta: meta,
+            ),
+          ),
+        ],
+      );
     }
 
-    // Rarity breakdown
-    final rarityOwned = <String, int>{};
-    final rarityTotal = <String, int>{};
-    for (final card in sortedCatalog) {
-      final rarity = card.rarity ?? 'Unknown';
-      rarityTotal[rarity] = (rarityTotal[rarity] ?? 0) + 1;
-      if (ownershipMap.containsKey(card.id)) {
-        rarityOwned[rarity] = (rarityOwned[rarity] ?? 0) + 1;
-      }
-    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: expansions.length,
+      itemBuilder: (ctx, i) {
+        final exp = expansions[i];
+        final owned = exp.cards.where((c) => productMap.containsKey(c.id)).length;
+        final progress = exp.cards.isEmpty ? 0.0 : owned / exp.cards.length;
 
-    // Value
-    double totalValue = 0;
-    int totalOwned = 0;
-    for (final entry in ownershipMap.entries) {
-      for (final product in entry.value) {
-        totalValue += (product.marketPrice ?? product.price) * product.quantity;
-        totalOwned += product.quantity.toInt();
-      }
-    }
-
-    final uniqueOwned = ownershipMap.length;
-    final expansionCode = _findExpansionCode(expansion);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-          child: StaggeredFadeSlide(
-            index: 0,
-            child: Row(
-              children: [
-                ScaleOnPress(
-                  onTap: _goBack,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.06),
+        return StaggeredFadeSlide(
+          index: i,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: ScaleOnPress(
+              onTap: () => onSelectExpansion(exp.name),
+              child: GlassCard(
+                glowColor: meta.color,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        color: meta.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${exp.cards.length}',
+                          style: TextStyle(color: meta.color, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
                       ),
                     ),
-                    child: const Icon(Icons.arrow_back,
-                        color: Colors.white, size: 22),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        expansion,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.3,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Row(
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (expansionCode != null) ...[
-                            Text(
-                              expansionCode,
-                              style: TextStyle(
-                                color: color,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const Text(
-                              ' · ',
-                              style: TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                          Text(
-                            '$uniqueOwned / ${sortedCatalog.length} carte',
-                            style: const TextStyle(
-                              color: AppColors.textMuted,
-                              fontSize: 12,
+                          Text(exp.name,
+                              style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                          const SizedBox(height: 4),
+                          Text('$owned / ${exp.cards.length} carte',
+                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                          const SizedBox(height: 4),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              backgroundColor: Colors.white.withValues(alpha: 0.06),
+                              valueColor: AlwaysStoppedAnimation(meta.color),
+                              minHeight: 4,
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '€${totalValue.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
                     ),
-                    Text(
-                      '$totalOwned copie',
-                      style: const TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 10,
-                      ),
-                    ),
+                    const SizedBox(width: 8),
+                    Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
                   ],
                 ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Progress bar
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: StaggeredFadeSlide(
-            index: 1,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: sortedCatalog.isNotEmpty
-                    ? (uniqueOwned / sortedCatalog.length).clamp(0.0, 1.0)
-                    : 0,
-                minHeight: 6,
-                backgroundColor: Colors.white.withValues(alpha: 0.06),
-                valueColor: AlwaysStoppedAnimation<Color>(color),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
+        );
+      },
+    );
+  }
+}
 
-        // Rarity breakdown chips
-        if (rarityTotal.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: StaggeredFadeSlide(
-              index: 2,
-              child: SingleChildScrollView(
+// ──────────────────────────────────────────────────
+// Level 3 — Card Grid
+// ──────────────────────────────────────────────────
+class _CardGridView extends StatelessWidget {
+  final List<CardBlueprint> cards;
+  final Map<String, Product> productMap;
+  final FirestoreService fs;
+  final String game;
+  final _GameMeta meta;
+
+  const _CardGridView({
+    required this.cards,
+    required this.productMap,
+    required this.fs,
+    required this.game,
+    required this.meta,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Sort by collector number
+    final sorted = List<CardBlueprint>.from(cards)
+      ..sort((a, b) {
+        final an = a.collectorNumber ?? '';
+        final bn = b.collectorNumber ?? '';
+        final ai = int.tryParse(an);
+        final bi = int.tryParse(bn);
+        if (ai != null && bi != null) return ai.compareTo(bi);
+        return an.compareTo(bn);
+      });
+
+    // Rarity breakdown
+    final Map<String, int> rarityCount = {};
+    final Map<String, int> rarityOwned = {};
+    for (final c in sorted) {
+      final r = c.rarity ?? 'unknown';
+      rarityCount[r] = (rarityCount[r] ?? 0) + 1;
+      if (productMap.containsKey(c.id)) {
+        rarityOwned[r] = (rarityOwned[r] ?? 0) + 1;
+      }
+    }
+
+    // Stats
+    final owned = sorted.where((c) => productMap.containsKey(c.id)).length;
+    final totalValue = sorted.fold<double>(0, (s, c) {
+      final p = productMap[c.id];
+      if (p == null) return s;
+      return s + (p.marketPrice ?? 0) * p.quantity;
+    });
+    final progress = sorted.isEmpty ? 0.0 : owned / sorted.length;
+
+    return Column(
+      children: [
+        // Header with progress
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('$owned / ${sorted.length}',
+                      style: TextStyle(color: meta.color, fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('€${totalValue.toStringAsFixed(2)}',
+                      style: TextStyle(color: meta.color, fontWeight: FontWeight.w600, fontSize: 14)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
+                  valueColor: AlwaysStoppedAnimation(meta.color),
+                  minHeight: 5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Rarity chips
+              SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
                 child: Row(
-                  children: rarityTotal.entries.map((entry) {
-                    final rarity = entry.key;
-                    final total = entry.value;
-                    final owned = rarityOwned[rarity] ?? 0;
-                    final rColor = _rarityColor(rarity);
+                  children: rarityCount.entries.map((e) {
+                    final ownedR = rarityOwned[e.key] ?? 0;
                     return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Chip(
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                        label: Text(
+                          '${e.key}: $ownedR/${e.value}',
+                          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
                         ),
-                        decoration: BoxDecoration(
-                          color: rColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: rColor.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: rColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '$rarity $owned/$total',
-                              style: TextStyle(
-                                color: rColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                        backgroundColor: AppColors.surface,
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                        padding: EdgeInsets.zero,
                       ),
                     );
                   }).toList(),
                 ),
               ),
-            ),
+            ],
           ),
-        const SizedBox(height: 12),
-
+        ),
         // Card grid
         Expanded(
-          child: sortedCatalog.isEmpty
-              ? _buildEmptyBinder(gameCards)
-              : GridView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    childAspectRatio: 0.55,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: sortedCatalog.length,
-                  itemBuilder: (context, index) {
-                    final card = sortedCatalog[index];
-                    final owned = ownershipMap[card.id];
-                    final isOwned = owned != null && owned.isNotEmpty;
-                    final count = isOwned
-                        ? owned.fold<int>(
-                            0, (sum, p) => sum + p.quantity.toInt())
-                        : 0;
-                    return StaggeredFadeSlide(
-                      index: (index ~/ 3) + 3,
-                      child: _buildCardSlot(card, isOwned, count, color),
-                    );
-                  },
-                ),
+          child: GridView.builder(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 80),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              childAspectRatio: 0.68,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+            ),
+            itemCount: sorted.length,
+            itemBuilder: (ctx, i) {
+              final card = sorted[i];
+              final product = productMap[card.id];
+              final isOwned = product != null;
+
+              return _CardSlot(
+                card: card,
+                product: product,
+                isOwned: isOwned,
+                meta: meta,
+                game: game,
+                fs: fs,
+              );
+            },
+          ),
         ),
       ],
     );
   }
+}
 
-  /// Empty binder: show owned cards that aren't in catalog
-  Widget _buildEmptyBinder(List<Product> gameCards) {
-    if (gameCards.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.menu_book,
-              color: AppColors.textMuted.withValues(alpha: 0.4),
-              size: 64,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Raccoglitore vuoto',
-              style: TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Questa espansione non è ancora nel catalogo',
-              style: TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
+// ──────────────────────────────────────────────────
+// Individual card slot
+// ──────────────────────────────────────────────────
+class _CardSlot extends StatelessWidget {
+  final CardBlueprint card;
+  final Product? product;
+  final bool isOwned;
+  final _GameMeta meta;
+  final String game;
+  final FirestoreService fs;
+
+  const _CardSlot({
+    required this.card,
+    required this.product,
+    required this.isOwned,
+    required this.meta,
+    required this.game,
+    required this.fs,
+  });
+
+  Future<void> _onTap() async {
+    if (isOwned && product != null) {
+      // Increment
+      final newQty = product!.quantity + 1;
+      await fs.updateProduct(product!.id!, {'quantity': newQty});
+    } else {
+      // Add new
+      await fs.addProduct(Product(
+        name: card.name,
+        brand: game.toUpperCase(),
+        quantity: 1,
+        price: card.marketPrice != null ? card.marketPrice!.cents / 100 : 0,
+        status: ProductStatus.inInventory,
+        kind: ProductKind.singleCard,
+        cardBlueprintId: card.id,
+        cardImageUrl: card.imageUrl,
+        cardExpansion: card.expansionName,
+        cardRarity: card.rarity,
+        marketPrice: card.marketPrice != null ? card.marketPrice!.cents / 100 : null,
+      ));
+    }
+  }
+
+  Future<void> _onLongPress() async {
+    if (isOwned && product != null) {
+      await fs.decrementProductQuantity(product!.id!, 1);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final priceStr = card.marketPrice != null
+        ? '€${(card.marketPrice!.cents / 100).toStringAsFixed(2)}'
+        : null;
+
+    Widget imageWidget;
+    if (card.imageUrl != null && card.imageUrl!.isNotEmpty) {
+      imageWidget = Image.network(
+        card.imageUrl!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _placeholder(),
+      );
+    } else {
+      imageWidget = _placeholder();
+    }
+
+    // Grey out if not owned
+    if (!isOwned) {
+      imageWidget = ColorFiltered(
+        colorFilter: const ColorFilter.mode(Colors.grey, BlendMode.saturation),
+        child: Opacity(opacity: 0.45, child: imageWidget),
       );
     }
 
-    // Show owned cards in a simple list
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      itemCount: gameCards.length,
-      itemBuilder: (context, index) {
-        final card = gameCards[index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: GlassCard(
-            padding: const EdgeInsets.all(10),
-            glowColor: _rarityColor(card.cardRarity),
-            child: Row(
-              children: [
-                if (card.cardImageUrl != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: SizedBox(
-                      width: 36,
-                      height: 50,
-                      child: Image.network(
-                        card.cardImageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: AppColors.surface,
-                          child: const Icon(Icons.style,
-                              color: AppColors.textMuted, size: 18),
-                        ),
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    card.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Text(
-                  'x${card.quantity.toInt()}',
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
+    return GestureDetector(
+      onTap: _onTap,
+      onLongPress: _onLongPress,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: AppColors.surface,
+          border: Border.all(
+            color: isOwned ? meta.color.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05),
+            width: isOwned ? 1.5 : 0.5,
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCardSlot(
-      CardBlueprint card, bool isOwned, int count, Color gameColor) {
-    final rarColor = card.rarityColor;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: isOwned
-            ? Colors.white.withValues(alpha: 0.04)
-            : Colors.white.withValues(alpha: 0.015),
-        border: Border.all(
-          color: isOwned
-              ? rarColor.withValues(alpha: 0.4)
-              : Colors.white.withValues(alpha: 0.06),
-          width: isOwned ? 1.5 : 1,
         ),
-        boxShadow: isOwned
-            ? [
-                BoxShadow(
-                  color: rarColor.withValues(alpha: 0.15),
-                  blurRadius: 12,
-                  spreadRadius: -2,
-                ),
-              ]
-            : [],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            // Card image or placeholder
-            Positioned.fill(
-              child: isOwned && card.imageUrl != null
-                  ? Image.network(
-                      card.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          _buildCardPlaceholder(card, isOwned),
-                    )
-                  : _buildCardPlaceholder(card, isOwned),
-            ),
+            // Card image
+            imageWidget,
 
-            // Dimming overlay for unowned
-            if (!isOwned)
-              Positioned.fill(
-                child: Container(
-                  color: AppColors.background.withValues(alpha: 0.5),
-                ),
-              ),
-
-            // Bottom info bar
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.background.withValues(alpha: 0.95),
-                      AppColors.background.withValues(alpha: 0.85),
-                    ],
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        if (card.collectorNumber != null)
-                          Text(
-                            '#${card.collectorNumber}',
-                            style: TextStyle(
-                              color: isOwned
-                                  ? rarColor
-                                  : AppColors.textMuted
-                                      .withValues(alpha: 0.5),
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        const Spacer(),
-                        if (isOwned && count > 1)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: gameColor.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'x$count',
-                              style: TextStyle(
-                                color: gameColor,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      card.name,
-                      style: TextStyle(
-                        color: isOwned
-                            ? Colors.white
-                            : AppColors.textMuted
-                                .withValues(alpha: 0.4),
-                        fontSize: 9,
-                        fontWeight:
-                            isOwned ? FontWeight.w600 : FontWeight.w400,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Rarity dot (top-right)
-            if (isOwned)
+            // Rarity dot (top-left)
+            if (card.rarity != null)
               Positioned(
-                top: 6,
-                right: 6,
+                top: 4, left: 4,
                 child: Container(
-                  width: 10,
-                  height: 10,
+                  width: 8, height: 8,
                   decoration: BoxDecoration(
-                    color: rarColor,
+                    color: card.rarityColor,
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: rarColor.withValues(alpha: 0.5),
-                        blurRadius: 6,
-                      ),
-                    ],
+                    boxShadow: [BoxShadow(color: card.rarityColor.withValues(alpha: 0.6), blurRadius: 4)],
                   ),
                 ),
               ),
 
-            // Lock icon for unowned
-            if (!isOwned)
-              Center(
-                child: Icon(
-                  Icons.lock_outline,
-                  color: Colors.white.withValues(alpha: 0.08),
-                  size: 28,
-                ),
-              ),
-
-            // Market price badge for owned
-            if (isOwned && card.marketPrice != null)
+            // Count badge (top-right) — only if owned and qty > 1
+            if (isOwned && product!.quantity > 1)
               Positioned(
-                top: 6,
-                left: 6,
+                top: 3, right: 3,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 2,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                   decoration: BoxDecoration(
-                    color: AppColors.background.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: AppColors.accentGreen.withValues(alpha: 0.3),
-                    ),
+                    color: meta.color,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    card.formattedPrice,
-                    style: const TextStyle(
-                      color: AppColors.accentGreen,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    'x${product!.quantity.toInt()}',
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+
+            // Price (bottom)
+            if (priceStr != null)
+              Positioned(
+                bottom: 2, right: 4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    priceStr,
+                    style: const TextStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+
+            // Collector number (bottom-left) for missing cards
+            if (!isOwned)
+              Positioned(
+                bottom: 2, left: 4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    card.collectorNumber ?? '',
+                    style: const TextStyle(color: Colors.white54, fontSize: 8),
                   ),
                 ),
               ),
@@ -1478,31 +869,19 @@ class _CollectionScreenState extends State<CollectionScreen> {
     );
   }
 
-  Widget _buildCardPlaceholder(CardBlueprint card, bool isOwned) {
-    final rarColor = card.rarityColor;
+  Widget _placeholder() {
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isOwned
-              ? [
-                  rarColor.withValues(alpha: 0.15),
-                  rarColor.withValues(alpha: 0.05),
-                ]
-              : [
-                  Colors.white.withValues(alpha: 0.03),
-                  Colors.white.withValues(alpha: 0.01),
-                ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
+      color: AppColors.surface,
       child: Center(
-        child: Icon(
-          Icons.style,
-          color: isOwned
-              ? rarColor.withValues(alpha: 0.3)
-              : Colors.white.withValues(alpha: 0.05),
-          size: 24,
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Text(
+            card.name,
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 9),
+          ),
         ),
       ),
     );
