@@ -11,17 +11,23 @@ import '../models/card_blueprint.dart';
 /// Returns a List<String> of all scanned collector numbers on close.
 class OcrScannerDialog extends StatefulWidget {
   final List<CardBlueprint> expansionCards;
+  final String mode; // 'ocr' (Gemini, free) or 'premium' (GPT-5.2)
 
-  const OcrScannerDialog({super.key, this.expansionCards = const []});
+  const OcrScannerDialog({
+    super.key,
+    this.expansionCards = const [],
+    this.mode = 'ocr',
+  });
 
   /// Open the scanner. Returns list of collector numbers found.
   static Future<List<String>> scan(BuildContext context,
-      {List<CardBlueprint> expansionCards = const []}) async {
+      {List<CardBlueprint> expansionCards = const [],
+       String mode = 'ocr'}) async {
     final result = await Navigator.of(context).push<List<String>>(
       PageRouteBuilder(
         opaque: false,
         pageBuilder: (_, __, ___) =>
-            OcrScannerDialog(expansionCards: expansionCards),
+            OcrScannerDialog(expansionCards: expansionCards, mode: mode),
         transitionsBuilder: (_, anim, __, child) =>
             FadeTransition(opacity: anim, child: child),
         transitionDuration: const Duration(milliseconds: 250),
@@ -115,10 +121,9 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     setState(() => _status = _ScanStatus.processing);
 
     try {
-      // Build context from expansion cards to help AI identify
+      // Build context — premium mode sends full card list, OCR mode just sends mode flag
       String? contextJson;
-      if (widget.expansionCards.isNotEmpty) {
-        // Pass name + collector number + rarity + version so AI can distinguish variants
+      if (widget.mode == 'premium' && widget.expansionCards.isNotEmpty) {
         final cardList = widget.expansionCards.map((c) {
           final num = c.collectorNumber ?? '?';
           final parts = [num, c.name];
@@ -128,9 +133,12 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
         }).toList();
         final expName = widget.expansionCards.first.expansionName;
         contextJson = jsonEncode({
+          'mode': 'premium',
           if (expName != null) 'expansion': expName,
           'cards': cardList,
         });
+      } else {
+        contextJson = jsonEncode({'mode': widget.mode});
       }
       final result = await _ocrService.captureAndRecognize(_containerId, contextJson: contextJson);
       if (!mounted) return;

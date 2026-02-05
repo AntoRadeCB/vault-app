@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
-import '../widgets/card_browser_sheet.dart';
 import '../widgets/ocr_scanner_dialog.dart';
 import '../models/product.dart';
 import '../models/card_pull.dart';
@@ -277,17 +276,11 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
     }
   }
 
-  Future<void> _openCardBrowser() async {
-    final card = await CardBrowserSheet.show(context);
-    if (card != null && mounted) {
-      _addPull(card: card);
-    }
-  }
-
-  Future<void> _openOcrScanner() async {
+  Future<void> _openScan({String mode = 'ocr'}) async {
     final numbers = await OcrScannerDialog.scan(
       context,
       expansionCards: _expansionCards,
+      mode: mode,
     );
     if (!mounted || numbers.isEmpty) return;
     for (final num in numbers) {
@@ -1089,9 +1082,9 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                   ),
                 ),
               ),
-              // Scan button
+              // Scan button (Gemini OCR — free/cheap)
               ScaleOnPress(
-                onTap: _openOcrScanner,
+                onTap: () => _openScan(mode: 'ocr'),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 5),
@@ -1117,24 +1110,25 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                 ),
               ),
               const SizedBox(width: 5),
-              // Catalog button
+              // Scan Premium button (GPT-5.2 — accurate)
               ScaleOnPress(
-                onTap: _openCardBrowser,
+                onTap: () => _openScan(mode: 'premium'),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 5),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF764ba2), Color(0xFF667eea)],
+                      colors: [Color(0xFFf093fb), Color(0xFFf5576c)],
                     ),
                     borderRadius: BorderRadius.circular(7),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.style, color: Colors.white, size: 13),
+                      Icon(Icons.auto_awesome,
+                          color: Colors.white, size: 13),
                       SizedBox(width: 3),
-                      Text('Catalogo',
+                      Text('Scan Pro',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 10,

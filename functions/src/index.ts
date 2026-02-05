@@ -762,3 +762,153 @@ If you cannot identify the card, reply exactly: NONE`;
     }
   }
 );
+
+// ═══════════════════════════════════════════════════════
+//  scanCardOcr — Free tier OCR via Gemini Flash (Vertex AI)
+// ═══════════════════════════════════════════════════════
+import { VertexAI } from "@google-cloud/vertexai";
+
+export const scanCardOcr = onRequest(
+  { region: "europe-west1", timeoutSeconds: 20, memory: "256MiB" },
+  async (req, res) => {
+    setCors(res);
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    if (req.method !== "POST") { res.status(405).json({ error: "POST only" }); return; }
+
+    const { image } = req.body;
+    if (!image || typeof image !== "string") {
+      res.status(400).json({ error: "Missing 'image' (base64)" });
+      return;
+    }
+
+    try {
+      const imageSize = image.length;
+      console.log(`scanCardOcr: image=${imageSize} chars`);
+
+      const vertexAi = new VertexAI({
+        project: "inventorymanager-dev-20262",
+        location: "us-central1",
+      });
+
+      const model = vertexAi.getGenerativeModel({
+        model: "gemini-2.0-flash-001",
+        generationConfig: { maxOutputTokens: 128, temperature: 0.1 },
+      });
+
+      // Strip data URI prefix if present, get raw base64
+      const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+
+      const result = await model.generateContent({
+        contents: [{
+          role: "user",
+          parts: [
+            {
+              text: `Read the collector number and card name from this Riftbound (League of Legends TCG) trading card photo.
+
+The collector number is printed small at the bottom of the card (format: "025/240" or just "025" or "007a").
+The card name is the large title text on the card. It may be in English, French, or Simplified Chinese.
+
+Reply with EXACTLY one line:
+COLLECTOR_NUMBER|CARD_NAME
+
+Example: 025|Jinx - Demolitionist
+
+If you cannot read the text clearly, reply: NONE`,
+            },
+            {
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: base64Data,
+              },
+            },
+          ],
+        }],
+      });
+
+      const rawAnswer = result.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "NONE";
+      const answer = rawAnswer.trim();
+      console.log(`scanCardOcr response: "${answer}"`);
+
+      if (!answer || answer === "NONE" || answer.toUpperCase() === "NONE") {
+        res.status(200).json({ found: false, cards: [] });
+        return;
+      }
+
+      // Parse: COLLECTOR_NUMBER|CARD_NAME
+      const parts = answer.split("|").map((s: string) => s.trim());
+      const collectorNum = parts[0] || null;
+      const cardName = parts.length > 1 ? parts.slice(1).join(" - ").trim() : null;
+
+      if (!collectorNum && !cardName) {
+        res.status(200).json({ found: false, cards: [] });
+        return;
+      }
+
+      // Clean collector number: "025/240" → "025"
+      const cleanNum = collectorNum?.replace(/\/\d+$/, "").replace(/^0+(\d)/, "$1") || null;
+
+      // Match against Firestore catalog
+      let matchedCard: any = null;
+
+      if (cleanNum) {
+        // Try exact collector number match
+        const snap = await db.collection("cardCatalog")
+          .where("collectorNumber", "==", collectorNum?.replace(/\/\d+$/, ""))
+          .limit(5)
+          .get();
+
+        if (!snap.empty) {
+          if (snap.size === 1) {
+            matchedCard = { id: snap.docs[0].id, ...snap.docs[0].data() };
+          } else {
+            // Multiple matches (variants) — try to pick best by name similarity
+            const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            if (cardName) {
+              const nameLower = cardName.toLowerCase();
+              matchedCard = docs.find((d: any) =>
+                d.name?.toLowerCase() === nameLower ||
+                d.nameLower === nameLower
+              ) || docs[0];
+            } else {
+              matchedCard = docs[0];
+            }
+          }
+        }
+      }
+
+      // Fallback: try name search if number didn't match
+      if (!matchedCard && cardName) {
+        const nameSnap = await db.collection("cardCatalog")
+          .where("nameLower", "==", cardName.toLowerCase())
+          .limit(1)
+          .get();
+        if (!nameSnap.empty) {
+          matchedCard = { id: nameSnap.docs[0].id, ...nameSnap.docs[0].data() };
+        }
+      }
+
+      const firstCard = {
+        cardName: collectorNum || "",
+        extraInfo: cardName || null,
+      };
+
+      res.status(200).json({
+        found: true,
+        cardName: matchedCard?.name || cardName || collectorNum,
+        extraInfo: collectorNum,
+        fullResponse: answer,
+        cards: [firstCard],
+        // Extra: matched catalog data
+        matchedBlueprintId: matchedCard?.blueprintId || null,
+        matchedName: matchedCard?.name || null,
+        matchedCollectorNumber: matchedCard?.collectorNumber || null,
+        matchedImageUrl: matchedCard?.imageUrl || null,
+        matchedRarity: matchedCard?.rarity || null,
+        matchedPrice: matchedCard?.marketPrice || null,
+      });
+    } catch (error: any) {
+      console.error("scanCardOcr error:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
