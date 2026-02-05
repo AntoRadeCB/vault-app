@@ -28,6 +28,8 @@ class Product {
   final List<String>? pullIds;
   // If this card came from opening a pack/box
   final String? parentProductId;
+  // Collection target override (null = use profile default)
+  final int? collectionTargetOverride;
 
   const Product({
     this.id,
@@ -49,6 +51,7 @@ class Product {
     this.openedAt,
     this.pullIds,
     this.parentProductId,
+    this.collectionTargetOverride,
   });
 
   String get statusLabel {
@@ -174,6 +177,7 @@ class Product {
           ? List<String>.from(data['pullIds'])
           : null,
       parentProductId: data['parentProductId'],
+      collectionTargetOverride: (data['collectionTargetOverride'] as num?)?.toInt(),
     );
   }
 
@@ -199,6 +203,7 @@ class Product {
       if (openedAt != null) 'openedAt': Timestamp.fromDate(openedAt!),
       if (pullIds != null) 'pullIds': pullIds,
       if (parentProductId != null) 'parentProductId': parentProductId,
+      if (collectionTargetOverride != null) 'collectionTargetOverride': collectionTargetOverride,
     };
   }
 
@@ -222,6 +227,7 @@ class Product {
     DateTime? openedAt,
     List<String>? pullIds,
     String? parentProductId,
+    int? collectionTargetOverride,
   }) {
     return Product(
       id: id ?? this.id,
@@ -243,6 +249,7 @@ class Product {
       openedAt: openedAt ?? this.openedAt,
       pullIds: pullIds ?? this.pullIds,
       parentProductId: parentProductId ?? this.parentProductId,
+      collectionTargetOverride: collectionTargetOverride ?? this.collectionTargetOverride,
     );
   }
 

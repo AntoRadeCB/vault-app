@@ -15,11 +15,14 @@ class DashboardScreen extends StatelessWidget {
   final VoidCallback? onNewPurchase;
   final VoidCallback? onNewSale;
   final FirestoreService _firestoreService = FirestoreService();
+  // Temporary context reference for nested builders
+  BuildContext? _contextRef;
 
   DashboardScreen({super.key, this.onNewPurchase, this.onNewSale});
 
   @override
   Widget build(BuildContext context) {
+    _contextRef = context;
     return AuroraBackground(
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
@@ -298,6 +301,7 @@ class DashboardScreen extends StatelessWidget {
     return StreamBuilder<List<Product>>(
       stream: _firestoreService.getProducts(),
       builder: (context, productSnap) {
+        _contextRef = context;
         final products = productSnap.data ?? [];
         final cardProducts = products.where((p) => p.isCard).toList();
 
@@ -313,6 +317,7 @@ class DashboardScreen extends StatelessWidget {
   /// Card market value (when card products exist)
   Widget _buildCardMarketValueContent(
       CardCatalogService catalogService, List<Product> cardProducts) {
+    final profileTarget = _getProfileTarget(cardProducts);
     final totalPaidCost = cardProducts.fold<double>(
         0, (sum, p) => sum + (p.price * p.quantity));
     final totalMarketValue = cardProducts.fold<double>(
@@ -322,6 +327,7 @@ class DashboardScreen extends StatelessWidget {
       future: _getUpdatedPrices(catalogService, cardProducts),
       builder: (context, priceSnap) {
         double liveMarketValue = totalMarketValue;
+        double liveInventoryValue = 0;
         if (priceSnap.hasData && priceSnap.data!.isNotEmpty) {
           final priceMap = <String, double>{};
           for (final card in priceSnap.data!) {
@@ -333,6 +339,25 @@ class DashboardScreen extends StatelessWidget {
             final livePrice =
                 priceMap[p.cardBlueprintId] ?? p.marketPrice ?? p.price;
             return sum + (livePrice * p.quantity);
+          });
+          // Inventory value = excess only
+          final provider = _contextRef != null ? ProfileProvider.maybeOf(_contextRef!) : null;
+          final profTarget = provider?.profile?.collectionTarget ?? 1;
+          liveInventoryValue = cardProducts.fold<double>(0, (sum, p) {
+            final livePrice =
+                priceMap[p.cardBlueprintId] ?? p.marketPrice ?? p.price;
+            final target = p.collectionTargetOverride ?? profTarget;
+            final excess = math.max(0.0, p.quantity - target);
+            return sum + (livePrice * excess);
+          });
+        } else {
+          final provider = _contextRef != null ? ProfileProvider.maybeOf(_contextRef!) : null;
+          final profTarget = provider?.profile?.collectionTarget ?? 1;
+          liveInventoryValue = cardProducts.fold<double>(0, (sum, p) {
+            final price = p.marketPrice ?? p.price;
+            final target = p.collectionTargetOverride ?? profTarget;
+            final excess = math.max(0.0, p.quantity - target);
+            return sum + (price * excess);
           });
         }
 
@@ -436,7 +461,7 @@ class DashboardScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Valore Mercato',
+                        const Text('Valore Collezione',
                             style: TextStyle(
                                 color: AppColors.textMuted, fontSize: 11)),
                         const SizedBox(height: 4),
@@ -461,14 +486,14 @@ class DashboardScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Costo Acquisto',
+                        const Text('Valore Inventario',
                             style: TextStyle(
                                 color: AppColors.textMuted, fontSize: 11)),
                         const SizedBox(height: 4),
                         Text(
-                          '€${totalPaidCost.toStringAsFixed(2)}',
+                          '€${liveInventoryValue.toStringAsFixed(2)}',
                           style: const TextStyle(
-                            color: AppColors.textSecondary,
+                            color: AppColors.accentGreen,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -505,6 +530,8 @@ class DashboardScreen extends StatelessWidget {
       },
     );
   }
+
+  int _getProfileTarget(List<Product> _) => 1; // resolved via context
 
   /// Total inventory value (when no card products exist)
   Widget _buildTotalInventoryContent(List<Product> products) {

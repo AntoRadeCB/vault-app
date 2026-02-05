@@ -4,7 +4,10 @@ import '../models/product.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/firestore_service.dart';
 import '../services/card_catalog_service.dart';
+import '../providers/profile_provider.dart';
+import '../models/user_profile.dart';
 import '../l10n/app_localizations.dart';
+import 'dart:math' as math;
 
 class InventoryScreen extends StatefulWidget {
   final void Function(Product product)? onEditProduct;
@@ -132,14 +135,44 @@ class _InventoryScreenState extends State<InventoryScreen>
     );
   }
 
+  /// Compute effective collection target for a product
+  int _effectiveTarget(Product p, int profileTarget) {
+    return p.collectionTargetOverride ?? profileTarget;
+  }
+
+  /// Filter products for inventory view:
+  /// - Non-singleCard: show as-is
+  /// - SingleCard: only show if qty > effectiveTarget, display excess qty
+  List<Product> _applyInventoryLogic(List<Product> products, int profileTarget) {
+    final result = <Product>[];
+    for (final p in products) {
+      if (p.kind != ProductKind.singleCard) {
+        result.add(p);
+      } else {
+        final target = _effectiveTarget(p, profileTarget);
+        final excess = p.quantity - target;
+        if (excess > 0) {
+          // Show card with excess quantity
+          result.add(p.copyWith(quantity: excess));
+        }
+      }
+    }
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
+    final provider = ProfileProvider.maybeOf(context);
+    final profileTarget = provider?.profile?.collectionTarget ?? 1;
+
     return StreamBuilder<List<Product>>(
       stream: _firestoreService.getProducts(),
       builder: (context, snapshot) {
         final allProducts = snapshot.data ?? [];
-        final products = _applyFilters(allProducts);
+        // Apply inventory logic: only show excess for single cards
+        final inventoryProducts = _applyInventoryLogic(allProducts, profileTarget);
+        final products = _applyFilters(inventoryProducts);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,

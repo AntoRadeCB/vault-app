@@ -51,7 +51,7 @@ class _MainShellState extends State<MainShell> {
   final _keyCollectionNav = GlobalKey();
   final _keyInventoryNav = GlobalKey();
   final _keyShipmentsNav = GlobalKey();
-  final _keyReportsNav = GlobalKey();
+  // _keyReportsNav removed (reports moved to settings)
   final _keySettingsNav = GlobalKey();
   final _keyFab = GlobalKey();
   final _keyNotifications = GlobalKey();
@@ -60,7 +60,7 @@ class _MainShellState extends State<MainShell> {
   final _keySidebarCollection = GlobalKey();
   final _keySidebarInventory = GlobalKey();
   final _keySidebarShipments = GlobalKey();
-  final _keySidebarReports = GlobalKey();
+  // _keySidebarReports removed (reports moved to settings)
   final _keySidebarSettings = GlobalKey();
 
   @override
@@ -154,7 +154,7 @@ class _MainShellState extends State<MainShell> {
       case 'collection': return _keyCollectionNav;
       case 'inventory':  return _keyInventoryNav;
       case 'shipments':  return _keyShipmentsNav;
-      case 'reports':    return _keyReportsNav;
+      case 'reports':    return GlobalKey(); // legacy fallback
       case 'settings':   return _keySettingsNav;
       default:           return GlobalKey();
     }
@@ -166,7 +166,7 @@ class _MainShellState extends State<MainShell> {
       case 'collection': return _keySidebarCollection;
       case 'inventory':  return _keySidebarInventory;
       case 'shipments':  return _keySidebarShipments;
-      case 'reports':    return _keySidebarReports;
+      case 'reports':    return GlobalKey(); // legacy fallback
       case 'settings':   return _keySidebarSettings;
       default:           return GlobalKey();
     }

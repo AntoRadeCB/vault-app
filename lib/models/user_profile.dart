@@ -15,6 +15,7 @@ class UserProfile {
   final List<String> trackedGames; // TCG ids the user wants to see
   final double? budgetMonthly;
   final double? budgetSpent;
+  final int collectionTarget;
   final DateTime createdAt;
 
   const UserProfile({
@@ -25,6 +26,7 @@ class UserProfile {
     this.trackedGames = const [],
     this.budgetMonthly,
     this.budgetSpent,
+    this.collectionTarget = 1,
     required this.createdAt,
   });
 
@@ -81,6 +83,7 @@ class UserProfile {
       'trackedGames': trackedGames,
       'budgetMonthly': budgetMonthly,
       'budgetSpent': budgetSpent,
+      'collectionTarget': collectionTarget,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
@@ -98,6 +101,7 @@ class UserProfile {
       trackedGames: List<String>.from(data['trackedGames'] ?? []),
       budgetMonthly: (data['budgetMonthly'] as num?)?.toDouble(),
       budgetSpent: (data['budgetSpent'] as num?)?.toDouble(),
+      collectionTarget: (data['collectionTarget'] as num?)?.toInt() ?? 1,
       createdAt: data['createdAt'] != null
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -112,6 +116,7 @@ class UserProfile {
     List<String>? trackedGames,
     double? budgetMonthly,
     double? budgetSpent,
+    int? collectionTarget,
     DateTime? createdAt,
   }) {
     return UserProfile(
@@ -122,6 +127,7 @@ class UserProfile {
       trackedGames: trackedGames ?? this.trackedGames,
       budgetMonthly: budgetMonthly ?? this.budgetMonthly,
       budgetSpent: budgetSpent ?? this.budgetSpent,
+      collectionTarget: collectionTarget ?? this.collectionTarget,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -129,6 +135,8 @@ class UserProfile {
   /// Merge any new tabs from [_allTabs] into a saved list, preserving order.
   static List<String> _mergeNewTabs(List<String> saved) {
     final result = List<String>.from(saved);
+    // Migration: remove 'reports' from saved lists (moved to settings)
+    result.remove('reports');
     for (var i = 0; i < _allTabs.length; i++) {
       if (!result.contains(_allTabs[i])) {
         // Insert at the canonical position (or end if beyond length)
@@ -145,7 +153,6 @@ class UserProfile {
     'collection',
     'inventory',
     'shipments',
-    'reports',
     'settings',
   ];
 

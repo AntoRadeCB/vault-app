@@ -575,7 +575,7 @@ class _AltroTab extends StatelessWidget {
 // ──────────────────────────────────────────────────
 // Level 3 — Card Grid
 // ──────────────────────────────────────────────────
-class _CardGridView extends StatelessWidget {
+class _CardGridView extends StatefulWidget {
   final List<CardBlueprint> cards;
   final Map<String, Product> productMap;
   final FirestoreService fs;
@@ -591,9 +591,16 @@ class _CardGridView extends StatelessWidget {
   });
 
   @override
+  State<_CardGridView> createState() => _CardGridViewState();
+}
+
+class _CardGridViewState extends State<_CardGridView> {
+  final Set<String> _selectedRarities = {};
+
+  @override
   Widget build(BuildContext context) {
     // Sort by collector number
-    final sorted = List<CardBlueprint>.from(cards)
+    final sorted = List<CardBlueprint>.from(widget.cards)
       ..sort((a, b) {
         final an = a.collectorNumber ?? '';
         final bn = b.collectorNumber ?? '';
@@ -609,15 +616,20 @@ class _CardGridView extends StatelessWidget {
     for (final c in sorted) {
       final r = c.rarity ?? 'unknown';
       rarityCount[r] = (rarityCount[r] ?? 0) + 1;
-      if (productMap.containsKey(c.id)) {
+      if (widget.productMap.containsKey(c.id)) {
         rarityOwned[r] = (rarityOwned[r] ?? 0) + 1;
       }
     }
 
-    // Stats
-    final owned = sorted.where((c) => productMap.containsKey(c.id)).length;
+    // Filter by selected rarities
+    final filtered = _selectedRarities.isEmpty
+        ? sorted
+        : sorted.where((c) => _selectedRarities.contains(c.rarity ?? 'unknown')).toList();
+
+    // Stats (based on full list, not filtered)
+    final owned = sorted.where((c) => widget.productMap.containsKey(c.id)).length;
     final totalValue = sorted.fold<double>(0, (s, c) {
-      final p = productMap[c.id];
+      final p = widget.productMap[c.id];
       if (p == null) return s;
       return s + (p.marketPrice ?? 0) * p.quantity;
     });
@@ -634,9 +646,9 @@ class _CardGridView extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('$owned / ${sorted.length}',
-                      style: TextStyle(color: meta.color, fontWeight: FontWeight.bold, fontSize: 16)),
+                      style: TextStyle(color: widget.meta.color, fontWeight: FontWeight.bold, fontSize: 16)),
                   Text('€${totalValue.toStringAsFixed(2)}',
-                      style: TextStyle(color: meta.color, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(color: widget.meta.color, fontWeight: FontWeight.w600, fontSize: 14)),
                 ],
               ),
               const SizedBox(height: 4),
@@ -645,29 +657,53 @@ class _CardGridView extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: progress,
                   backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  valueColor: AlwaysStoppedAnimation(meta.color),
+                  valueColor: AlwaysStoppedAnimation(widget.meta.color),
                   minHeight: 5,
                 ),
               ),
               const SizedBox(height: 8),
-              // Rarity chips
+              // Rarity chips — tappable toggles
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: rarityCount.entries.map((e) {
                     final ownedR = rarityOwned[e.key] ?? 0;
+                    final isSelected = _selectedRarities.contains(e.key);
                     return Padding(
                       padding: const EdgeInsets.only(right: 6),
-                      child: Chip(
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          '${e.key}: $ownedR/${e.value}',
-                          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedRarities.remove(e.key);
+                            } else {
+                              _selectedRarities.add(e.key);
+                            }
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? widget.meta.color.withValues(alpha: 0.2)
+                                : AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? widget.meta.color.withValues(alpha: 0.5)
+                                  : Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: Text(
+                            '${e.key}: $ownedR/${e.value}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isSelected ? widget.meta.color : AppColors.textSecondary,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                            ),
+                          ),
                         ),
-                        backgroundColor: AppColors.surface,
-                        side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-                        padding: EdgeInsets.zero,
                       ),
                     );
                   }).toList(),
@@ -686,19 +722,19 @@ class _CardGridView extends StatelessWidget {
               mainAxisSpacing: 6,
               crossAxisSpacing: 6,
             ),
-            itemCount: sorted.length,
+            itemCount: filtered.length,
             itemBuilder: (ctx, i) {
-              final card = sorted[i];
-              final product = productMap[card.id];
+              final card = filtered[i];
+              final product = widget.productMap[card.id];
               final isOwned = product != null;
 
               return _CardSlot(
                 card: card,
                 product: product,
                 isOwned: isOwned,
-                meta: meta,
-                game: game,
-                fs: fs,
+                meta: widget.meta,
+                game: widget.game,
+                fs: widget.fs,
               );
             },
           ),

@@ -7,6 +7,7 @@ import '../services/firestore_service.dart';
 import '../providers/profile_provider.dart';
 import '../models/user_profile.dart';
 import '../l10n/app_localizations.dart';
+import '../screens/reports_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -1115,7 +1116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showTabToggles(UserProfile profile) {
-    final allTabs = ['dashboard', 'inventory', 'shipments', 'reports', 'settings'];
+    final allTabs = ['dashboard', 'inventory', 'shipments', 'settings'];
     final enabledTabs = List<String>.from(profile.enabledTabs);
 
     showModalBottomSheet(
@@ -1429,6 +1430,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () => _showBudgetEditor(activeProfile),
                     trailing: _buildChevron(),
                     iconColor: AppColors.accentGreen,
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.copy_all,
+                    title: 'Copie per collezione',
+                    subtitle: 'Copie da tenere prima di contare come inventario',
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            final newVal = (activeProfile.collectionTarget - 1).clamp(1, 10);
+                            _firestoreService.updateProfile(activeProfile.id, {
+                              'collectionTarget': newVal,
+                            });
+                          },
+                          child: Container(
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.remove, color: AppColors.textSecondary, size: 18),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            '${activeProfile.collectionTarget}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            final newVal = (activeProfile.collectionTarget + 1).clamp(1, 10);
+                            _firestoreService.updateProfile(activeProfile.id, {
+                              'collectionTarget': newVal,
+                            });
+                          },
+                          child: Container(
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
+                              color: AppColors.accentBlue.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.add, color: AppColors.accentBlue, size: 18),
+                          ),
+                        ),
+                      ],
+                    ),
+                    iconColor: AppColors.accentTeal,
+                  ),
+                  _buildSettingsRow(
+                    icon: Icons.bar_chart,
+                    title: 'Report',
+                    subtitle: 'Visualizza report e statistiche',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                            backgroundColor: AppColors.background,
+                            appBar: AppBar(
+                              backgroundColor: AppColors.background,
+                              leading: IconButton(
+                                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                                onPressed: () => Navigator.of(context).pop(),
+                              ),
+                              title: const Text('Report', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            ),
+                            body: const ReportsScreen(),
+                          ),
+                        ),
+                      );
+                    },
+                    trailing: _buildChevron(),
+                    iconColor: AppColors.accentPurple,
                   ),
                   _buildSettingsRow(
                     icon: Icons.add_circle_outline,

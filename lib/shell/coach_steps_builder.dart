@@ -39,11 +39,6 @@ const List<TabDef> allTabDefs = <TabDef>[
     selectedIcon: Icons.local_shipping,
   ),
   TabDef(
-    id: 'reports',
-    icon: Icons.bar_chart_outlined,
-    selectedIcon: Icons.bar_chart,
-  ),
-  TabDef(
     id: 'settings',
     icon: Icons.settings_outlined,
     selectedIcon: Icons.settings,
