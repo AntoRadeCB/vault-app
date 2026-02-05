@@ -652,49 +652,47 @@ export const scanCard = onRequest(
         ? image
         : `data:image/jpeg;base64,${image}`;
 
-      // ── Build system prompt for structured card identification ──
+      // ── Build system prompt for single-card identification ──
       let systemPrompt = `You are a Riftbound (League of Legends TCG) card identification expert.
-Your job: identify every trading card visible in a photo with 100% accuracy.
+Your job: identify the ONE trading card shown in the photo with 100% accuracy.
 
-CRITICAL RULES:
-1. FIRST read the COLLECTOR NUMBER printed on each card. This is the MOST RELIABLE identifier.
+STEP-BY-STEP PROCESS:
+1. Read the COLLECTOR NUMBER printed on the card. This is the MOST RELIABLE identifier.
    - Located at bottom-left or bottom-right of the card
-   - Format examples: "025/240", "025", "007a", "301"
+   - Format: "025/240", "025", "007a", "301"
    - Alternate Art variants have suffix "a" (e.g. "007a", "027a")
-   - Showcase variants have high numbers (e.g. 246+, 301+)
-2. THEN verify the card name matches what you see (champion name, artwork, card title).
-3. Cards exist in English, Simplified Chinese (zh-CN), and French — the text on the card may be in any language, but ALWAYS return the ENGLISH name.
-4. If you are NOT confident about a card, skip it — do NOT guess. Only return cards you are sure about.
-5. Analyze EACH card independently. Don't let one card's identification influence another.`;
+   - Showcase variants have high numbers (246+, 301+)
+2. Match the collector number to the reference list.
+3. Verify: does the card name, champion, and artwork match what you see?
+4. Cards exist in English, Simplified Chinese (zh-CN), and French — text may be in any language, but ALWAYS return the ENGLISH name.
+5. If NOT confident, reply NONE rather than guess wrong.`;
 
-      let userPrompt = `Identify ALL Riftbound trading cards visible in this photo.`;
+      let userPrompt = `Identify the Riftbound trading card in this photo.`;
 
       if (expansion) {
         userPrompt += `\nExpansion: "${expansion}".`;
       }
 
       if (cards && Array.isArray(cards) && cards.length > 0) {
-        userPrompt += `\n\nREFERENCE LIST (COLLECTOR_NUMBER|NAME or COLLECTOR_NUMBER|NAME|RARITY or COLLECTOR_NUMBER|NAME|RARITY|VERSION):`;
+        userPrompt += `\n\nREFERENCE LIST (COLLECTOR_NUMBER|NAME or ...NAME|RARITY or ...NAME|RARITY|VERSION):`;
         userPrompt += `\n${cards.join('\n')}`;
-        userPrompt += `\n\nFor EACH card visible in the photo:`;
+        userPrompt += `\n\nSTEPS:`;
         userPrompt += `\n1. Read the collector number printed on the card`;
-        userPrompt += `\n2. Find the matching entry in the list above by collector number`;
+        userPrompt += `\n2. Find the matching entry in the list by collector number`;
         userPrompt += `\n3. Verify the card name/artwork matches`;
-        userPrompt += `\n4. If the collector number is unreadable, use the champion/character name + artwork to find the best match, but prefer to skip over guessing wrong`;
+        userPrompt += `\n4. If collector number is unreadable, use champion name + artwork to find the best match`;
       }
 
-      userPrompt += `\n\nOUTPUT FORMAT — one line per card, nothing else:
+      userPrompt += `\n\nOUTPUT — exactly one line, nothing else:
 COLLECTOR_NUMBER|CARD_NAME_EN
 
-Example:
-025|Jinx - Demolitionist
-042a|Calm Rune
+Example: 025|Jinx - Demolitionist
 
-If NO cards visible or NONE identifiable with confidence, reply: NONE`;
+If you cannot identify the card, reply exactly: NONE`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5.2",
-        max_completion_tokens: 4096,
+        max_completion_tokens: 256,
         messages: [
           {
             role: "system",
