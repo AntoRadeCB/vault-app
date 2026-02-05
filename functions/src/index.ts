@@ -834,41 +834,71 @@ If you cannot read the text clearly, reply: NONE`,
         return;
       }
 
-      // Parse: COLLECTOR_NUMBER|CARD_NAME
+      // Parse: COLLECTOR_NUMBER|CARD_NAME (Gemini may return various formats)
       const parts = answer.split("|").map((s: string) => s.trim());
-      const collectorNum = parts[0] || null;
-      const cardName = parts.length > 1 ? parts.slice(1).join(" - ").trim() : null;
+      const rawCollectorNum = parts[0] || "";
+      const cardName = parts.length > 1 ? parts.slice(1).join("|").trim() : null;
 
-      if (!collectorNum && !cardName) {
+      // Extract clean collector number from messy formats:
+      // "OGN-308/298" → "308", "025/240" → "025", "SFD 196" → "196",
+      // "007a" → "007a", "OGN 042a" → "042a"
+      function extractCollectorNumber(raw: string): string | null {
+        if (!raw) return null;
+        let s = raw.trim();
+        // Strip set code prefix: "OGN-308" / "OGN 308" / "SFD.196" → "308" / "196"
+        s = s.replace(/^[A-Za-z]{2,}[\s.\-_]*/i, "");
+        // Strip total after slash: "308/298" → "308"
+        s = s.replace(/\/\d+$/, "");
+        // Trim whitespace
+        s = s.trim();
+        // Must contain at least one digit
+        if (!/\d/.test(s)) return null;
+        return s || null;
+      }
+
+      const cleanNum = extractCollectorNumber(rawCollectorNum);
+      console.log(`scanCardOcr parsed: raw="${rawCollectorNum}" → clean="${cleanNum}", name="${cardName}"`);
+
+      if (!cleanNum && !cardName) {
         res.status(200).json({ found: false, cards: [] });
         return;
       }
-
-      // Clean collector number: "025/240" → "025"
-      const cleanNum = collectorNum?.replace(/\/\d+$/, "").replace(/^0+(\d)/, "$1") || null;
 
       // Match against Firestore catalog
       let matchedCard: any = null;
 
       if (cleanNum) {
-        // Try exact collector number match
+        // Try multiple collector number formats (with/without leading zeros)
+        const numVariants = new Set<string>();
+        numVariants.add(cleanNum); // e.g. "308"
+        // Pad to 3 digits: "308" → "308", "42" → "042", "7" → "007"
+        const digits = cleanNum.replace(/[^0-9]/g, "");
+        const suffix = cleanNum.replace(/^[0-9]+/, ""); // "a" from "007a"
+        if (digits) {
+          numVariants.add(digits + suffix);
+          numVariants.add(digits.padStart(3, "0") + suffix);
+          numVariants.add(String(parseInt(digits, 10)) + suffix);
+        }
+
+        // Query Firestore with all variants
+        const variantArray = [...numVariants];
         const snap = await db.collection("cardCatalog")
-          .where("collectorNumber", "==", collectorNum?.replace(/\/\d+$/, ""))
-          .limit(5)
+          .where("collectorNumber", "in", variantArray)
+          .limit(10)
           .get();
 
         if (!snap.empty) {
           if (snap.size === 1) {
             matchedCard = { id: snap.docs[0].id, ...snap.docs[0].data() };
           } else {
-            // Multiple matches (variants) — try to pick best by name similarity
+            // Multiple matches — try to pick best by name similarity
             const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             if (cardName) {
               const nameLower = cardName.toLowerCase();
               matchedCard = docs.find((d: any) =>
-                d.name?.toLowerCase() === nameLower ||
-                d.nameLower === nameLower
-              ) || docs[0];
+                d.name?.toLowerCase().includes(nameLower) ||
+                d.nameLower?.includes(nameLower)
+              ) || docs[0]; // fallback to first match
             } else {
               matchedCard = docs[0];
             }
@@ -888,18 +918,19 @@ If you cannot read the text clearly, reply: NONE`,
       }
 
       const firstCard = {
-        cardName: collectorNum || "",
-        extraInfo: cardName || null,
+        cardName: cleanNum || rawCollectorNum || "",
+        extraInfo: matchedCard?.name || cardName || null,
       };
 
       res.status(200).json({
-        found: true,
-        cardName: matchedCard?.name || cardName || collectorNum,
-        extraInfo: collectorNum,
+        found: !!matchedCard,
+        cardName: matchedCard?.name || cardName || cleanNum,
+        extraInfo: matchedCard?.collectorNumber || cleanNum,
         fullResponse: answer,
         cards: [firstCard],
-        // Extra: matched catalog data
+        // Matched catalog data for frontend
         matchedBlueprintId: matchedCard?.blueprintId || null,
+        matchedId: matchedCard?.id || null,
         matchedName: matchedCard?.name || null,
         matchedCollectorNumber: matchedCard?.collectorNumber || null,
         matchedImageUrl: matchedCard?.imageUrl || null,

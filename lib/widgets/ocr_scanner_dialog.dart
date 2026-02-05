@@ -215,35 +215,44 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       _recentlyFound.remove(dedupeKey);
     });
 
-    // AI response may be "COLLECTOR_NUM|CARD_NAME" or just "CARD_NAME"
+    // Parse AI response: "COLLECTOR_NUM|CARD_NAME" or "OGN-308/298|名前" or just "CARD_NAME"
     String? aiCollectorNum;
     String aiName = aiCardName.trim();
     
-    // Parse collector number from AI response if present (format: "025/165|Pikachu")
     final pipeIdx = aiName.indexOf('|');
     if (pipeIdx > 0) {
       final firstPart = aiName.substring(0, pipeIdx).trim();
       final secondPart = aiName.substring(pipeIdx + 1).trim();
-      // If first part looks like a number, it's the collector number
-      if (RegExp(r'^\d').hasMatch(firstPart)) {
-        aiCollectorNum = firstPart.replaceAll(RegExp(r'/\d+$'), '').trim(); // "025/165" → "025"
+      // Extract collector number: strip set prefix + total suffix
+      // "OGN-308/298" → "308", "025/165" → "025", "SFD 042a" → "042a"
+      var cleaned = firstPart
+          .replaceAll(RegExp(r'^[A-Za-z]{2,}[\s.\-_]*'), '') // strip set code prefix
+          .replaceAll(RegExp(r'/\d+$'), '')                    // strip /total
+          .trim();
+      if (cleaned.contains(RegExp(r'\d'))) {
+        aiCollectorNum = cleaned;
         aiName = secondPart;
       }
     }
 
-    // Match by name in the expansion cards
+    // Match by collector number or name in the expansion cards
     CardBlueprint? matched;
     final aiNameLower = aiName.toLowerCase().trim();
 
     if (widget.expansionCards.isNotEmpty) {
-      // 0. Match by collector number first (most precise for variants)
+      // 0. Match by collector number first (most precise)
       if (aiCollectorNum != null) {
+        final aiNum = int.tryParse(aiCollectorNum!.replaceAll(RegExp(r'[^0-9]'), ''));
+        final aiSuffix = aiCollectorNum!.replaceAll(RegExp(r'^[0-9]+'), ''); // "a" from "042a"
         matched = widget.expansionCards.where((c) {
           if (c.collectorNumber == null) return false;
           final cn = c.collectorNumber!;
-          final aiNum = int.tryParse(aiCollectorNum!);
-          final cardNum = int.tryParse(cn);
-          return cn == aiCollectorNum || (aiNum != null && cardNum != null && aiNum == cardNum);
+          // Direct match
+          if (cn == aiCollectorNum) return true;
+          // Numeric match (ignore leading zeros): "308" == "308", "042" == "42"
+          final cardNum = int.tryParse(cn.replaceAll(RegExp(r'[^0-9]'), ''));
+          final cardSuffix = cn.replaceAll(RegExp(r'^[0-9]+'), '');
+          return aiNum != null && cardNum != null && aiNum == cardNum && aiSuffix == cardSuffix;
         }).firstOrNull;
       }
 
