@@ -601,6 +601,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get resetViaEmail => 'Réinitialiser par email';
 
   @override
+  String get forgotPassword => 'Mot de passe oublié ?';
+
+  @override
   String get twoFactorAuth => 'Authentification 2FA';
 
   @override

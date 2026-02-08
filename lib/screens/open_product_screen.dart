@@ -407,48 +407,51 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          StaggeredFadeSlide(
-            index: 0,
-            child: Row(
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ScaleOnPress(
-                  onTap: widget.onBack,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.06),
+                // Header
+                StaggeredFadeSlide(
+                  index: 0,
+                  child: Row(
+                    children: [
+                      ScaleOnPress(
+                        onTap: widget.onBack,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.06),
+                            ),
+                          ),
+                          child: const Icon(Icons.arrow_back,
+                              color: Colors.white, size: 22),
+                        ),
                       ),
-                    ),
-                    child: const Icon(Icons.arrow_back,
-                        color: Colors.white, size: 22),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          _isOpened ? 'Registra Pulls' : 'Apri Prodotto',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    _isOpened ? 'Registra Pulls' : 'Apri Prodotto',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
           // Product info card (compact when opened)
           StaggeredFadeSlide(
@@ -667,11 +670,41 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                 ),
               );
             }),
-            const SizedBox(height: 24),
-
-            // Finish button
-            StaggeredFadeSlide(
-              index: 4 + _pulls.length,
+                const SizedBox(height: 100), // Space for sticky button
+              ],
+            ],
+          ),
+        ),
+      ),
+      // Sticky finish button at bottom
+      if (_isOpened)
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.background.withValues(alpha: 0),
+                AppColors.background,
+                AppColors.background,
+              ],
+              stops: const [0, 0.3, 1],
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accentGreen.withValues(alpha: 0.5),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
               child: ShimmerButton(
                 baseGradient: const LinearGradient(
                   colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
@@ -693,26 +726,45 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
                           ),
                         )
                       else ...[
-                        const Icon(Icons.check_circle,
-                            color: Colors.white, size: 22),
+                        const Icon(Icons.check_circle, color: Colors.white, size: 24),
                         const SizedBox(width: 10),
-                        const Text(
-                          'Fatto',
-                          style: TextStyle(
+                        Text(
+                          _pulls.isEmpty 
+                              ? 'Fatto' 
+                              : 'Conferma $_totalPullCount ${_totalPullCount == 1 ? 'carta' : 'carte'}',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        if (_pulls.isNotEmpty) ...[
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '€${_totalPullValue.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ],
                   ),
                 ),
               ),
             ),
-          ],
-        ],
-      ),
+          ),
+        ),
+    ],
     );
   }
 
@@ -1077,86 +1129,91 @@ class _OpenProductScreenState extends State<OpenProductScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row: title + progress + action buttons
-          Row(
-            children: [
-              const Icon(Icons.checklist,
-                  color: AppColors.accentPurple, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      const TextSpan(
-                        text: '📋 Checklist ',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      TextSpan(
-                        text: '$_checkedUniqueCount/$totalCount',
-                        style: TextStyle(
-                          color: _checkedUniqueCount > 0
-                              ? AppColors.accentGreen
-                              : AppColors.textMuted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (_checkedTotalCount != _checkedUniqueCount)
-                        TextSpan(
-                          text: ' ($_checkedTotalCount tot)',
-                          style: const TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 10,
+          // Header row: title + progress + action buttons — entire row is tappable
+          GestureDetector(
+            onTap: () => setState(() => _showChecklist = !_showChecklist),
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Icon(
+                  _showChecklist ? Icons.folder_open : Icons.folder,
+                  color: AppColors.accentPurple, size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        const TextSpan(
+                          text: '🎴 Seleziona Carte ',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                    ],
-                  ),
-                ),
-              ),
-              // Scan button (Gemini OCR)
-              ScaleOnPress(
-                onTap: () => _openScan(mode: 'ocr'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 5),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.accentTeal, Color(0xFF00ACC1)],
-                    ),
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.photo_camera,
-                          color: Colors.white, size: 13),
-                      SizedBox(width: 3),
-                      Text('Scan',
+                        TextSpan(
+                          text: '$_checkedUniqueCount/$totalCount',
                           style: TextStyle(
-                              color: Colors.white,
+                            color: _checkedUniqueCount > 0
+                                ? AppColors.accentGreen
+                                : AppColors.textMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (_checkedTotalCount != _checkedUniqueCount)
+                          TextSpan(
+                            text: ' ($_checkedTotalCount copie)',
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
                               fontSize: 10,
-                              fontWeight: FontWeight.w700)),
-                    ],
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 5),
-              // Toggle button
-              ScaleOnPress(
-                onTap: () => setState(() => _showChecklist = !_showChecklist),
-                child: Icon(
-                  _showChecklist
-                      ? Icons.keyboard_arrow_up
-                      : Icons.keyboard_arrow_down,
-                  color: AppColors.textMuted,
-                  size: 20,
+                // Scan button (Gemini OCR) — stops propagation
+                GestureDetector(
+                  onTap: () => _openScan(mode: 'ocr'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppColors.accentTeal, Color(0xFF00ACC1)],
+                      ),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.photo_camera,
+                            color: Colors.white, size: 13),
+                        SizedBox(width: 3),
+                        Text('Scan',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                // Toggle arrow indicator
+                AnimatedRotation(
+                  turns: _showChecklist ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: AppColors.textMuted,
+                    size: 22,
+                  ),
+                ),
+              ],
+            ),
           ),
 
           // Progress bar

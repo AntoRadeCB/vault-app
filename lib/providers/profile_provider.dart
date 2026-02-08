@@ -65,13 +65,34 @@ class ProfileProvider extends InheritedWidget {
 
   @override
   bool updateShouldNotify(ProfileProvider oldWidget) {
-    return profile?.id != oldWidget.profile?.id ||
-        profiles.length != oldWidget.profiles.length ||
-        loading != oldWidget.loading ||
-        profile?.name != oldWidget.profile?.name ||
-        profile?.budgetMonthly != oldWidget.profile?.budgetMonthly ||
-        profile?.budgetSpent != oldWidget.profile?.budgetSpent ||
-        profile?.enabledTabs.length != oldWidget.profile?.enabledTabs.length;
+    // Compare all mutable profile properties to ensure UI updates
+    final oldProfile = oldWidget.profile;
+    final newProfile = profile;
+    
+    if (profiles.length != oldWidget.profiles.length) return true;
+    if (loading != oldWidget.loading) return true;
+    if (newProfile?.id != oldProfile?.id) return true;
+    if (newProfile?.name != oldProfile?.name) return true;
+    if (newProfile?.budgetMonthly != oldProfile?.budgetMonthly) return true;
+    if (newProfile?.budgetSpent != oldProfile?.budgetSpent) return true;
+    if (newProfile?.autoInventory != oldProfile?.autoInventory) return true;
+    if (newProfile?.collectionTarget != oldProfile?.collectionTarget) return true;
+    if (newProfile?.enabledTabs.length != oldProfile?.enabledTabs.length) return true;
+    if (newProfile?.trackedGames.length != oldProfile?.trackedGames.length) return true;
+    
+    // Deep compare lists for actual content changes
+    if (newProfile != null && oldProfile != null) {
+      for (int i = 0; i < newProfile.enabledTabs.length; i++) {
+        if (i >= oldProfile.enabledTabs.length || 
+            newProfile.enabledTabs[i] != oldProfile.enabledTabs[i]) return true;
+      }
+      for (int i = 0; i < newProfile.trackedGames.length; i++) {
+        if (i >= oldProfile.trackedGames.length || 
+            newProfile.trackedGames[i] != oldProfile.trackedGames[i]) return true;
+      }
+    }
+    
+    return false;
   }
 }
 

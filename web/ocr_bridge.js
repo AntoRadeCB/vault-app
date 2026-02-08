@@ -1,6 +1,139 @@
-// AI Vision Bridge — Camera + Cloud Function for card scanning
+// AI Vision Bridge — Camera + Cloud Function + Local Tesseract.js for card scanning
 
 const cameraState = {};
+let tesseractWorker = null;
+let tesseractLoading = false;
+
+// Lazy load Tesseract.js only when needed
+async function ensureTesseract() {
+  if (tesseractWorker) return tesseractWorker;
+  if (tesseractLoading) {
+    // Wait for loading to complete
+    while (tesseractLoading) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return tesseractWorker;
+  }
+  
+  tesseractLoading = true;
+  try {
+    // Load Tesseract.js from CDN
+    if (!window.Tesseract) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+    
+    // Create worker with English language, optimized for speed
+    tesseractWorker = await Tesseract.createWorker('eng', 1, {
+      logger: () => {}, // Disable logging
+    });
+    
+    // Set parameters for number/text recognition
+    await tesseractWorker.setParameters({
+      tessedit_char_whitelist: '0123456789/-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ',
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+    });
+    
+    console.log('Tesseract.js loaded successfully');
+    return tesseractWorker;
+  } catch (e) {
+    console.error('Failed to load Tesseract.js:', e);
+    tesseractWorker = null;
+    throw e;
+  } finally {
+    tesseractLoading = false;
+  }
+}
+
+/**
+ * Capture frame and run LOCAL OCR with Tesseract.js
+ * Focuses on the bottom portion of the card where collector number is
+ */
+async function captureAndRecognizeLocal(containerId) {
+  const state = cameraState[containerId];
+  if (!state) return JSON.stringify({ error: 'Camera not started' });
+
+  const video = state.video;
+  const canvas = state.canvas;
+
+  if (video.videoWidth === 0 || video.videoHeight === 0) {
+    return JSON.stringify({ error: 'Video not ready' });
+  }
+
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+
+  // Crop to card area first (same as captureFrame)
+  const cardRatio = 0.714;
+  const cropH = Math.round(vh * 0.60);
+  const cropW = Math.round(Math.min(cropH * cardRatio, vw * 0.75));
+  const cropX = Math.round((vw - cropW) / 2);
+  const cropY = Math.round((vh - cropH) / 2 - vh * 0.03);
+
+  // Now extract just the BOTTOM 15% of the card (where collector number is)
+  const numH = Math.round(cropH * 0.12);
+  const numY = cropY + cropH - numH - Math.round(cropH * 0.03); // slightly above bottom edge
+  const numW = Math.round(cropW * 0.5); // right half where number usually is
+  const numX = cropX + Math.round(cropW * 0.45);
+
+  // Create a separate canvas for OCR region
+  const ocrCanvas = document.createElement('canvas');
+  ocrCanvas.width = numW;
+  ocrCanvas.height = numH;
+  const ctx = ocrCanvas.getContext('2d');
+  
+  // Draw the collector number region
+  ctx.drawImage(video, numX, numY, numW, numH, 0, 0, numW, numH);
+  
+  // Enhance contrast for better OCR
+  const imageData = ctx.getImageData(0, 0, numW, numH);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    // Convert to grayscale
+    const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+    // Increase contrast
+    const enhanced = gray < 128 ? gray * 0.5 : 128 + (gray - 128) * 1.5;
+    const clamped = Math.max(0, Math.min(255, enhanced));
+    data[i] = data[i+1] = data[i+2] = clamped;
+  }
+  ctx.putImageData(imageData, 0, 0);
+
+  try {
+    const worker = await ensureTesseract();
+    const { data: result } = await worker.recognize(ocrCanvas);
+    
+    // Extract collector number pattern (e.g., "123/456", "OGN-123", etc.)
+    const text = result.text.trim();
+    const patterns = [
+      /(\d{1,3})\s*[\/\\]\s*(\d{1,3})/,  // 123/456
+      /([A-Z]{2,4})-?(\d{1,3})/i,         // OGN-123
+      /#?\s*(\d{1,3})/,                    // #123 or just 123
+    ];
+    
+    let collectorNumber = null;
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        collectorNumber = match[0].replace(/\s/g, '');
+        break;
+      }
+    }
+    
+    return JSON.stringify({
+      success: true,
+      rawText: text,
+      collectorNumber: collectorNumber,
+      confidence: result.confidence,
+    });
+  } catch (e) {
+    return JSON.stringify({ error: e.message || 'OCR failed' });
+  }
+}
 
 // Callback for async scan results (set from Dart side)
 let _onScanResult = null;
@@ -155,10 +288,99 @@ function vibrateDevice(ms) {
   try { if (navigator.vibrate) navigator.vibrate(ms); } catch(e) {}
 }
 
+/**
+ * Run local OCR on a base64 image to extract collector number
+ * @param {string} base64Image - The image as base64 data URL
+ * @param {Object} cardRegion - Optional {x, y, width, height} of detected card
+ */
+async function ocrFromBase64(base64Image, cardRegion) {
+  try {
+    const worker = await ensureTesseract();
+    
+    // Create image element from base64
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = base64Image;
+    });
+    
+    // Create canvas for OCR region (bottom portion of card)
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    let cropX, cropY, cropW, cropH;
+    
+    if (cardRegion && cardRegion.width > 0) {
+      // Use detected card region - extract bottom 15% for collector number
+      cropX = cardRegion.x + cardRegion.width * 0.3;
+      cropY = cardRegion.y + cardRegion.height * 0.85;
+      cropW = cardRegion.width * 0.5;
+      cropH = cardRegion.height * 0.12;
+    } else {
+      // Fallback: bottom center of image
+      cropX = img.width * 0.3;
+      cropY = img.height * 0.85;
+      cropW = img.width * 0.4;
+      cropH = img.height * 0.12;
+    }
+    
+    canvas.width = Math.max(1, Math.round(cropW));
+    canvas.height = Math.max(1, Math.round(cropH));
+    
+    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+    
+    // Enhance contrast
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+      // High contrast: make dark pixels darker, light pixels lighter
+      const enhanced = gray < 128 ? 0 : 255;
+      data[i] = data[i+1] = data[i+2] = enhanced;
+    }
+    ctx.putImageData(imageData, 0, 0);
+    
+    // Run OCR
+    const { data: result } = await worker.recognize(canvas);
+    const text = result.text.trim();
+    
+    // Extract collector number pattern
+    const patterns = [
+      /(\d{1,3})\s*[\/\\]\s*(\d{1,3})/,  // 123/456
+      /([A-Z]{2,4})[- ]?(\d{1,3})/i,      // OGN-123, SVP 123
+      /#\s*(\d{1,3})/,                    // #123
+      /(\d{2,3})(?:\s|$)/,                // Just numbers at end
+    ];
+    
+    let collectorNumber = null;
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        collectorNumber = match[0].replace(/\s+/g, '').toUpperCase();
+        break;
+      }
+    }
+    
+    return JSON.stringify({
+      success: true,
+      rawText: text,
+      collectorNumber: collectorNumber,
+      confidence: result.confidence,
+    });
+  } catch (e) {
+    console.error('OCR error:', e);
+    return JSON.stringify({ error: e.message || 'OCR failed' });
+  }
+}
+
 window.initOcrWorker = initOcrWorker;
 window.startOcrCamera = startOcrCamera;
 window.captureAndRecognize = captureAndRecognize;
+window.captureAndRecognizeLocal = captureAndRecognizeLocal;
 window.captureFrame = captureFrame;
 window.stopOcrCamera = stopOcrCamera;
 window.createOcrContainer = createOcrContainer;
 window.vibrateDevice = vibrateDevice;
+window.ensureTesseract = ensureTesseract;
+window.ocrFromBase64 = ocrFromBase64;

@@ -194,6 +194,7 @@
 
   "account": "Conta",
   "resetViaEmail": "Redefinir por email",
+  "forgotPassword": "Esqueceu a senha?",
   "twoFactorAuth": "Autenticação 2FA",
   "notAvailable": "Não disponível",
   "twoFactorTitle": "Autenticação de Dois Fatores",

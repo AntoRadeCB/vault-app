@@ -600,6 +600,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resetViaEmail => 'Reset via email';
 
   @override
+  String get forgotPassword => 'Forgot password?';
+
+  @override
   String get twoFactorAuth => '2FA Authentication';
 
   @override

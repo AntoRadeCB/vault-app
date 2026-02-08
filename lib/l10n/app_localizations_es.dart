@@ -602,6 +602,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get resetViaEmail => 'Restablecer vía email';
 
   @override
+  String get forgotPassword => '¿Olvidaste tu contraseña?';
+
+  @override
   String get twoFactorAuth => 'Autenticación 2FA';
 
   @override

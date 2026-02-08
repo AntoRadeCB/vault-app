@@ -151,14 +151,18 @@ class _GameSelectionView extends StatelessWidget {
       productsByGame.putIfAbsent(g, () => []).add(p);
     }
 
-    // Order: known games first, then any others
+    // Order: known games first, filter out unknown
+    // In demo mode, only show Riftbound
     final gameKeys = <String>{};
     for (final m in _knownGames) {
-      if (catalogByGame.containsKey(m.key)) gameKeys.add(m.key);
+      if (catalogByGame.containsKey(m.key)) {
+        // In demo mode, hide games other than Riftbound
+        if (FirestoreService.demoMode && m.key != 'riftbound') continue;
+        gameKeys.add(m.key);
+      }
     }
-    for (final k in catalogByGame.keys) {
-      gameKeys.add(k);
-    }
+    // Don't add unknown/other games - only show known TCGs
+    // for (final k in catalogByGame.keys) { ... }
 
     return CustomScrollView(
       slivers: [
@@ -182,6 +186,13 @@ class _GameSelectionView extends StatelessWidget {
                 final totalCopies = owned.fold<double>(0, (s, p) => s + p.quantity);
                 final totalValue = owned.fold<double>(0, (s, p) => s + (p.marketPrice ?? 0) * p.quantity);
                 final progress = catCards.isEmpty ? 0.0 : uniqueOwned / catCards.length;
+                
+                // Get a representative image from catalog cards
+                final representativeImage = catCards
+                    .where((c) => c.imageUrl != null && c.imageUrl!.isNotEmpty)
+                    .take(1)
+                    .map((c) => c.imageUrl!)
+                    .firstOrNull;
 
                 return StaggeredFadeSlide(
                   index: i,
@@ -193,13 +204,24 @@ class _GameSelectionView extends StatelessWidget {
                         glowColor: meta.color,
                         child: Row(
                           children: [
+                            // Game image or icon
                             Container(
-                              width: 56, height: 56,
+                              width: 56, height: representativeImage != null ? 76 : 56,
                               decoration: BoxDecoration(
                                 color: meta.color.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(representativeImage != null ? 10 : 14),
+                                border: representativeImage != null
+                                    ? Border.all(color: meta.color.withValues(alpha: 0.3), width: 1.5)
+                                    : null,
                               ),
-                              child: Icon(meta.icon, color: meta.color, size: 28),
+                              clipBehavior: Clip.antiAlias,
+                              child: representativeImage != null
+                                  ? Image.network(
+                                      representativeImage,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Icon(meta.icon, color: meta.color, size: 28),
+                                    )
+                                  : Icon(meta.icon, color: meta.color, size: 28),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
@@ -448,13 +470,7 @@ class _GameExpansionViewState extends State<_GameExpansionView>
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.camera_alt, color: _meta.color),
-            tooltip: 'Scansiona carta',
-            onPressed: () => _scanCard(context, gameCatalog, pMap),
-          ),
-        ],
+        actions: const [],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(46),
           child: TabBar(
@@ -661,6 +677,41 @@ class _CardGridView extends StatefulWidget {
 
 class _CardGridViewState extends State<_CardGridView> {
   final Set<String> _selectedRarities = {};
+  bool _selectionMode = false;
+  final Set<String> _selectedCardIds = {};
+
+  Future<void> _moveSelectedToInventory(List<CardBlueprint> allCards) async {
+    if (_selectedCardIds.isEmpty) return;
+    
+    // For each selected card, increment inventoryQty
+    for (final cardId in _selectedCardIds) {
+      final product = widget.productMap[cardId];
+      if (product != null && product.id != null) {
+        final maxMove = (product.quantity - product.inventoryQty).clamp(0.0, product.quantity);
+        if (maxMove > 0) {
+          await widget.fs.updateProduct(product.id!, {
+            'inventoryQty': product.inventoryQty + 1,
+          });
+        }
+      }
+    }
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ ${_selectedCardIds.length} carte spostate in inventario'),
+          backgroundColor: AppColors.accentGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      setState(() {
+        _selectionMode = false;
+        _selectedCardIds.clear();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -702,31 +753,118 @@ class _CardGridViewState extends State<_CardGridView> {
 
     return Column(
       children: [
+        // Selection mode action bar
+        if (_selectionMode)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: widget.meta.color.withValues(alpha: 0.15),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _selectionMode = false;
+                    _selectedCardIds.clear();
+                  }),
+                  child: const Icon(Icons.close, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${_selectedCardIds.length} selezionate',
+                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+                const Spacer(),
+                if (_selectedCardIds.isNotEmpty)
+                  GestureDetector(
+                    onTap: () => _moveSelectedToInventory(sorted),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.blueButtonGradient,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.inventory_2, color: Colors.white, size: 16),
+                          SizedBox(width: 6),
+                          Text('Inventario', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         // Header with progress
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: Column(
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('$owned / ${sorted.length}',
-                      style: TextStyle(color: widget.meta.color, fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text('€${totalValue.toStringAsFixed(2)}',
-                      style: TextStyle(color: widget.meta.color, fontWeight: FontWeight.w600, fontSize: 14)),
+                  // Progress info
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Text('$owned',
+                            style: TextStyle(color: widget.meta.color, fontWeight: FontWeight.bold, fontSize: 18)),
+                        Text(' / ${sorted.length}',
+                            style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w500, fontSize: 14)),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: widget.meta.color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '€${totalValue.toStringAsFixed(2)}',
+                            style: TextStyle(color: widget.meta.color, fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Select button (nicer design)
+                  if (!_selectionMode)
+                    GestureDetector(
+                      onTap: () => setState(() => _selectionMode = true),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              widget.meta.color.withValues(alpha: 0.15),
+                              widget.meta.color.withValues(alpha: 0.08),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: widget.meta.color.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_outline, color: widget.meta.color, size: 15),
+                            const SizedBox(width: 5),
+                            Text('Seleziona', style: TextStyle(color: widget.meta.color, fontSize: 12, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
+              // Subtle progress bar
               ClipRRect(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(3),
                 child: LinearProgressIndicator(
                   value: progress,
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  valueColor: AlwaysStoppedAnimation(widget.meta.color),
-                  minHeight: 5,
+                  backgroundColor: widget.meta.color.withValues(alpha: 0.1),
+                  valueColor: AlwaysStoppedAnimation(widget.meta.color.withValues(alpha: 0.6)),
+                  minHeight: 3,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               // Rarity chips — tappable toggles
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -792,6 +930,7 @@ class _CardGridViewState extends State<_CardGridView> {
               final card = filtered[i];
               final product = widget.productMap[card.id];
               final isOwned = product != null;
+              final isSelected = _selectedCardIds.contains(card.id);
 
               return _CardSlot(
                 card: card,
@@ -800,6 +939,19 @@ class _CardGridViewState extends State<_CardGridView> {
                 meta: widget.meta,
                 game: widget.game,
                 fs: widget.fs,
+                selectionMode: _selectionMode,
+                isSelected: isSelected,
+                onSelectionToggle: _selectionMode && isOwned
+                    ? () {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedCardIds.remove(card.id);
+                          } else {
+                            _selectedCardIds.add(card.id);
+                          }
+                        });
+                      }
+                    : null,
               );
             },
           ),
@@ -819,6 +971,9 @@ class _CardSlot extends StatelessWidget {
   final _GameMeta meta;
   final String game;
   final FirestoreService fs;
+  final bool selectionMode;
+  final bool isSelected;
+  final VoidCallback? onSelectionToggle;
 
   const _CardSlot({
     required this.card,
@@ -827,6 +982,9 @@ class _CardSlot extends StatelessWidget {
     required this.meta,
     required this.game,
     required this.fs,
+    this.selectionMode = false,
+    this.isSelected = false,
+    this.onSelectionToggle,
   });
 
   Future<void> _onTap() async {
@@ -1075,16 +1233,23 @@ class _CardSlot extends StatelessWidget {
     }
 
     return GestureDetector(
-      onTap: _onTap,
-      onLongPress: () => _onLongPress(context),
+      onTap: selectionMode ? onSelectionToggle : _onTap,
+      onLongPress: selectionMode ? null : () => _onLongPress(context),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           color: AppColors.surface,
           border: Border.all(
-            color: isOwned ? meta.color.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05),
-            width: isOwned ? 1.5 : 0.5,
+            color: isSelected 
+                ? AppColors.accentBlue
+                : isOwned 
+                    ? meta.color.withValues(alpha: 0.3) 
+                    : Colors.white.withValues(alpha: 0.05),
+            width: isSelected ? 2.5 : (isOwned ? 1.5 : 0.5),
           ),
+          boxShadow: isSelected
+              ? [BoxShadow(color: AppColors.accentBlue.withValues(alpha: 0.3), blurRadius: 8)]
+              : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
@@ -1173,6 +1338,30 @@ class _CardSlot extends StatelessWidget {
                     card.collectorNumber ?? '',
                     style: const TextStyle(color: Colors.white54, fontSize: 8),
                   ),
+                ),
+              ),
+
+            // Selection checkbox (top-left when in selection mode)
+            if (selectionMode && isOwned)
+              Positioned(
+                top: 4, left: 4,
+                child: Container(
+                  width: 22, height: 22,
+                  decoration: BoxDecoration(
+                    color: isSelected 
+                        ? AppColors.accentBlue 
+                        : Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isSelected 
+                          ? AppColors.accentBlue 
+                          : Colors.white.withValues(alpha: 0.4),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: isSelected
+                      ? const Icon(Icons.check, color: Colors.white, size: 14)
+                      : null,
                 ),
               ),
           ],

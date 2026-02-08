@@ -218,6 +218,7 @@
 
   "account": "Account",
   "resetViaEmail": "Reset via email",
+  "forgotPassword": "Password dimenticata?",
   "twoFactorAuth": "2FA Authentication",
   "notAvailable": "Non disponibile",
   "twoFactorTitle": "Autenticazione a 2 Fattori",

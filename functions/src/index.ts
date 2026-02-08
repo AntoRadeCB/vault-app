@@ -791,7 +791,7 @@ export const scanCardOcr = onRequest(
       });
 
       const model = vertexAi.getGenerativeModel({
-        model: "gemini-2.0-flash-001",
+        model: "gemini-2.5-flash-lite",
         generationConfig: { maxOutputTokens: 128, temperature: 0.1 },
       });
 
@@ -803,15 +803,20 @@ export const scanCardOcr = onRequest(
           role: "user",
           parts: [
             {
-              text: `Read the collector number and card name from this Riftbound (League of Legends TCG) trading card photo.
+              text: `Read the set code, collector number, and card name from this Riftbound (League of Legends TCG) trading card photo.
 
-The collector number is printed small at the bottom of the card (format: "025/240" or just "025" or "007a").
+The collector number is printed small at the bottom of the card. It includes:
+- Set code prefix: 3 letters like "OGN", "RSB", "RFT", etc.
+- Number: like "025/240" or "025" or "007a"
+
 The card name is the large title text on the card. It may be in English, French, or Simplified Chinese.
 
 Reply with EXACTLY one line:
-COLLECTOR_NUMBER|CARD_NAME
+SET_CODE|COLLECTOR_NUMBER|CARD_NAME
 
-Example: 025|Jinx - Demolitionist
+Examples:
+OGN|025|Jinx - Demolitionist
+RSB|142|Teemo
 
 If you cannot read the text clearly, reply: NONE`,
             },
@@ -834,19 +839,31 @@ If you cannot read the text clearly, reply: NONE`,
         return;
       }
 
-      // Parse: COLLECTOR_NUMBER|CARD_NAME (Gemini may return various formats)
+      // Parse: SET_CODE|COLLECTOR_NUMBER|CARD_NAME or fallback to old format
       const parts = answer.split("|").map((s: string) => s.trim());
-      const rawCollectorNum = parts[0] || "";
-      const cardName = parts.length > 1 ? parts.slice(1).join("|").trim() : null;
+      
+      let setCode: string | null = null;
+      let rawCollectorNum = "";
+      let cardName: string | null = null;
+      
+      if (parts.length >= 3) {
+        // New format: SET_CODE|COLLECTOR_NUMBER|CARD_NAME
+        setCode = parts[0].toUpperCase();
+        rawCollectorNum = parts[1];
+        cardName = parts.slice(2).join("|").trim();
+      } else if (parts.length === 2) {
+        // Old format: COLLECTOR_NUMBER|CARD_NAME
+        rawCollectorNum = parts[0];
+        cardName = parts[1];
+      } else {
+        rawCollectorNum = parts[0] || "";
+      }
 
       // Extract clean collector number from messy formats:
-      // "OGN-308/298" → "308", "025/240" → "025", "SFD 196" → "196",
-      // "007a" → "007a", "OGN 042a" → "042a"
+      // "025/240" → "025", "007a" → "007a"
       function extractCollectorNumber(raw: string): string | null {
         if (!raw) return null;
         let s = raw.trim();
-        // Strip set code prefix: "OGN-308" / "OGN 308" / "SFD.196" → "308" / "196"
-        s = s.replace(/^[A-Za-z]{2,}[\s.\-_]*/i, "");
         // Strip total after slash: "308/298" → "308"
         s = s.replace(/\/\d+$/, "");
         // Trim whitespace
@@ -857,7 +874,7 @@ If you cannot read the text clearly, reply: NONE`,
       }
 
       const cleanNum = extractCollectorNumber(rawCollectorNum);
-      console.log(`scanCardOcr parsed: raw="${rawCollectorNum}" → clean="${cleanNum}", name="${cardName}"`);
+      console.log(`scanCardOcr parsed: set="${setCode}", raw="${rawCollectorNum}" → clean="${cleanNum}", name="${cardName}"`);
 
       if (!cleanNum && !cardName) {
         res.status(200).json({ found: false, cards: [] });
@@ -884,24 +901,31 @@ If you cannot read the text clearly, reply: NONE`,
         const variantArray = [...numVariants];
         const snap = await db.collection("cardCatalog")
           .where("collectorNumber", "in", variantArray)
-          .limit(10)
+          .limit(20)
           .get();
 
         if (!snap.empty) {
-          if (snap.size === 1) {
-            matchedCard = { id: snap.docs[0].id, ...snap.docs[0].data() };
-          } else {
-            // Multiple matches — try to pick best by name similarity
-            const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            if (cardName) {
-              const nameLower = cardName.toLowerCase();
-              matchedCard = docs.find((d: any) =>
-                d.name?.toLowerCase().includes(nameLower) ||
-                d.nameLower?.includes(nameLower)
-              ) || docs[0]; // fallback to first match
-            } else {
-              matchedCard = docs[0];
-            }
+          const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          
+          // First priority: match by expansion code if provided
+          if (setCode) {
+            matchedCard = docs.find((d: any) => 
+              d.expansionCode?.toUpperCase() === setCode
+            );
+          }
+          
+          // Second priority: match by name similarity
+          if (!matchedCard && cardName) {
+            const nameLower = cardName.toLowerCase();
+            matchedCard = docs.find((d: any) =>
+              d.name?.toLowerCase().includes(nameLower) ||
+              d.nameLower?.includes(nameLower)
+            );
+          }
+          
+          // Fallback to first match
+          if (!matchedCard) {
+            matchedCard = docs[0];
           }
         }
       }
@@ -933,12 +957,214 @@ If you cannot read the text clearly, reply: NONE`,
         matchedId: matchedCard?.id || null,
         matchedName: matchedCard?.name || null,
         matchedCollectorNumber: matchedCard?.collectorNumber || null,
+        matchedExpansionCode: matchedCard?.expansionCode || null,
+        matchedExpansionName: matchedCard?.expansionName || null,
         matchedImageUrl: matchedCard?.imageUrl || null,
         matchedRarity: matchedCard?.rarity || null,
         matchedPrice: matchedCard?.marketPrice || null,
+        // AI detected set code (for debugging)
+        detectedSetCode: setCode,
       });
     } catch (error: any) {
       console.error("scanCardOcr error:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════
+//  generateFingerprints — Multi-region dHash with voting
+//  3 overlapping regions for more robust matching
+// ═══════════════════════════════════════════════════════
+const DHASH_SIZE = 9; // 9x8 pixels -> 8x8 = 64 bit hash
+const DHASH_LENGTH = 64;
+const MULTI_HASH_LENGTH = 64 * 3; // 3 hashes = 192 values
+
+// Region definitions (percentage of card height/width)
+const REGIONS = [
+  { name: "top", top: 0.10, height: 0.30, left: 0.10, width: 0.80 },
+  { name: "mid", top: 0.25, height: 0.35, left: 0.10, width: 0.80 },
+  { name: "bot", top: 0.15, height: 0.35, left: 0.10, width: 0.80 },
+];
+
+async function generateMultiDHashFromUrl(imageUrl: string): Promise<number[] | null> {
+  try {
+    const sharp = await import("sharp");
+    
+    const response = await fetch(imageUrl);
+    if (!response.ok) return null;
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    const metadata = await sharp.default(buffer).metadata();
+    const imgWidth = metadata.width || 200;
+    const imgHeight = metadata.height || 280;
+    
+    const allHashes: number[] = [];
+    
+    for (const region of REGIONS) {
+      const cropTop = Math.floor(imgHeight * region.top);
+      const cropHeight = Math.floor(imgHeight * region.height);
+      const cropLeft = Math.floor(imgWidth * region.left);
+      const cropWidth = Math.floor(imgWidth * region.width);
+      
+      const { data } = await sharp.default(buffer)
+        .extract({ left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight })
+        .resize(DHASH_SIZE, 8, { fit: "fill", kernel: "cubic" }) // cubic = bicubic, similar to bilinear
+        .grayscale()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      // Generate dHash for this region
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const leftIdx = y * DHASH_SIZE + x;
+          const rightIdx = y * DHASH_SIZE + x + 1;
+          allHashes.push(data[leftIdx] > data[rightIdx] ? 1 : 0);
+        }
+      }
+    }
+
+    return allHashes; // 192 values (3 x 64)
+  } catch (error) {
+    console.error(`Multi-dHash error for ${imageUrl}:`, error);
+    return null;
+  }
+}
+
+export const generateFingerprints = onRequest(
+  { 
+    region: "europe-west1", 
+    timeoutSeconds: 540, 
+    memory: "1GiB",
+  },
+  async (req, res) => {
+    setCors(res);
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+
+    try {
+      // Get limit from query (default 1000, max 2000)
+      const limit = Math.min(parseInt(req.query.limit as string) || 1000, 2000);
+      const skipExisting = req.query.skipExisting !== "false";
+
+      // Fetch ALL cards from catalog (no limit on query, filter after)
+      const snapshot = await db.collection("cardCatalog").get();
+      console.log(`Found ${snapshot.size} cards to process`);
+
+      let processed = 0;
+      let skipped = 0;
+      let errors = 0;
+      let batch = db.batch();
+      let batchCount = 0;
+
+      for (const doc of snapshot.docs) {
+        if (doc.id === "_meta") continue;
+        
+        const data = doc.data();
+        
+        // Only process singleCard or null kind
+        const kind = data.kind as string | null;
+        if (kind && kind !== "singleCard") {
+          continue;
+        }
+        
+        // Skip if already has multiHash
+        if (skipExisting && data.multiHash && Array.isArray(data.multiHash) && data.multiHash.length === MULTI_HASH_LENGTH) {
+          skipped++;
+          continue;
+        }
+
+        // Skip if no image
+        if (!data.imageUrl) {
+          skipped++;
+          continue;
+        }
+        
+        // Respect limit
+        if (processed >= limit) break;
+
+        // Generate multi-region dHash
+        const multiHash = await generateMultiDHashFromUrl(data.imageUrl);
+        if (multiHash && multiHash.length === MULTI_HASH_LENGTH) {
+          batch.update(doc.ref, { multiHash });
+          processed++;
+          batchCount++;
+        } else {
+          errors++;
+        }
+
+        // Commit batch every 400 documents
+        if (batchCount >= 400) {
+          await batch.commit();
+          batch = db.batch();
+          batchCount = 0;
+          console.log(`Committed batch, processed: ${processed}`);
+        }
+
+        // Small delay to avoid rate limits
+        await sleep(100);
+      }
+
+      // Commit remaining
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+
+      // Update meta
+      await db.collection("cardCatalog").doc("_meta").set({
+        lastMultiHashUpdate: FieldValue.serverTimestamp(),
+        multiHashCount: processed,
+      }, { merge: true });
+
+      console.log(`✅ Generated ${processed} fingerprints, skipped ${skipped}, errors ${errors}`);
+      res.status(200).json({
+        success: true,
+        processed,
+        skipped,
+        errors,
+        total: snapshot.size,
+      });
+    } catch (error: any) {
+      console.error("generateFingerprints error:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════
+//  getFingerprints — Fetch all fingerprints for client-side matching
+// ═══════════════════════════════════════════════════════
+export const getFingerprints = onRequest(
+  { 
+    region: "europe-west1", 
+    memory: "512MiB",
+  },
+  async (req, res) => {
+    setCors(res);
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+
+    try {
+      // Fetch all cards with multiHash
+      const snapshot = await db.collection("cardCatalog")
+        .where("multiHash", "!=", null)
+        .select("multiHash") // Only fetch multiHash field to reduce payload
+        .get();
+
+      const hashes: Record<string, number[]> = {};
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+        if (data.multiHash && Array.isArray(data.multiHash)) {
+          hashes[doc.id] = data.multiHash;
+        }
+      }
+
+      res.set("Cache-Control", "public, max-age=3600"); // Cache for 1 hour
+      res.status(200).json({
+        success: true,
+        count: Object.keys(hashes).length,
+        hashes,
+      });
+    } catch (error: any) {
+      console.error("getFingerprints error:", error.message);
       res.status(500).json({ error: error.message });
     }
   }

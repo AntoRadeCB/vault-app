@@ -22,6 +22,7 @@ import '../services/firestore_service.dart';
 import '../services/card_catalog_service.dart';
 import '../models/product.dart';
 import '../models/purchase.dart';
+import '../models/card_blueprint.dart';
 
 import 'navigation_state.dart';
 import 'coach_steps_builder.dart';
@@ -227,7 +228,7 @@ class _MainShellState extends State<MainShell> {
                 GestureDetector(
                   onTap: () {
                     Navigator.pop(ctx);
-                    _showAddSealedProductDialog(context);
+                    _showCatalogSealedProducts(context);
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -322,6 +323,213 @@ class _MainShellState extends State<MainShell> {
               ),
             ),
             const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCatalogSealedProducts(BuildContext parentContext) {
+    final catalogService = CardCatalogService();
+    
+    showModalBottomSheet(
+      context: parentContext,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text('Catalogo Prodotti', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showAddSealedProductDialog(parentContext);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text('+ Manuale', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text('Seleziona un prodotto dal catalogo', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: FutureBuilder<List<CardBlueprint>>(
+                future: catalogService.getAllCards(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final allCards = snap.data ?? [];
+                  // Filter to only sealed products (packs, boxes, displays, bundles)
+                  final sealedKinds = {'boosterPack', 'boosterBox', 'display', 'bundle', 'starterDeck', 'etb'};
+                  final sealedProducts = allCards.where((c) =>
+                    c.kind != null && sealedKinds.contains(c.kind)
+                  ).toList();
+                  
+                  if (sealedProducts.isEmpty) {
+                    return const Center(
+                      child: Text('Nessun prodotto sigillato nel catalogo', style: TextStyle(color: AppColors.textMuted)),
+                    );
+                  }
+                  
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.75,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                    ),
+                    itemCount: sealedProducts.length,
+                    itemBuilder: (context, i) {
+                      final product = sealedProducts[i];
+                      final hasImg = product.imageUrl != null && product.imageUrl!.isNotEmpty;
+                      final kindLabel = switch (product.kind) {
+                        'boosterPack' => 'Busta',
+                        'boosterBox' => 'Box',
+                        'display' => 'Display',
+                        'bundle' => 'Bundle',
+                        'starterDeck' => 'Starter',
+                        'etb' => 'ETB',
+                        _ => product.kind ?? '',
+                      };
+                      final priceVal = product.marketPrice != null ? product.marketPrice!.cents / 100 : 0.0;
+                      
+                      return GestureDetector(
+                        onTap: () async {
+                          Navigator.pop(ctx);
+                          // Add to inventory
+                          final fs = FirestoreService();
+                          final productKind = switch (product.kind) {
+                            'boosterPack' => ProductKind.boosterPack,
+                            'boosterBox' => ProductKind.boosterBox,
+                            'display' => ProductKind.display,
+                            'bundle' => ProductKind.bundle,
+                            _ => ProductKind.boosterPack,
+                          };
+                          await fs.addProduct(Product(
+                            name: product.name,
+                            brand: (product.game ?? 'RIFTBOUND').toUpperCase(),
+                            quantity: 1,
+                            price: priceVal,
+                            status: ProductStatus.inInventory,
+                            kind: productKind,
+                            cardBlueprintId: product.id,
+                            cardImageUrl: product.imageUrl,
+                            cardExpansion: product.expansionName,
+                          ));
+                          await fs.addPurchase(Purchase(
+                            productName: product.name,
+                            price: priceVal,
+                            quantity: 1,
+                            date: DateTime.now(),
+                            workspace: 'default',
+                          ));
+                          if (mounted) {
+                            ScaffoldMessenger.of(parentContext).showSnackBar(
+                              SnackBar(
+                                content: Text('✅ ${product.name} aggiunto'),
+                                backgroundColor: AppColors.accentGreen,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                margin: const EdgeInsets.all(16),
+                              ),
+                            );
+                            _showSbustaSheet(parentContext);
+                          }
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.cardDark,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                                  child: hasImg
+                                      ? Image.network(product.imageUrl!, fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            color: AppColors.accentOrange.withValues(alpha: 0.1),
+                                            child: const Icon(Icons.inventory_2, color: AppColors.accentOrange, size: 40),
+                                          ))
+                                      : Container(
+                                          color: AppColors.accentOrange.withValues(alpha: 0.1),
+                                          child: const Icon(Icons.inventory_2, color: AppColors.accentOrange, size: 40),
+                                        ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.accentOrange.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(kindLabel, style: const TextStyle(color: AppColors.accentOrange, fontSize: 9, fontWeight: FontWeight.w700)),
+                                        ),
+                                        const Spacer(),
+                                        if (priceVal > 0)
+                                          Text('€${priceVal.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.accentGreen, fontSize: 11, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(product.name, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
@@ -677,7 +885,8 @@ class _MainShellState extends State<MainShell> {
               ),
             )
           : null,
-      floatingActionButton: !isWide
+      // Hide FAB when in overlay screens opened by FAB (add, sbusta, open product)
+      floatingActionButton: !isWide && !_nav.hasOverlay
           ? IgnorePointer(
               ignoring: _showTutorial,
               child: AnimatedFab(

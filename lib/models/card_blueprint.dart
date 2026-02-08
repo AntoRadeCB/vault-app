@@ -102,6 +102,58 @@ class CardBlueprint {
         return const Color(0xFF9E9E9E);
     }
   }
+
+  /// Create from plain Map (for JSON serialization)
+  factory CardBlueprint.fromMap(String id, Map<String, dynamic> data) {
+    return CardBlueprint(
+      id: id,
+      blueprintId: data['blueprintId'] ?? 0,
+      name: data['name'] ?? '',
+      version: data['version'],
+      game: data['game'] as String?,
+      expansionId: data['expansionId'],
+      expansionName: data['expansionName'],
+      expansionCode: data['expansionCode'],
+      collectorNumber: data['collectorNumber'],
+      rarity: data['rarity'],
+      imageUrl: data['imageUrl'],
+      backImageUrl: data['backImageUrl'] as String?,
+      marketPrice: data['marketPrice'] != null
+          ? MarketPrice.fromMap(data['marketPrice'] as Map<String, dynamic>)
+          : null,
+      kind: data['kind'] as String?,
+      categoryId: data['categoryId'] as int?,
+      categoryName: data['categoryName'] as String?,
+      availableLanguages: (data['availableLanguages'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      hasFoil: data['hasFoil'] as bool? ?? false,
+    );
+  }
+
+  /// Convert to plain Map (for JSON serialization)
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'blueprintId': blueprintId,
+      'name': name,
+      if (version != null) 'version': version,
+      if (game != null) 'game': game,
+      if (expansionId != null) 'expansionId': expansionId,
+      if (expansionName != null) 'expansionName': expansionName,
+      if (expansionCode != null) 'expansionCode': expansionCode,
+      if (collectorNumber != null) 'collectorNumber': collectorNumber,
+      if (rarity != null) 'rarity': rarity,
+      if (imageUrl != null) 'imageUrl': imageUrl,
+      if (backImageUrl != null) 'backImageUrl': backImageUrl,
+      if (kind != null) 'kind': kind,
+      if (categoryId != null) 'categoryId': categoryId,
+      if (categoryName != null) 'categoryName': categoryName,
+      if (availableLanguages.isNotEmpty) 'availableLanguages': availableLanguages,
+      'hasFoil': hasFoil,
+    };
+  }
 }
 
 class MarketPrice {

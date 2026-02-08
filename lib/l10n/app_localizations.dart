@@ -1186,6 +1186,12 @@ abstract class AppLocalizations {
   /// **'Reset via email'**
   String get resetViaEmail;
 
+  /// No description provided for @forgotPassword.
+  ///
+  /// In it, this message translates to:
+  /// **'Password dimenticata?'**
+  String get forgotPassword;
+
   /// No description provided for @twoFactorAuth.
   ///
   /// In it, this message translates to:

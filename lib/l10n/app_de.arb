@@ -218,6 +218,7 @@
 
   "account": "Konto",
   "resetViaEmail": "Per Email zurücksetzen",
+  "forgotPassword": "Passwort vergessen?",
   "twoFactorAuth": "2FA-Authentifizierung",
   "notAvailable": "Nicht verfügbar",
   "twoFactorTitle": "Zwei-Faktor-Authentifizierung",

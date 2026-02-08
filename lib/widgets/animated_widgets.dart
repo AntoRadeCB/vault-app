@@ -590,7 +590,7 @@ class _CountUpTextState extends State<CountUpText>
 }
 
 // ──────────────────────────────────────────────────
-// Expandable FAB menu with 3 options
+// Expandable FAB menu with 4 options
 // ──────────────────────────────────────────────────
 class AnimatedFab extends StatefulWidget {
   final VoidCallback? onSbusta;
@@ -648,7 +648,7 @@ class _AnimatedFabState extends State<AnimatedFab>
   Widget build(BuildContext context) {
     return SizedBox(
       width: 180,
-      height: 280,
+      height: 340,
       child: Stack(
         alignment: Alignment.bottomRight,
         children: [
@@ -724,9 +724,11 @@ class _AnimatedFabState extends State<AnimatedFab>
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    Color? color,
   }) {
-    // Each button spaced 60px above previous, starting 66px above main FAB
-    final bottomOffset = 66.0 + index * 58.0;
+    // Each button spaced 58px above previous, starting 66px above main FAB
+    final bottomOffset = 66.0 + index * 54.0;
+    final buttonColor = color ?? AppColors.accentBlue;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -782,15 +784,15 @@ class _AnimatedFabState extends State<AnimatedFab>
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.55),
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                            border: Border.all(color: buttonColor.withValues(alpha: 0.25)),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.accentBlue.withValues(alpha: 0.2),
+                                color: buttonColor.withValues(alpha: 0.25),
                                 blurRadius: 8,
                               ),
                             ],
                           ),
-                          child: Icon(icon, color: Colors.white, size: 20),
+                          child: Icon(icon, color: buttonColor.withValues(alpha: 0.9), size: 20),
                         ),
                       ),
                     ),

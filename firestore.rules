@@ -1,10 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Card catalog is public (read-only) — needed for demo mode
-    match /cardCatalog/{document=**} {
+    // Card catalog - public read
+    match /cardCatalog/{docId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if false; // Only via Cloud Functions
+    }
+    
+    // Card prices - public read
+    match /cardPrices/{docId} {
+      allow read: if true;
+      allow write: if false; // Only via Cloud Functions
     }
     
     // User data requires authentication

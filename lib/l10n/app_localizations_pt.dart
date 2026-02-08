@@ -600,6 +600,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get resetViaEmail => 'Redefinir por email';
 
   @override
+  String get forgotPassword => 'Esqueceu a senha?';
+
+  @override
   String get twoFactorAuth => 'Autenticação 2FA';
 
   @override

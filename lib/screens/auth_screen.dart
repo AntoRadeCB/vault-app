@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../widgets/animated_widgets.dart';
+import '../widgets/cardvault_logo.dart';
 import '../l10n/app_localizations.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -213,41 +214,15 @@ class _AuthScreenState extends State<AuthScreen>
                   index: 0,
                   child: Column(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: AppColors.headerGradient,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color:
-                                  AppColors.accentBlue.withValues(alpha: 0.4),
-                              blurRadius: 24,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.view_in_ar,
-                          color: Colors.white,
-                          size: 40,
-                        ),
-                      ),
+                      const CardVaultLogo(size: 100),
                       const SizedBox(height: 20),
                       const Text(
-                        'Vault',
+                        'CardVault',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
                           letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Reselling Tracker',
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 15,
                         ),
                       ),
                     ],
@@ -318,6 +293,37 @@ class _AuthScreenState extends State<AuthScreen>
     );
   }
 
+  Future<void> _handleResetPassword() async {
+    final l = AppLocalizations.of(context)!;
+    final email = _loginEmailController.text.trim();
+    if (email.isEmpty) {
+      _showError(l.enterEmailAndPassword);
+      return;
+    }
+    try {
+      await _authService.resetPassword(email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(child: Text(l.resetEmailSent(email))),
+              ],
+            ),
+            backgroundColor: AppColors.accentGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) _showError(l.error(e.toString()));
+    }
+  }
+
   Widget _buildLoginForm() {
     final l = AppLocalizations.of(context)!;
     return Column(
@@ -337,7 +343,22 @@ class _AuthScreenState extends State<AuthScreen>
           toggleObscure: () =>
               setState(() => _obscureLogin = !_obscureLogin),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            onTap: _handleResetPassword,
+            child: Text(
+              l.forgotPassword,
+              style: TextStyle(
+                color: AppColors.accentBlue,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
         _buildSubmitButton(
           label: l.login,
           loading: _loginLoading,

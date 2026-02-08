@@ -201,10 +201,10 @@ class _CoachMarkOverlayState extends State<CoachMarkOverlay>
                   child: CustomPaint(
                     painter: _SpotlightPainter(
                       targetRect: rect,
-                      padding: 8.0,
-                      borderRadius: 14.0,
+                      padding: 10.0,
+                      borderRadius: 16.0,
                       overlayColor:
-                          Colors.black.withValues(alpha: 0.82),
+                          Colors.black.withValues(alpha: 0.92),
                       pulseScale: _pulseAnim.value,
                       accentColor: step.accentColor,
                     ),
@@ -257,22 +257,35 @@ class _CoachMarkOverlayState extends State<CoachMarkOverlay>
                         onTap: _skip,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 7),
+                              horizontal: 18, vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(20),
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(24),
                             border: Border.all(
-                              color:
-                                  Colors.white.withValues(alpha: 0.12),
+                              color: Colors.white.withValues(alpha: 0.25),
+                              width: 1.5,
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                              ),
+                            ],
                           ),
-                          child: const Text(
-                            'Salta',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.skip_next, color: Colors.white, size: 16),
+                              SizedBox(width: 4),
+                              Text(
+                                'Salta',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -289,10 +302,15 @@ class _CoachMarkOverlayState extends State<CoachMarkOverlay>
 
   Widget _buildTooltip(BuildContext context, CoachStep step, Rect targetRect,
       Size screenSize, bool isLast) {
-    // Determine tooltip placement
-    const tooltipWidth = 300.0;
+    // Determine tooltip placement - responsive width for mobile
+    final tooltipWidth = screenSize.width < 380 ? screenSize.width - 40 : 300.0;
     const tooltipMargin = 16.0;
     const arrowSize = 10.0;
+    
+    // Safety check for invalid rect
+    if (targetRect == Rect.zero || targetRect.width <= 0) {
+      return const SizedBox.shrink();
+    }
 
     final spaceAbove = targetRect.top;
     final spaceBelow = screenSize.height - targetRect.bottom;
@@ -321,33 +339,39 @@ class _CoachMarkOverlayState extends State<CoachMarkOverlay>
 
     double left, top;
 
+    // Get safe area padding
+    final safePadding = MediaQuery.of(context).padding;
+    final maxTop = screenSize.height - 220 - safePadding.bottom;
+
     switch (pos) {
       case TooltipPosition.below:
         left = (targetRect.center.dx - tooltipWidth / 2)
             .clamp(tooltipMargin, screenSize.width - tooltipWidth - tooltipMargin);
-        top = targetRect.bottom + arrowSize + 8;
+        top = (targetRect.bottom + arrowSize + 8).clamp(tooltipMargin, maxTop);
         break;
       case TooltipPosition.above:
         left = (targetRect.center.dx - tooltipWidth / 2)
             .clamp(tooltipMargin, screenSize.width - tooltipWidth - tooltipMargin);
-        // We'll calculate height below; for now estimate
         top = targetRect.top - 180 - arrowSize;
-        if (top < tooltipMargin) top = tooltipMargin;
+        if (top < safePadding.top + tooltipMargin) top = safePadding.top + tooltipMargin;
         break;
       case TooltipPosition.right:
         left = targetRect.right + arrowSize + 8;
+        if (left + tooltipWidth > screenSize.width - tooltipMargin) {
+          left = screenSize.width - tooltipWidth - tooltipMargin;
+        }
         top = (targetRect.center.dy - 80)
-            .clamp(tooltipMargin, screenSize.height - 200);
+            .clamp(safePadding.top + tooltipMargin, maxTop);
         break;
       case TooltipPosition.left:
         left = targetRect.left - tooltipWidth - arrowSize - 8;
         if (left < tooltipMargin) left = tooltipMargin;
         top = (targetRect.center.dy - 80)
-            .clamp(tooltipMargin, screenSize.height - 200);
+            .clamp(safePadding.top + tooltipMargin, maxTop);
         break;
       default:
         left = tooltipMargin;
-        top = targetRect.bottom + arrowSize + 8;
+        top = (targetRect.bottom + arrowSize + 8).clamp(tooltipMargin, maxTop);
     }
 
     return Positioned(

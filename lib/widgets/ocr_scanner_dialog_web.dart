@@ -53,9 +53,9 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
   Timer? _scanTimer;
   bool _cameraReady = false;
 
-  // Non-blocking scan state
+  // Non-blocking scan state - allow multiple concurrent scans
   int _inflightScans = 0;
-  static const int _maxConcurrent = 2;
+  static const int _maxConcurrent = 3;
 
   // Continuous mode state
   final List<String> _foundNumbers = [];
@@ -66,6 +66,21 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 
   // Deduplicate: don't scan the same card twice in a row
   final Set<String> _recentlyFound = {};
+
+  // Track last scanned to prevent duplicate consecutive scans
+  String? _lastScannedId;
+  DateTime? _lastScannedTime;
+
+  // Success feedback when taking photo (replaces flash for accessibility)
+  bool _showSuccess = false;
+
+  void _triggerSuccess() {
+    setState(() => _showSuccess = true);
+    _ocrService.vibrate();
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) setState(() => _showSuccess = false);
+    });
+  }
 
   @override
   void initState() {
@@ -109,16 +124,18 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
-    // Camera ready — wait for user to tap scan button
+    // Camera ready — user can tap scan button
   }
 
-  bool _isBusy = false;
-
   Future<void> _performOcrScan() async {
-    if (_isBusy || _status == _ScanStatus.error || !_cameraReady) return;
+    if (_inflightScans >= _maxConcurrent || _status == _ScanStatus.error || !_cameraReady) return;
 
-    _isBusy = true;
-    setState(() => _status = _ScanStatus.processing);
+    // Visual feedback
+    _triggerSuccess();
+    
+    setState(() {
+      _inflightScans++;
+    });
 
     try {
       // Build context — premium mode sends full card list, OCR mode just sends mode flag
@@ -196,10 +213,14 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     } catch (e) {
       if (mounted) {
         _showErrorBanner(e.toString());
-        setState(() => _status = _ScanStatus.scanning);
       }
     } finally {
-      _isBusy = false;
+      if (mounted) {
+        setState(() {
+          _inflightScans--;
+          if (_inflightScans < 0) _inflightScans = 0;
+        });
+      }
     }
   }
 
@@ -215,24 +236,31 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       _recentlyFound.remove(dedupeKey);
     });
 
-    // Parse AI response: "COLLECTOR_NUM|CARD_NAME" or "OGN-308/298|名前" or just "CARD_NAME"
+    // Parse AI response: "SET_CODE|COLLECTOR_NUM|CARD_NAME" or "COLLECTOR_NUM|CARD_NAME" or just "CARD_NAME"
+    String? aiSetCode;
     String? aiCollectorNum;
     String aiName = aiCardName.trim();
     
-    final pipeIdx = aiName.indexOf('|');
-    if (pipeIdx > 0) {
-      final firstPart = aiName.substring(0, pipeIdx).trim();
-      final secondPart = aiName.substring(pipeIdx + 1).trim();
-      // Extract collector number: strip set prefix + total suffix
-      // "OGN-308/298" → "308", "025/165" → "025", "SFD 042a" → "042a"
-      var cleaned = firstPart
-          .replaceAll(RegExp(r'^[A-Za-z]{2,}[\s.\-_]*'), '') // strip set code prefix
-          .replaceAll(RegExp(r'/\d+$'), '')                    // strip /total
-          .trim();
-      if (cleaned.contains(RegExp(r'\d'))) {
-        aiCollectorNum = cleaned;
-        aiName = secondPart;
+    final parts = aiName.split('|').map((p) => p.trim()).toList();
+    
+    if (parts.length >= 3) {
+      // New format: SET_CODE|COLLECTOR_NUM|CARD_NAME
+      aiSetCode = parts[0].toUpperCase();
+      aiCollectorNum = parts[1].replaceAll(RegExp(r'/\d+$'), '').trim(); // strip /total
+      aiName = parts.sublist(2).join('|').trim();
+    } else if (parts.length == 2) {
+      // Old format: COLLECTOR_NUM|CARD_NAME
+      final firstPart = parts[0];
+      final secondPart = parts[1];
+      // Check if first part has set code prefix
+      final setMatch = RegExp(r'^([A-Z]{2,4})[\s.\-_]*(.*)$', caseSensitive: false).firstMatch(firstPart);
+      if (setMatch != null) {
+        aiSetCode = setMatch.group(1)!.toUpperCase();
+        aiCollectorNum = setMatch.group(2)!.replaceAll(RegExp(r'/\d+$'), '').trim();
+      } else {
+        aiCollectorNum = firstPart.replaceAll(RegExp(r'/\d+$'), '').trim();
       }
+      aiName = secondPart;
     }
 
     // Match by collector number or name in the expansion cards
@@ -240,19 +268,34 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
     final aiNameLower = aiName.toLowerCase().trim();
 
     if (widget.expansionCards.isNotEmpty) {
-      // 0. Match by collector number first (most precise)
+      // 0. Match by set code + collector number first (most precise)
       if (aiCollectorNum != null) {
         final aiNum = int.tryParse(aiCollectorNum!.replaceAll(RegExp(r'[^0-9]'), ''));
         final aiSuffix = aiCollectorNum!.replaceAll(RegExp(r'^[0-9]+'), ''); // "a" from "042a"
+        
         matched = widget.expansionCards.where((c) {
           if (c.collectorNumber == null) return false;
           final cn = c.collectorNumber!;
-          // Direct match
-          if (cn == aiCollectorNum) return true;
-          // Numeric match (ignore leading zeros): "308" == "308", "042" == "42"
-          final cardNum = int.tryParse(cn.replaceAll(RegExp(r'[^0-9]'), ''));
-          final cardSuffix = cn.replaceAll(RegExp(r'^[0-9]+'), '');
-          return aiNum != null && cardNum != null && aiNum == cardNum && aiSuffix == cardSuffix;
+          
+          // Check collector number match
+          bool numMatch = false;
+          if (cn == aiCollectorNum) {
+            numMatch = true;
+          } else {
+            // Numeric match (ignore leading zeros): "308" == "308", "042" == "42"
+            final cardNum = int.tryParse(cn.replaceAll(RegExp(r'[^0-9]'), ''));
+            final cardSuffix = cn.replaceAll(RegExp(r'^[0-9]+'), '');
+            numMatch = aiNum != null && cardNum != null && aiNum == cardNum && aiSuffix == cardSuffix;
+          }
+          
+          if (!numMatch) return false;
+          
+          // If we have set code, require it to match
+          if (aiSetCode != null && c.expansionCode != null) {
+            return c.expansionCode!.toUpperCase() == aiSetCode;
+          }
+          
+          return true;
         }).firstOrNull;
       }
 
@@ -290,15 +333,41 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
       if (matched == null) return false;
     }
 
-    _ocrService.vibrate();
     final collectorNumber = matched?.collectorNumber ?? aiCardName;
-    _foundNumbers.add(collectorNumber);
-
-    final found = _FoundCard(
-      collectorNumber: collectorNumber,
-      card: matched,
-    );
-    _foundCards.add(found);
+    
+    // Check if this is the same card as last scan (skip duplicate within 2s)
+    final now = DateTime.now();
+    if (_lastScannedId == collectorNumber && 
+        _lastScannedTime != null &&
+        now.difference(_lastScannedTime!).inMilliseconds < 2000) {
+      return true; // Already found recently, not an error
+    }
+    _lastScannedId = collectorNumber;
+    _lastScannedTime = now;
+    
+    _ocrService.vibrate();
+    
+    // Check if card already in found list - if so, increment quantity
+    final existingIndex = _foundCards.indexWhere((f) => f.collectorNumber == collectorNumber);
+    _FoundCard found;
+    
+    if (existingIndex >= 0) {
+      // Increment quantity of existing card
+      _foundCards[existingIndex].quantity++;
+      found = _foundCards[existingIndex];
+      // Move to end of list
+      _foundCards.removeAt(existingIndex);
+      _foundCards.add(found);
+    } else {
+      // New card - add to list
+      _foundNumbers.add(collectorNumber);
+      found = _FoundCard(
+        collectorNumber: collectorNumber,
+        card: matched,
+        quantity: 1,
+      );
+      _foundCards.add(found);
+    }
 
     setState(() {
       _status = _ScanStatus.found;
@@ -339,7 +408,14 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
   }
 
   void _close() {
-    Navigator.of(context).pop(_foundNumbers);
+    // Build list with quantities (repeat collector number for each quantity)
+    final result = <String>[];
+    for (final found in _foundCards) {
+      for (int i = 0; i < found.quantity; i++) {
+        result.add(found.collectorNumber);
+      }
+    }
+    Navigator.of(context).pop(result);
   }
 
   @override
@@ -509,6 +585,43 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
               status: _status,
             ),
 
+          // Success feedback overlay (accessibility-friendly, no flash)
+          if (_showSuccess)
+            Positioned.fill(
+              child: Center(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.9),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.green.withValues(alpha: 0.4),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.check,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+
           // Top bar
           Positioned(
             top: 0, left: 0, right: 0,
@@ -540,7 +653,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '${_foundCards.length}',
+                          '${_foundCards.fold<int>(0, (sum, c) => sum + c.quantity)}',
                           style: const TextStyle(color: Colors.white,
                               fontSize: 14, fontWeight: FontWeight.bold),
                         ),
@@ -610,29 +723,53 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                         ),
                         // Big scan button
                         GestureDetector(
-                          onTap: _isBusy ? null : _performOcrScan,
-                          child: Container(
-                            width: 72, height: 72,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 3),
-                            ),
-                            child: Container(
-                              margin: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: _isBusy ? Colors.orange : Colors.white,
+                          onTap: _inflightScans >= _maxConcurrent ? null : _performOcrScan,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Container(
+                                width: 72, height: 72,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 3),
+                                ),
+                                child: Container(
+                                  margin: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _inflightScans >= _maxConcurrent 
+                                        ? Colors.grey 
+                                        : _inflightScans > 0 
+                                            ? Colors.orange 
+                                            : Colors.white,
+                                  ),
+                                  child: const Icon(Icons.camera_alt, color: Colors.black87, size: 30),
+                                ),
                               ),
-                              child: _isBusy
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(18),
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 3,
-                                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                              // Show inflight count badge
+                              if (_inflightScans > 0)
+                                Positioned(
+                                  top: 0, right: 0,
+                                  child: Container(
+                                    width: 24, height: 24,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.accentBlue,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 2),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '$_inflightScans',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    )
-                                  : const Icon(Icons.camera_alt, color: Colors.black87, size: 30),
-                            ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         // Done/Close button
@@ -1055,9 +1192,25 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 
   /// Horizontal scroll strip showing recently found cards
   /// Tap = open variant picker (if variants exist), Long press = remove
+  void _incrementQuantity(int index) {
+    setState(() {
+      _foundCards[index].quantity++;
+    });
+  }
+
+  void _decrementQuantity(int index) {
+    if (_foundCards[index].quantity > 1) {
+      setState(() {
+        _foundCards[index].quantity--;
+      });
+    } else {
+      _removeFoundCard(index);
+    }
+  }
+
   Widget _buildFoundStrip() {
     return SizedBox(
-      height: 56,
+      height: 64,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: _foundCards.length,
@@ -1068,15 +1221,13 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
           final card = found.card;
           final hasVariants = card != null && _getVariantsFor(card).isNotEmpty;
           return GestureDetector(
-            onTap: hasVariants
-                ? () => _showVariantPicker(realIndex)
-                : () => _removeFoundCard(realIndex),
+            onTap: hasVariants ? () => _showVariantPicker(realIndex) : null,
             onLongPress: () => _removeFoundCard(realIndex),
             child: Container(
               margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.9),
+                color: AppColors.surface.withValues(alpha: 0.95),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                     color: AppColors.accentGreen.withValues(alpha: 0.3)),
@@ -1084,6 +1235,7 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Card image
                   if (card?.imageUrl != null)
                     Container(
                       width: 28, height: 40,
@@ -1096,44 +1248,86 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
                                 const SizedBox.shrink()),
                       ),
                     ),
+                  // Card info
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 100),
+                        constraints: const BoxConstraints(maxWidth: 80),
                         child: Text(
                           card?.name ?? '#${found.collectorNumber}',
                           style: const TextStyle(color: Colors.white,
-                              fontSize: 11, fontWeight: FontWeight.w600),
+                              fontSize: 10, fontWeight: FontWeight.w600),
                           maxLines: 1, overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (card?.marketPrice != null)
-                            Text(card!.formattedPrice,
-                                style: const TextStyle(
-                                    color: AppColors.accentGreen,
-                                    fontSize: 10, fontWeight: FontWeight.bold)),
-                          if (card?.version != null && card!.version!.isNotEmpty) ...[
-                            if (card.marketPrice != null) const SizedBox(width: 4),
-                            Text(card.version!,
-                                style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.5),
-                                    fontSize: 9)),
-                          ],
-                        ],
-                      ),
+                      if (card?.marketPrice != null)
+                        Text(card!.formattedPrice,
+                            style: const TextStyle(
+                                color: AppColors.accentGreen,
+                                fontSize: 9, fontWeight: FontWeight.bold)),
                     ],
                   ),
-                  const SizedBox(width: 4),
-                  hasVariants
-                    ? Icon(Icons.swap_horiz,
-                        color: AppColors.accentBlue.withValues(alpha: 0.8), size: 16)
-                    : Icon(Icons.close,
-                        color: Colors.white.withValues(alpha: 0.4), size: 14),
+                  const SizedBox(width: 6),
+                  // Quantity controls
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _decrementQuantity(realIndex),
+                          child: Container(
+                            width: 24, height: 24,
+                            decoration: BoxDecoration(
+                              color: found.quantity == 1 
+                                  ? AppColors.accentRed.withValues(alpha: 0.8)
+                                  : Colors.white.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(
+                              found.quantity == 1 ? Icons.delete : Icons.remove,
+                              color: Colors.white,
+                              size: 14,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          constraints: const BoxConstraints(minWidth: 28),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${found.quantity}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => _incrementQuantity(realIndex),
+                          child: Container(
+                            width: 24, height: 24,
+                            decoration: BoxDecoration(
+                              color: AppColors.accentGreen.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Icon(Icons.add, color: Colors.white, size: 14),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Variant indicator
+                  if (hasVariants) ...[
+                    const SizedBox(width: 4),
+                    Icon(Icons.swap_horiz,
+                        color: AppColors.accentBlue.withValues(alpha: 0.8), size: 16),
+                  ],
                 ],
               ),
             ),
@@ -1213,7 +1407,8 @@ class _OcrScannerDialogState extends State<OcrScannerDialog> {
 class _FoundCard {
   final String collectorNumber;
   final CardBlueprint? card;
-  const _FoundCard({required this.collectorNumber, this.card});
+  int quantity;
+  _FoundCard({required this.collectorNumber, this.card, this.quantity = 1});
 }
 
 /// Dark overlay with card-shaped cutout.

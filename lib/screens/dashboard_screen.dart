@@ -25,7 +25,7 @@ class DashboardScreen extends StatelessWidget {
     return AuroraBackground(
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -34,30 +34,23 @@ class DashboardScreen extends StatelessWidget {
               GestureDetector(
                 onTap: () => onAuthRequired?.call(),
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppColors.accentBlue.withValues(alpha: 0.15), AppColors.accentPurple.withValues(alpha: 0.1)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.accentBlue.withValues(alpha: 0.3)),
+                    color: const Color(0xFF4CAF50),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, color: AppColors.accentBlue),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Modalità Demo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                            SizedBox(height: 2),
-                            Text('Registrati per salvare i tuoi dati e sbloccare tutte le funzionalità', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                          ],
+                      const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'Modalità Demo — Registrati per salvare i dati',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
                         ),
                       ),
-                      Icon(Icons.chevron_right, color: AppColors.accentBlue),
+                      const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
                     ],
                   ),
                 ),
@@ -701,35 +694,49 @@ class DashboardScreen extends StatelessWidget {
   // ════════════════════════════════════════════════════
 
   Widget _buildRecentActivity(BuildContext context) {
-    return StreamBuilder<List<Sale>>(
-      stream: _firestoreService.getSales(),
-      builder: (context, salesSnap) {
-        return StreamBuilder<List<Purchase>>(
-          stream: _firestoreService.getPurchases(),
-          builder: (context, purchasesSnap) {
-            final sales = salesSnap.data ?? [];
-            final purchases = purchasesSnap.data ?? [];
+    return StreamBuilder<List<Product>>(
+      stream: _firestoreService.getProducts(),
+      builder: (context, productsSnap) {
+        // Build image lookup map
+        final imageMap = <String, String>{};
+        for (final p in productsSnap.data ?? []) {
+          final imgUrl = p.displayImageUrl;
+          if (imgUrl.isNotEmpty) {
+            imageMap[p.name.toLowerCase()] = imgUrl;
+          }
+        }
+        
+        return StreamBuilder<List<Sale>>(
+          stream: _firestoreService.getSales(),
+          builder: (context, salesSnap) {
+            return StreamBuilder<List<Purchase>>(
+              stream: _firestoreService.getPurchases(),
+              builder: (context, purchasesSnap) {
+                final sales = salesSnap.data ?? [];
+                final purchases = purchasesSnap.data ?? [];
 
-            // Build unified activity list
-            final activities = <_ActivityItem>[];
-            for (final sale in sales) {
-              activities.add(_ActivityItem(
-                name: sale.productName,
-                amount: sale.profit,
-                date: sale.date,
-                isSale: true,
-              ));
-            }
-            for (final purchase in purchases) {
-              activities.add(_ActivityItem(
-                name: purchase.productName,
-                amount: purchase.totalCost,
-                date: purchase.date,
-                isSale: false,
-              ));
-            }
-            activities.sort((a, b) => b.date.compareTo(a.date));
-            final recent = activities.take(8).toList();
+                // Build unified activity list
+                final activities = <_ActivityItem>[];
+                for (final sale in sales) {
+                  activities.add(_ActivityItem(
+                    name: sale.productName,
+                    amount: sale.profit,
+                    date: sale.date,
+                    isSale: true,
+                    imageUrl: imageMap[sale.productName.toLowerCase()],
+                  ));
+                }
+                for (final purchase in purchases) {
+                  activities.add(_ActivityItem(
+                    name: purchase.productName,
+                    amount: purchase.totalCost,
+                    date: purchase.date,
+                    isSale: false,
+                    imageUrl: imageMap[purchase.productName.toLowerCase()],
+                  ));
+                }
+                activities.sort((a, b) => b.date.compareTo(a.date));
+                final recent = activities.take(8).toList();
 
             return GlassCard(
               padding: const EdgeInsets.all(20),
@@ -789,10 +796,12 @@ class DashboardScreen extends StatelessWidget {
                         )),
                 ],
               ),
-            );
-          },
-        );
-      },
+              );
+            },
+          );
+        },
+      );
+    },
     );
   }
 
@@ -800,6 +809,7 @@ class DashboardScreen extends StatelessWidget {
     final isSale = item.isSale;
     final color = isSale ? AppColors.accentGreen : AppColors.accentBlue;
     final icon = isSale ? Icons.arrow_upward : Icons.shopping_cart;
+    final hasImage = item.imageUrl != null && item.imageUrl!.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -810,14 +820,24 @@ class DashboardScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // Product image or icon
           Container(
-            width: 36,
-            height: 36,
+            width: hasImage ? 40 : 36,
+            height: hasImage ? 52 : 36,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(hasImage ? 6 : 8),
             ),
-            child: Icon(icon, color: color, size: 18),
+            child: hasImage
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: Image.network(
+                      item.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(icon, color: color, size: 18),
+                    ),
+                  )
+                : Icon(icon, color: color, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -961,12 +981,14 @@ class _ActivityItem {
   final double amount;
   final DateTime date;
   final bool isSale;
+  final String? imageUrl;
 
   _ActivityItem({
     required this.name,
     required this.amount,
     required this.date,
     required this.isSale,
+    this.imageUrl,
   });
 }
 

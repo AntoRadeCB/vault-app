@@ -4,6 +4,7 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_widgets.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/card_catalog_service.dart';
 import '../providers/profile_provider.dart';
 import '../models/user_profile.dart';
 import '../l10n/app_localizations.dart';
@@ -685,7 +686,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: ProfileType.values.map((type) {
+                  children: ProfileType.values
+                    // In demo mode, only allow Riftbound profiles
+                    .where((type) => !FirestoreService.demoMode || type == ProfileType.riftbound)
+                    .map((type) {
                     final isSelected = type == selectedType;
                     final preset = UserProfile.presets.firstWhere(
                       (p) => p.type == type,
@@ -1261,7 +1265,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1284,30 +1288,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             GestureDetector(
               onTap: () => widget.onAuthRequired?.call(),
               child: Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.accentBlue.withValues(alpha: 0.15), AppColors.accentPurple.withValues(alpha: 0.1)],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.accentBlue.withValues(alpha: 0.3)),
+                  color: const Color(0xFF4CAF50),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
-                    Icon(Icons.info_outline, color: AppColors.accentBlue),
+                    Icon(Icons.info_outline, color: Colors.white, size: 20),
                     SizedBox(width: 12),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Modalità Demo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                          SizedBox(height: 2),
-                          Text('Registrati per salvare i tuoi dati e sbloccare tutte le funzionalità', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                        ],
+                      child: Text(
+                        'Modalità Demo — Registrati per salvare i dati',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
                       ),
                     ),
-                    Icon(Icons.chevron_right, color: AppColors.accentBlue),
+                    Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
                   ],
                 ),
               ),
@@ -1374,31 +1371,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: _buildChevron(),
                   iconColor: AppColors.accentBlue,
                 ),
-                _buildSettingsRow(
-                  icon: Icons.security,
-                  title: AppLocalizations.of(context)!.twoFactorAuth,
-                  subtitle: AppLocalizations.of(context)!.notAvailable,
-                  onTap: () => _showInfoSheet(
-                    AppLocalizations.of(context)!.twoFactorTitle,
-                    AppLocalizations.of(context)!.twoFactorDescription,
-                  ),
-                  iconColor: AppColors.accentBlue,
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.textMuted.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'N/A',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
+                // 2FA removed per user request
               ],
             ),
           ),
