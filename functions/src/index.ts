@@ -15,6 +15,9 @@ import shipmentsRoutes from "./routes/shipments.routes";
 import notificationsRoutes from "./routes/notifications.routes";
 import statsRoutes from "./routes/stats.routes";
 import profileRoutes from "./routes/profile.routes";
+import ebayRoutes from "./routes/ebay.routes";
+import * as ebayController from "./controllers/ebay.controller";
+import { EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_REDIRECT_URI } from "./config/ebay.config";
 
 // Import docs (for swagger-jsdoc to pick up annotations)
 import "./docs/products.docs";
@@ -88,6 +91,7 @@ app.use("/shipments", shipmentsRoutes);
 app.use("/notifications", notificationsRoutes);
 app.use("/stats", statsRoutes);
 app.use("/profile", profileRoutes);
+app.use("/ebay", ebayRoutes);
 
 // 404 handler
 app.use((_req, res) => {
@@ -98,9 +102,29 @@ app.use((_req, res) => {
 export const api = onRequest(
   {
     region: "europe-west1",
-    secrets: [SHIP24_API_KEY],
+    secrets: [SHIP24_API_KEY, EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_REDIRECT_URI],
   },
   app
+);
+
+// ── eBay Webhook (standalone, no auth) ─
+export const ebayWebhook = onRequest(
+  {
+    region: "europe-west1",
+    secrets: [EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_REDIRECT_URI],
+  },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    await ebayController.handleWebhook(req as any, res as any);
+  }
 );
 
 // ── Ship24 Webhook (standalone, separate secrets) ─

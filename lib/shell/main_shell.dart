@@ -5,10 +5,9 @@ import '../theme/app_theme.dart';
 import '../providers/profile_provider.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/collection_screen.dart';
-import '../screens/inventory_screen.dart';
+import '../screens/marketplace_screen.dart';
 import '../screens/add_item_screen.dart';
 import '../screens/reports_screen.dart';
-import '../screens/settings_screen.dart';
 import '../screens/shipments_screen.dart';
 import '../screens/tracking_detail_screen.dart';
 import '../screens/add_sale_screen.dart';
@@ -31,6 +30,7 @@ import 'widgets/bottom_nav.dart';
 import 'widgets/desktop_top_bar.dart';
 import 'widgets/mobile_top_bar.dart';
 import 'widgets/profile_switcher.dart';
+import 'widgets/settings_drawer.dart';
 import 'widgets/demo_auth_prompt.dart';
 
 class MainShell extends StatefulWidget {
@@ -55,20 +55,16 @@ class _MainShellState extends State<MainShell> {
   // ─── GlobalKeys for interactive coach marks ──────
   final _keyDashboardNav = GlobalKey();
   final _keyCollectionNav = GlobalKey();
-  final _keyInventoryNav = GlobalKey();
+  final _keyMarketplaceNav = GlobalKey();
   final _keyShipmentsNav = GlobalKey();
   // _keyReportsNav removed (reports moved to settings)
-  final _keySettingsNav = GlobalKey();
   final _keyFab = GlobalKey();
   final _keyNotifications = GlobalKey();
   // Desktop sidebar keys
   final _keySidebarDashboard = GlobalKey();
   final _keySidebarCollection = GlobalKey();
-  final _keySidebarInventory = GlobalKey();
+  final _keySidebarMarketplace = GlobalKey();
   final _keySidebarShipments = GlobalKey();
-  // _keySidebarReports removed (reports moved to settings)
-  final _keySidebarSettings = GlobalKey();
-
   @override
   void initState() {
     super.initState();
@@ -158,10 +154,9 @@ class _MainShellState extends State<MainShell> {
     switch (id) {
       case 'dashboard':  return _keyDashboardNav;
       case 'collection': return _keyCollectionNav;
-      case 'inventory':  return _keyInventoryNav;
+      case 'marketplace': return _keyMarketplaceNav;
       case 'shipments':  return _keyShipmentsNav;
       case 'reports':    return GlobalKey(); // legacy fallback
-      case 'settings':   return _keySettingsNav;
       default:           return GlobalKey();
     }
   }
@@ -170,10 +165,9 @@ class _MainShellState extends State<MainShell> {
     switch (id) {
       case 'dashboard':  return _keySidebarDashboard;
       case 'collection': return _keySidebarCollection;
-      case 'inventory':  return _keySidebarInventory;
+      case 'marketplace': return _keySidebarMarketplace;
       case 'shipments':  return _keySidebarShipments;
       case 'reports':    return GlobalKey(); // legacy fallback
-      case 'settings':   return _keySidebarSettings;
       default:           return GlobalKey();
     }
   }
@@ -784,7 +778,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _handleProfileSwitch() {
-    showProfileSwitcher(context, onSwitched: () {
+    showSettingsDrawer(context, onProfileSwitched: () {
       _nav.navigateTo(0);
     });
   }
@@ -831,8 +825,8 @@ class _MainShellState extends State<MainShell> {
         return DashboardScreen(onAuthRequired: widget.onAuthRequired);
       case 'collection':
         return const CollectionScreen();
-      case 'inventory':
-        return InventoryScreen(
+      case 'marketplace':
+        return MarketplaceScreen(
           onEditProduct: _nav.showEditProduct,
           onOpenProduct: _nav.showOpenProduct,
         );
@@ -840,8 +834,6 @@ class _MainShellState extends State<MainShell> {
         return ShipmentsScreen(onTrackShipment: _nav.showTrackingDetail);
       case 'reports':
         return const ReportsScreen();
-      case 'settings':
-        return SettingsScreen(onAuthRequired: widget.onAuthRequired);
       default:
         return DashboardScreen(onAuthRequired: widget.onAuthRequired);
     }

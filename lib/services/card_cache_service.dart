@@ -32,7 +32,7 @@ class CardCacheService {
     request.onupgradeneeded = ((web.IDBVersionChangeEvent event) {
       final db = (event.target as web.IDBOpenDBRequest).result as web.IDBDatabase;
       if (!db.objectStoreNames.contains(_storeName)) {
-        db.createObjectStore(_storeName, web.IDBObjectStoreParameters(keyPath: 'id'.toJS));
+        db.createObjectStore(_storeName, {'keyPath': 'id'}.jsify() as web.IDBObjectStoreParameters);
       }
       if (!db.objectStoreNames.contains(_metaStore)) {
         db.createObjectStore(_metaStore);

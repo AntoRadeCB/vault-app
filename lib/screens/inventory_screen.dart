@@ -8,6 +8,8 @@ import '../providers/profile_provider.dart';
 import '../models/user_profile.dart';
 import '../l10n/app_localizations.dart';
 import 'dart:math' as math;
+import '../services/ebay_service.dart';
+import '../widgets/ebay_listing_dialog.dart';
 
 class InventoryScreen extends StatefulWidget {
   final void Function(Product product)? onEditProduct;
@@ -27,6 +29,7 @@ class _InventoryScreenState extends State<InventoryScreen>
   String _kindFilter = 'all'; // all, singleCard, boosterPack, boosterBox, display
   final FirestoreService _firestoreService = FirestoreService();
   final CardCatalogService _catalogService = CardCatalogService();
+  final EbayService _ebayService = EbayService();
   Map<String, double> _livePrices = {};
 
   @override
@@ -538,6 +541,64 @@ class _InventoryScreenState extends State<InventoryScreen>
     );
   }
 
+  void _showProductActions(Product product) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.edit, color: AppColors.accentBlue),
+              title: const Text('Modifica', style: TextStyle(color: AppColors.textPrimary)),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onEditProduct?.call(product);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.sell, color: AppColors.accentGreen),
+              title: const Text('Vendi su eBay', style: TextStyle(color: AppColors.textPrimary)),
+              subtitle: const Text('Crea inserzione eBay', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                showDialog(
+                  context: context,
+                  builder: (_) => EbayListingDialog(
+                    product: product,
+                    ebayService: _ebayService,
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: AppColors.accentRed),
+              title: const Text('Elimina', style: TextStyle(color: AppColors.accentRed)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmDelete(product);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildProductList(List<Product> products) {
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
@@ -567,6 +628,7 @@ class _InventoryScreenState extends State<InventoryScreen>
               },
               child: GestureDetector(
                 onTap: () => widget.onEditProduct?.call(products[index]),
+                onLongPress: () => _showProductActions(products[index]),
                 child: HoverLiftCard(
                   liftAmount: 3,
                   child: _buildProductCard(products[index]),

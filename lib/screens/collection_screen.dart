@@ -706,7 +706,7 @@ class _CardGridViewState extends State<_CardGridView> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✅ ${_selectedCardIds.length} carte spostate in inventario'),
+          content: Text('✅ ${_selectedCardIds.length} carte spostate in Marketplace'),
           backgroundColor: AppColors.accentGreen,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -794,7 +794,7 @@ class _CardGridViewState extends State<_CardGridView> {
                         children: [
                           Icon(Icons.inventory_2, color: Colors.white, size: 16),
                           SizedBox(width: 6),
-                          Text('Inventario', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                          Text('Marketplace', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -1619,7 +1619,7 @@ class _CardDetailOverlayState extends State<_CardDetailOverlay> {
     if (maxMove <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Tutte le copie sono già in inventario'),
+          content: const Text('Tutte le copie sono già in Marketplace'),
           backgroundColor: AppColors.accentOrange,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1651,7 +1651,7 @@ class _CardDetailOverlayState extends State<_CardDetailOverlay> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('Sposta in inventario', 
+              const Text('Sposta in Marketplace', 
                   style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text('Max: ${maxMove.toInt()} copie disponibili', 
@@ -1974,7 +1974,7 @@ class _CardDetailOverlayState extends State<_CardDetailOverlay> {
                             color: hasProduct && qty > 0 ? AppColors.accentBlue : AppColors.textMuted,
                             size: 16),
                         const SizedBox(width: 6),
-                        Text('Inventario',
+                        Text('Marketplace',
                             style: TextStyle(
                               color: hasProduct && qty > 0 ? AppColors.accentBlue : AppColors.textMuted,
                               fontSize: 13,

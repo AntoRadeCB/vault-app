@@ -29,19 +29,14 @@ const List<TabDef> allTabDefs = <TabDef>[
     selectedIcon: Icons.collections_bookmark,
   ),
   TabDef(
-    id: 'inventory',
-    icon: Icons.inventory_2_outlined,
-    selectedIcon: Icons.inventory_2,
+    id: 'marketplace',
+    icon: Icons.storefront_outlined,
+    selectedIcon: Icons.storefront,
   ),
   TabDef(
     id: 'shipments',
     icon: Icons.local_shipping_outlined,
     selectedIcon: Icons.local_shipping,
-  ),
-  TabDef(
-    id: 'settings',
-    icon: Icons.settings_outlined,
-    selectedIcon: Icons.settings,
   ),
 ];
 
@@ -58,14 +53,10 @@ class CoachStepsBuilder {
         return l.home;
       case 'collection':
         return 'Collezione';
-      case 'inventory':
-        return l.inventory;
+      case 'marketplace':
+        return 'Marketplace';
       case 'shipments':
         return l.shipments;
-      case 'reports':
-        return l.reports;
-      case 'settings':
-        return l.settings;
       default:
         return id;
     }
@@ -78,14 +69,10 @@ class CoachStepsBuilder {
         return AppColors.accentBlue;
       case 'collection':
         return const Color(0xFF667eea);
-      case 'inventory':
-        return AppColors.accentPurple;
+      case 'marketplace':
+        return AppColors.accentGreen;
       case 'shipments':
         return AppColors.accentTeal;
-      case 'reports':
-        return AppColors.accentOrange;
-      case 'settings':
-        return AppColors.textMuted;
       default:
         return AppColors.accentBlue;
     }
@@ -100,18 +87,12 @@ class CoachStepsBuilder {
       case 'collection':
         return 'Sfoglia la tua collezione come un raccoglitore di carte. '
             'Vedi il progresso per ogni espansione e il valore delle tue carte.';
-      case 'inventory':
-        return 'Tutta la tua collezione in un posto. Carte singole, buste sigillate, '
-            'box e display. Apri le buste e registra le pulls!';
+      case 'marketplace':
+        return 'Vendi le tue carte su eBay e Cardmarket. '
+            'Gestisci inventario di vendita, inserzioni, ordini e spedizioni.';
       case 'shipments':
         return 'Traccia ogni pacco automaticamente. Inserisci il tracking '
             'e CardVault monitora corriere, stato e notifiche.';
-      case 'reports':
-        return 'Grafici e statistiche su valore della collezione, vendite e profitti. '
-            'Filtra per periodo e analizza il tuo portfolio.';
-      case 'settings':
-        return 'Cambia profilo, lingua, gestisci il tuo account e '
-            "personalizza l'app come preferisci.";
       default:
         return '';
     }
@@ -146,7 +127,7 @@ class CoachStepsBuilder {
       ));
 
       // Insert FAB + Notifications steps after inventory in mobile
-      if (!isWide && tab.id == 'inventory') {
+      if (!isWide && tab.id == 'marketplace') {
         steps.add(CoachStep(
           id: 'fab',
           targetKey: fabKey,

@@ -141,8 +141,11 @@ class UserProfile {
   /// Merge any new tabs from [_allTabs] into a saved list, preserving order.
   static List<String> _mergeNewTabs(List<String> saved) {
     final result = List<String>.from(saved);
-    // Migration: remove 'reports' from saved lists (moved to settings)
+    // Migration: remove legacy tabs
     result.remove('reports');
+    result.remove('inventory');
+    result.remove('ebay');
+    result.remove('settings');
     for (var i = 0; i < _allTabs.length; i++) {
       if (!result.contains(_allTabs[i])) {
         // Insert at the canonical position (or end if beyond length)
@@ -157,9 +160,8 @@ class UserProfile {
   static const List<String> _allTabs = [
     'dashboard',
     'collection',
-    'inventory',
+    'marketplace',
     'shipments',
-    'settings',
   ];
 
   // ═══════════════════════════════════════════════════
