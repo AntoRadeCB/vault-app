@@ -29,27 +29,34 @@ class MobileTopBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          // Profile icon (tappable to switch)
+          // Profile + menu icon (tappable to open settings drawer)
           GestureDetector(
             onTap: onProfileSwitch,
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                gradient: profile != null
-                    ? LinearGradient(
-                        colors: [
-                          profile!.color,
-                          profile!.color.withValues(alpha: 0.6),
-                        ],
-                      )
-                    : AppColors.headerGradient,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                profile?.icon ?? Icons.view_in_ar,
-                color: Colors.white,
-                size: 18,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.menu, color: AppColors.textMuted, size: 20),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    gradient: profile != null
+                        ? LinearGradient(
+                            colors: [
+                              profile!.color,
+                              profile!.color.withValues(alpha: 0.6),
+                            ],
+                          )
+                        : AppColors.headerGradient,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    profile?.icon ?? Icons.view_in_ar,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 10),

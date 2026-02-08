@@ -291,7 +291,9 @@ class _SettingsDrawerOverlayState extends State<_SettingsDrawerOverlay> {
 
     return Align(
       alignment: Alignment.centerLeft,
-      child: ClipRRect(
+      child: Material(
+        color: Colors.transparent,
+        child: ClipRRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
@@ -575,6 +577,7 @@ class _SettingsDrawerOverlayState extends State<_SettingsDrawerOverlay> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
