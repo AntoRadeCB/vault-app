@@ -42,6 +42,12 @@ class AppColors {
     end: Alignment.centerRight,
   );
 
+  static const LinearGradient greenButtonGradient = LinearGradient(
+    colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+  );
+
   static const LinearGradient auroraGradient = LinearGradient(
     colors: [
       Color(0x00667eea),

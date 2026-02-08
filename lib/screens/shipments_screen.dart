@@ -321,26 +321,36 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
     final l = AppLocalizations.of(context)!;
     if (shipments.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.local_shipping_outlined,
-                color: AppColors.textMuted.withValues(alpha: 0.5), size: 64),
-            const SizedBox(height: 16),
-            Text(
-              l.noShipments,
-              style: const TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l.addTrackingWhenRegistering,
-              style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.accentBlue.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.local_shipping_outlined,
+                    color: AppColors.accentBlue.withValues(alpha: 0.5), size: 48),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                l.noShipments,
+                style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l.addTrackingWhenRegistering,
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       );
     }

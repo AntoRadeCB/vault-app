@@ -79,7 +79,16 @@ class _CollectionScreenState extends State<CollectionScreen> {
     if (_catalogLoading) {
       return const Scaffold(
         backgroundColor: AppColors.background,
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: AppColors.accentBlue, strokeWidth: 2.5),
+              SizedBox(height: 16),
+              Text('Caricamento catalogo...', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            ],
+          ),
+        ),
       );
     }
 

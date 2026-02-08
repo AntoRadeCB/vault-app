@@ -745,26 +745,37 @@ class _InventarioTabState extends State<_InventarioTab>
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.storefront_outlined,
-              color: AppColors.textMuted.withValues(alpha: 0.5), size: 64),
-          const SizedBox(height: 16),
-          const Text(
-            'Nessun prodotto in vendita',
-            style: TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.accentGreen.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.storefront_outlined,
+                  color: AppColors.accentGreen.withValues(alpha: 0.5), size: 48),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Sposta le carte dalla collezione al marketplace',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 14),
-          ),
-        ],
+            const SizedBox(height: 20),
+            const Text(
+              'Nessun prodotto in vendita',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Sposta le carte dalla collezione al marketplace\nper iniziare a vendere',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.4),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
