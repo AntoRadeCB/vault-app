@@ -450,8 +450,9 @@ class _GameExpansionViewState extends State<_GameExpansionView>
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
+        toolbarHeight: 40,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 20),
           onPressed: () {
             if (_altroSelectedExpansion != null) {
               setState(() => _altroSelectedExpansion = null);
@@ -460,33 +461,39 @@ class _GameExpansionViewState extends State<_GameExpansionView>
             }
           },
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        titleSpacing: 0,
+        title: Row(
           children: [
-            Text(_meta.label, style: TextStyle(color: _meta.color, fontWeight: FontWeight.bold, fontSize: 18)),
+            Text(_meta.label, style: TextStyle(color: _meta.color, fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(width: 8),
             Text(
-              '$uniqueOwned / ${gameCatalog.length} carte  •  €${totalValue.toStringAsFixed(2)}',
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+              '$uniqueOwned/${gameCatalog.length}',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '€${totalValue.toStringAsFixed(2)}',
+              style: TextStyle(color: _meta.color.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ],
         ),
-        actions: const [],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(46),
+          preferredSize: const Size.fromHeight(38),
           child: TabBar(
             controller: _tabController,
             isScrollable: true,
             indicatorColor: _meta.color,
-            indicatorWeight: 3,
+            indicatorWeight: 2.5,
             labelColor: _meta.color,
             unselectedLabelColor: AppColors.textMuted,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 12),
             tabAlignment: TabAlignment.start,
             tabs: [
               for (final exp in _bigExpansions)
-                Tab(text: exp.name),
+                Tab(text: exp.name, height: 32),
               if (_smallExpansions.isNotEmpty)
-                const Tab(text: 'Altro'),
+                const Tab(text: 'Altro', height: 32),
             ],
           ),
         ),
@@ -797,54 +804,94 @@ class _CardGridViewState extends State<_CardGridView> {
           ),
         // Header with progress
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
           child: Column(
             children: [
               Row(
                 children: [
-                  // Progress info
+                  // Progress circle + count
                   Expanded(
                     child: Row(
                       children: [
-                        Text('$owned',
-                            style: TextStyle(color: widget.meta.color, fontWeight: FontWeight.bold, fontSize: 18)),
-                        Text(' / ${sorted.length}',
-                            style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w500, fontSize: 14)),
+                        // Mini progress ring
+                        SizedBox(
+                          width: 36, height: 36,
+                          child: Stack(
+                            children: [
+                              CircularProgressIndicator(
+                                value: progress,
+                                strokeWidth: 3,
+                                backgroundColor: widget.meta.color.withValues(alpha: 0.12),
+                                valueColor: AlwaysStoppedAnimation(widget.meta.color),
+                              ),
+                              Center(
+                                child: Text(
+                                  '${(progress * 100).toInt()}%',
+                                  style: TextStyle(
+                                    color: widget.meta.color,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: widget.meta.color.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '€${totalValue.toStringAsFixed(2)}',
-                            style: TextStyle(color: widget.meta.color, fontSize: 12, fontWeight: FontWeight.w600),
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text('$owned',
+                                    style: TextStyle(color: widget.meta.color, fontWeight: FontWeight.bold, fontSize: 20)),
+                                Text(' / ${sorted.length}',
+                                    style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w500, fontSize: 14)),
+                              ],
+                            ),
+                            if (totalValue > 0)
+                              Container(
+                                margin: const EdgeInsets.only(top: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      widget.meta.color.withValues(alpha: 0.15),
+                                      widget.meta.color.withValues(alpha: 0.05),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '€${totalValue.toStringAsFixed(2)}',
+                                  style: TextStyle(color: widget.meta.color, fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  // Select button (nicer design)
+                  // Select button
                   if (!_selectionMode)
                     GestureDetector(
                       onTap: () => setState(() => _selectionMode = true),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
                               widget.meta.color.withValues(alpha: 0.15),
-                              widget.meta.color.withValues(alpha: 0.08),
+                              widget.meta.color.withValues(alpha: 0.05),
                             ],
                           ),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: widget.meta.color.withValues(alpha: 0.3)),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: widget.meta.color.withValues(alpha: 0.25)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.check_circle_outline, color: widget.meta.color, size: 15),
+                            Icon(Icons.check_circle_outline, color: widget.meta.color, size: 16),
                             const SizedBox(width: 5),
                             Text('Seleziona', style: TextStyle(color: widget.meta.color, fontSize: 12, fontWeight: FontWeight.w600)),
                           ],
@@ -853,25 +900,17 @@ class _CardGridViewState extends State<_CardGridView> {
                     ),
                 ],
               ),
-              const SizedBox(height: 6),
-              // Subtle progress bar
-              ClipRRect(
-                borderRadius: BorderRadius.circular(3),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: widget.meta.color.withValues(alpha: 0.1),
-                  valueColor: AlwaysStoppedAnimation(widget.meta.color.withValues(alpha: 0.6)),
-                  minHeight: 3,
-                ),
-              ),
-              const SizedBox(height: 6),
-              // Rarity chips — tappable toggles
+              const SizedBox(height: 10),
+              // Rarity chips — matching card rarity colors exactly
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: rarityCount.entries.map((e) {
                     final ownedR = rarityOwned[e.key] ?? 0;
                     final isSelected = _selectedRarities.contains(e.key);
+                    // Get the exact rarityColor from a card with this rarity
+                    final sampleCard = sorted.where((c) => (c.rarity ?? 'unknown') == e.key).firstOrNull;
+                    final rarityCol = sampleCard?.rarityColor ?? const Color(0xFF9E9E9E);
                     return Padding(
                       padding: const EdgeInsets.only(right: 6),
                       child: GestureDetector(
@@ -886,25 +925,48 @@ class _CardGridViewState extends State<_CardGridView> {
                         },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? widget.meta.color.withValues(alpha: 0.2)
+                                ? rarityCol.withValues(alpha: 0.2)
                                 : AppColors.surface,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: isSelected
-                                  ? widget.meta.color.withValues(alpha: 0.5)
+                                  ? rarityCol.withValues(alpha: 0.5)
                                   : Colors.white.withValues(alpha: 0.08),
                             ),
                           ),
-                          child: Text(
-                            '${e.key}: $ownedR/${e.value}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isSelected ? widget.meta.color : AppColors.textSecondary,
-                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8, height: 8,
+                                decoration: BoxDecoration(
+                                  color: rarityCol,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [BoxShadow(color: rarityCol.withValues(alpha: 0.5), blurRadius: 3)],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${e.key}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isSelected ? rarityCol : AppColors.textSecondary,
+                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$ownedR/${e.value}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isSelected ? rarityCol.withValues(alpha: 0.7) : AppColors.textMuted,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -918,12 +980,12 @@ class _CardGridViewState extends State<_CardGridView> {
         // Card grid
         Expanded(
           child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 80),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 80),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
               childAspectRatio: 0.68,
-              mainAxisSpacing: 6,
-              crossAxisSpacing: 6,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
             ),
             itemCount: filtered.length,
             itemBuilder: (ctx, i) {
@@ -1095,6 +1157,61 @@ class _CardSlot extends StatelessWidget {
     }
   }
 
+  // Quick remove: decrement quantity or remove card
+  Future<void> _quickRemove(BuildContext context) async {
+    if (!isOwned || product == null) return;
+    
+    if (FirestoreService.demoMode) {
+      final idx = DemoDataService.products.indexWhere((p) => p.id == product!.id);
+      if (idx >= 0) {
+        if (product!.quantity <= 1) {
+          DemoDataService.products.removeAt(idx);
+        } else {
+          DemoDataService.products[idx] = DemoDataService.products[idx].copyWith(
+            quantity: product!.quantity - 1,
+          );
+        }
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('-1 ${card.name}'),
+            backgroundColor: AppColors.accentRed,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(milliseconds: 800),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+      return;
+    }
+    
+    final newQty = product!.quantity - 1;
+    if (newQty <= 0) {
+      if (product!.id != null) await fs.deleteProduct(product!.id!);
+    } else {
+      final newInv = product!.inventoryQty > newQty ? newQty : product!.inventoryQty;
+      await fs.updateProduct(product!.id!, {
+        'quantity': newQty,
+        'inventoryQty': newInv,
+      });
+    }
+    
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('-1 ${card.name}'),
+          backgroundColor: AppColors.accentRed,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 800),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final priceStr = card.marketPrice != null
@@ -1122,23 +1239,26 @@ class _CardSlot extends StatelessWidget {
 
     return GestureDetector(
       onTap: selectionMode ? onSelectionToggle : () => _openCardDetail(context),
-      onLongPress: selectionMode ? null : () => _quickAdd(context),
+      onLongPress: selectionMode ? null : () => _quickRemove(context),
       onDoubleTap: selectionMode ? null : () => _quickAdd(context),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           color: AppColors.surface,
           border: Border.all(
             color: isSelected 
                 ? AppColors.accentBlue
                 : isOwned 
-                    ? meta.color.withValues(alpha: 0.3) 
-                    : Colors.white.withValues(alpha: 0.05),
+                    ? meta.color.withValues(alpha: 0.4) 
+                    : Colors.white.withValues(alpha: 0.04),
             width: isSelected ? 2.5 : (isOwned ? 1.5 : 0.5),
           ),
           boxShadow: isSelected
-              ? [BoxShadow(color: AppColors.accentBlue.withValues(alpha: 0.3), blurRadius: 8)]
-              : null,
+              ? [BoxShadow(color: AppColors.accentBlue.withValues(alpha: 0.4), blurRadius: 12)]
+              : isOwned
+                  ? [BoxShadow(color: meta.color.withValues(alpha: 0.15), blurRadius: 8, spreadRadius: 1)]
+                  : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
@@ -1147,29 +1267,37 @@ class _CardSlot extends StatelessWidget {
             // Card image
             imageWidget,
 
-            // Rarity dot (top-left)
-            if (card.rarity != null)
+            // Subtle gradient overlay at bottom for owned cards (better readability)
+            if (isOwned)
               Positioned(
-                top: 4, left: 4,
+                bottom: 0, left: 0, right: 0,
                 child: Container(
-                  width: 8, height: 8,
+                  height: 28,
                   decoration: BoxDecoration(
-                    color: card.rarityColor,
-                    shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: card.rarityColor.withValues(alpha: 0.6), blurRadius: 4)],
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.5),
+                      ],
+                    ),
                   ),
                 ),
               ),
 
-            // Count badge (top-right) — only if owned and qty > 1
+            // Count badge (top-right) — styled with gradient
             if (isOwned && product!.quantity > 1)
               Positioned(
-                top: 3, right: 3,
+                top: 4, right: 4,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: meta.color,
-                    borderRadius: BorderRadius.circular(8),
+                    gradient: LinearGradient(
+                      colors: [meta.color, meta.color.withValues(alpha: 0.8)],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [BoxShadow(color: meta.color.withValues(alpha: 0.4), blurRadius: 6)],
                   ),
                   child: Text(
                     'x${product!.quantity.toInt()}',
@@ -1178,37 +1306,44 @@ class _CardSlot extends StatelessWidget {
                 ),
               ),
 
-            // Inventory badge (below count badge) — if inventoryQty > 0
+            // Inventory badge — pill style with icon
             if (isOwned && product!.inventoryQty > 0)
               Positioned(
-                top: product!.quantity > 1 ? 20 : 3, right: 3,
+                top: product!.quantity > 1 ? 24 : 4, right: 4,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppColors.accentOrange.withValues(alpha: 0.5), width: 0.5),
+                    color: Colors.black.withValues(alpha: 0.75),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.accentOrange.withValues(alpha: 0.6), width: 0.8),
                   ),
-                  child: Text(
-                    '📦 ${product!.inventoryQty.toInt()}',
-                    style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.inventory_2, color: AppColors.accentOrange, size: 8),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${product!.inventoryQty.toInt()}',
+                        style: const TextStyle(color: AppColors.accentOrange, fontSize: 8, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-            // Price (bottom)
-            if (priceStr != null)
+            // Price badge (bottom-right) — cleaner
+            if (priceStr != null && isOwned)
               Positioned(
-                bottom: 2, right: 4,
+                bottom: 3, right: 4,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(4),
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     priceStr,
-                    style: const TextStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.w500),
+                    style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -1216,16 +1351,16 @@ class _CardSlot extends StatelessWidget {
             // Collector number (bottom-left) for missing cards
             if (!isOwned)
               Positioned(
-                bottom: 2, left: 4,
+                bottom: 3, left: 4,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    card.collectorNumber ?? '',
-                    style: const TextStyle(color: Colors.white54, fontSize: 8),
+                    '#${card.collectorNumber ?? '?'}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 8, fontWeight: FontWeight.w500),
                   ),
                 ),
               ),
@@ -1235,21 +1370,24 @@ class _CardSlot extends StatelessWidget {
               Positioned(
                 top: 4, left: 4,
                 child: Container(
-                  width: 22, height: 22,
+                  width: 24, height: 24,
                   decoration: BoxDecoration(
                     color: isSelected 
                         ? AppColors.accentBlue 
                         : Colors.black.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: isSelected 
                           ? AppColors.accentBlue 
                           : Colors.white.withValues(alpha: 0.4),
                       width: 1.5,
                     ),
+                    boxShadow: isSelected
+                        ? [BoxShadow(color: AppColors.accentBlue.withValues(alpha: 0.4), blurRadius: 6)]
+                        : null,
                   ),
                   child: isSelected
-                      ? const Icon(Icons.check, color: Colors.white, size: 14)
+                      ? const Icon(Icons.check, color: Colors.white, size: 16)
                       : null,
                 ),
               ),
@@ -1335,6 +1473,8 @@ class _CardDetailOverlay extends StatefulWidget {
 class _CardDetailOverlayState extends State<_CardDetailOverlay> {
   late int _currentIndex;
   late PageController _pageController;
+  bool _actionInProgress = false;
+  DateTime _lastActionTime = DateTime(2000);
   
   // Local product map that updates in demo mode
   late Map<String, Product> _liveProductMap;
@@ -1365,6 +1505,18 @@ class _CardDetailOverlayState extends State<_CardDetailOverlay> {
   CardBlueprint get _currentCard => widget.cards[_currentIndex];
 
   Future<void> _addCard(Product? currentProduct) async {
+    final now = DateTime.now();
+    if (_actionInProgress || now.difference(_lastActionTime).inMilliseconds < 400) return;
+    _actionInProgress = true;
+    _lastActionTime = now;
+    try {
+    await _addCardInner(currentProduct);
+    } finally {
+      _actionInProgress = false;
+    }
+  }
+
+  Future<void> _addCardInner(Product? currentProduct) async {
     final card = _currentCard;
     
     if (FirestoreService.demoMode) {
@@ -1418,6 +1570,19 @@ class _CardDetailOverlayState extends State<_CardDetailOverlay> {
   }
 
   Future<void> _removeCard(Product? currentProduct) async {
+    final now = DateTime.now();
+    if (_actionInProgress || now.difference(_lastActionTime).inMilliseconds < 400) return;
+    if (currentProduct == null) return;
+    _actionInProgress = true;
+    _lastActionTime = now;
+    try {
+    await _removeCardInner(currentProduct);
+    } finally {
+      _actionInProgress = false;
+    }
+  }
+
+  Future<void> _removeCardInner(Product? currentProduct) async {
     if (currentProduct == null) return;
     final card = _currentCard;
 
@@ -1692,73 +1857,70 @@ class _CardDetailOverlayState extends State<_CardDetailOverlay> {
               ),
             ),
           
-          // Bottom action bar
+          // Bottom action bar — compact pill style
           Positioned(
             left: 0, right: 0,
             bottom: MediaQuery.of(context).padding.bottom + 16,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.95),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: widget.meta.color.withValues(alpha: 0.3)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Quantity row
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(40),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 16,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Quantity controls
-                  Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       // Remove button
                       GestureDetector(
                         onTap: hasProduct ? () => _removeCard(currentProduct) : null,
                         child: Container(
-                          width: 52, height: 52,
+                          width: 44, height: 44,
                           decoration: BoxDecoration(
                             color: hasProduct 
                                 ? AppColors.accentRed.withValues(alpha: 0.15)
-                                : Colors.white.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: hasProduct 
-                                  ? AppColors.accentRed.withValues(alpha: 0.3)
-                                  : Colors.white.withValues(alpha: 0.1),
-                            ),
+                                : Colors.white.withValues(alpha: 0.04),
+                            shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            Icons.remove,
+                            Icons.remove_rounded,
                             color: hasProduct ? AppColors.accentRed : AppColors.textMuted,
-                            size: 26,
+                            size: 22,
                           ),
                         ),
                       ),
                       
                       // Quantity display
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                      Container(
+                        width: 70,
+                        alignment: Alignment.center,
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               '${qty.toInt()}',
                               style: TextStyle(
-                                color: hasProduct ? widget.meta.color : AppColors.textMuted,
-                                fontSize: 36,
+                                color: hasProduct ? Colors.white : AppColors.textMuted,
+                                fontSize: 28,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             if (hasProduct && invQty > 0)
                               Text(
-                                '📦 ${invQty.toInt()} in inventario',
-                                style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                '📦 ${invQty.toInt()}',
+                                style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
                               ),
                           ],
                         ),
@@ -1768,50 +1930,61 @@ class _CardDetailOverlayState extends State<_CardDetailOverlay> {
                       GestureDetector(
                         onTap: () => _addCard(currentProduct),
                         child: Container(
-                          width: 52, height: 52,
+                          width: 44, height: 44,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                widget.meta.color.withValues(alpha: 0.2),
-                                widget.meta.color.withValues(alpha: 0.1),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: widget.meta.color.withValues(alpha: 0.4)),
+                            color: widget.meta.color.withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
                           ),
-                          child: Icon(Icons.add, color: widget.meta.color, size: 26),
+                          child: Icon(Icons.add_rounded, color: widget.meta.color, size: 22),
                         ),
                       ),
                     ],
                   ),
-                  
-                  // Move to inventory button (only if owned)
-                  if (hasProduct && qty > 0) ...[
-                    const SizedBox(height: 14),
-                    GestureDetector(
-                      onTap: () => _showMoveToInventory(currentProduct),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: AppColors.accentBlue.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.accentBlue.withValues(alpha: 0.25)),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.inventory_2_outlined, color: AppColors.accentBlue, size: 18),
-                            SizedBox(width: 8),
-                            Text('Sposta in inventario',
-                                style: TextStyle(color: AppColors.accentBlue, fontSize: 14, fontWeight: FontWeight.w600)),
-                          ],
-                        ),
+                ),
+                
+                const SizedBox(height: 10),
+                
+                // Move to inventory — small pill
+                GestureDetector(
+                  onTap: hasProduct && qty > 0 ? () => _showMoveToInventory(currentProduct!) : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: hasProduct && qty > 0
+                          ? AppColors.surface.withValues(alpha: 0.9)
+                          : AppColors.surface.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: hasProduct && qty > 0
+                            ? AppColors.accentBlue.withValues(alpha: 0.3)
+                            : Colors.white.withValues(alpha: 0.05),
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 10,
+                        ),
+                      ],
                     ),
-                  ],
-                ],
-              ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.inventory_2_outlined,
+                            color: hasProduct && qty > 0 ? AppColors.accentBlue : AppColors.textMuted,
+                            size: 16),
+                        const SizedBox(width: 6),
+                        Text('Inventario',
+                            style: TextStyle(
+                              color: hasProduct && qty > 0 ? AppColors.accentBlue : AppColors.textMuted,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            )),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

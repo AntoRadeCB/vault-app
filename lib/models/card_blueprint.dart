@@ -147,6 +147,7 @@ class CardBlueprint {
       if (rarity != null) 'rarity': rarity,
       if (imageUrl != null) 'imageUrl': imageUrl,
       if (backImageUrl != null) 'backImageUrl': backImageUrl,
+      if (marketPrice != null) 'marketPrice': marketPrice!.toMap(),
       if (kind != null) 'kind': kind,
       if (categoryId != null) 'categoryId': categoryId,
       if (categoryName != null) 'categoryName': categoryName,
@@ -172,14 +173,29 @@ class MarketPrice {
   });
 
   factory MarketPrice.fromMap(Map<String, dynamic> map) {
+    DateTime? parsedDate;
+    final rawDate = map['updatedAt'];
+    if (rawDate is Timestamp) {
+      parsedDate = rawDate.toDate();
+    } else if (rawDate is String) {
+      parsedDate = DateTime.tryParse(rawDate);
+    }
     return MarketPrice(
       cents: map['cents'] ?? 0,
       currency: map['currency'] ?? 'EUR',
       formatted: map['formatted'],
       sellersCount: map['sellersCount'],
-      updatedAt: map['updatedAt'] != null
-          ? (map['updatedAt'] as Timestamp).toDate()
-          : null,
+      updatedAt: parsedDate,
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'cents': cents,
+      'currency': currency,
+      if (formatted != null) 'formatted': formatted,
+      if (sellersCount != null) 'sellersCount': sellersCount,
+      if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+    };
   }
 }

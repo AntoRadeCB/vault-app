@@ -288,7 +288,7 @@ class _InventoryScreenState extends State<InventoryScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: StaggeredFadeSlide(
                 index: 0,
                 child: Row(
@@ -297,9 +297,8 @@ class _InventoryScreenState extends State<InventoryScreen>
                       l.inventory,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 26,
+                        fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: -0.3,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -330,7 +329,7 @@ class _InventoryScreenState extends State<InventoryScreen>
             const SizedBox(height: 12),
             // ─── Kind filter chips ───
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: StaggeredFadeSlide(
                 index: 0,
                 child: SingleChildScrollView(
@@ -354,7 +353,7 @@ class _InventoryScreenState extends State<InventoryScreen>
             ),
             const SizedBox(height: 12),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: StaggeredFadeSlide(
                 index: 1,
                 child: Container(
@@ -393,7 +392,7 @@ class _InventoryScreenState extends State<InventoryScreen>
             ),
             const SizedBox(height: 16),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: StaggeredFadeSlide(
                 index: 2,
                 child: Focus(
@@ -542,7 +541,7 @@ class _InventoryScreenState extends State<InventoryScreen>
   Widget _buildProductList(List<Product> products) {
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: products.length,
       itemBuilder: (context, index) {
         return StaggeredFadeSlide(
@@ -593,7 +592,7 @@ class _InventoryScreenState extends State<InventoryScreen>
 
     return ListView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       children: [
         StaggeredFadeSlide(
           index: 0,

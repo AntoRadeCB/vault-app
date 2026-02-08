@@ -201,7 +201,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: StaggeredFadeSlide(
             index: 0,
             child: Row(
@@ -210,9 +210,8 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
                   l.shipments,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 26,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: -0.3,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -249,7 +248,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
         ),
         const SizedBox(height: 16),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: StaggeredFadeSlide(
             index: 1,
             child: Container(
@@ -348,7 +347,7 @@ class _ShipmentsScreenState extends State<ShipmentsScreen>
 
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: shipments.length,
       itemBuilder: (context, index) {
         return StaggeredFadeSlide(
