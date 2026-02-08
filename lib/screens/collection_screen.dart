@@ -941,6 +941,10 @@ class _CardGridViewState extends State<_CardGridView> {
                 fs: widget.fs,
                 selectionMode: _selectionMode,
                 isSelected: isSelected,
+                // For card detail navigation
+                allCards: filtered,
+                cardIndex: i,
+                productMap: widget.productMap,
                 onSelectionToggle: _selectionMode && isOwned
                     ? () {
                         setState(() {
@@ -974,6 +978,10 @@ class _CardSlot extends StatelessWidget {
   final bool selectionMode;
   final bool isSelected;
   final VoidCallback? onSelectionToggle;
+  // For card detail navigation
+  final List<CardBlueprint> allCards;
+  final int cardIndex;
+  final Map<String, Product> productMap;
 
   const _CardSlot({
     required this.card,
@@ -985,11 +993,36 @@ class _CardSlot extends StatelessWidget {
     this.selectionMode = false,
     this.isSelected = false,
     this.onSelectionToggle,
+    required this.allCards,
+    required this.cardIndex,
+    required this.productMap,
   });
 
-  Future<void> _onTap() async {
+  // Open card detail overlay
+  void _openCardDetail(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => _CardDetailOverlay(
+        cards: allCards,
+        initialIndex: cardIndex,
+        productMap: productMap,
+        meta: meta,
+        game: game,
+        fs: fs,
+      ),
+    );
+  }
+
+  // Quick add: increment quantity or add new card
+  Future<void> _quickAdd(BuildContext context) async {
+    // Haptic feedback
+    try {
+      // ignore: avoid_dynamic_calls
+      // Vibration not available in web, just skip
+    } catch (_) {}
+    
     if (FirestoreService.demoMode) {
-      // In demo mode, update local list instead of Firestore
       if (isOwned && product != null) {
         final idx = DemoDataService.products.indexWhere((p) => p.id == product!.id);
         if (idx >= 0) {
@@ -1014,14 +1047,24 @@ class _CardSlot extends StatelessWidget {
           marketPrice: card.marketPrice != null ? card.marketPrice!.cents / 100 : null,
         ));
       }
+      // Show feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('+1 ${card.name}'),
+          backgroundColor: meta.color,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 800),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
       return;
     }
+    
     if (isOwned && product != null) {
-      // Increment
       final newQty = product!.quantity + 1;
       await fs.updateProduct(product!.id!, {'quantity': newQty});
     } else {
-      // Add new
       await fs.addProduct(Product(
         name: card.name,
         brand: game.toUpperCase(),
@@ -1036,175 +1079,20 @@ class _CardSlot extends StatelessWidget {
         marketPrice: card.marketPrice != null ? card.marketPrice!.cents / 100 : null,
       ));
     }
-  }
-
-  void _onLongPress(BuildContext context) {
-    if (!isOwned || product == null) return;
-    _showCardOptionsSheet(context);
-  }
-
-  void _showCardOptionsSheet(BuildContext context) {
-    final p = product!;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    
+    // Show feedback
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('+1 ${card.name}'),
+          backgroundColor: meta.color,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 800),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
         ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(p.name, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text('Quantità: ${p.quantity.toInt()} • Inventario: ${p.inventoryQty.toInt()}',
-                style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
-            const SizedBox(height: 20),
-            // Move to inventory
-            _OptionTile(
-              icon: Icons.inventory_2_outlined,
-              label: 'Sposta in inventario',
-              color: AppColors.accentBlue,
-              onTap: () {
-                Navigator.pop(ctx);
-                _showMoveToInventorySheet(context, p);
-              },
-            ),
-            const SizedBox(height: 8),
-            // Remove from collection
-            _OptionTile(
-              icon: Icons.remove_circle_outline,
-              label: 'Rimuovi dalla collezione',
-              color: AppColors.accentRed,
-              onTap: () async {
-                Navigator.pop(ctx);
-                final newQty = p.quantity - 1;
-                if (newQty <= 0) {
-                  if (p.id != null) await fs.deleteProduct(p.id!);
-                } else {
-                  final newInv = p.inventoryQty > newQty ? newQty : p.inventoryQty;
-                  await fs.updateProduct(p.id!, {
-                    'quantity': newQty,
-                    'inventoryQty': newInv,
-                  });
-                }
-              },
-            ),
-            // Remove from inventory (only if inventoryQty > 0)
-            if (p.inventoryQty > 0) ...[
-              const SizedBox(height: 8),
-              _OptionTile(
-                icon: Icons.outbox_outlined,
-                label: 'Rimuovi da inventario',
-                color: AppColors.accentOrange,
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final newInv = (p.inventoryQty - 1).clamp(0.0, p.quantity);
-                  await fs.updateProduct(p.id!, {'inventoryQty': newInv});
-                },
-              ),
-            ],
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showMoveToInventorySheet(BuildContext context, Product p) {
-    final maxMove = (p.quantity - p.inventoryQty).clamp(0.0, p.quantity);
-    if (maxMove <= 0) return;
-    int moveCount = 1;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text('Sposta in inventario', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text('Max: ${maxMove.toInt()} copie disponibili', style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  GestureDetector(
-                    onTap: () { if (moveCount > 1) setSheetState(() => moveCount--); },
-                    child: Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(Icons.remove, color: AppColors.textSecondary),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Text('$moveCount', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                  ),
-                  GestureDetector(
-                    onTap: () { if (moveCount < maxMove.toInt()) setSheetState(() => moveCount++); },
-                    child: Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(color: AppColors.accentBlue.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(Icons.add, color: AppColors.accentBlue),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              GestureDetector(
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final newInv = (p.inventoryQty + moveCount).clamp(0.0, p.quantity);
-                  await fs.updateProduct(p.id!, {'inventoryQty': newInv});
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.blueButtonGradient,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Center(
-                    child: Text('Conferma', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
+      );
+    }
   }
 
   @override
@@ -1233,8 +1121,9 @@ class _CardSlot extends StatelessWidget {
     }
 
     return GestureDetector(
-      onTap: selectionMode ? onSelectionToggle : _onTap,
-      onLongPress: selectionMode ? null : () => _onLongPress(context),
+      onTap: selectionMode ? onSelectionToggle : () => _openCardDetail(context),
+      onLongPress: selectionMode ? null : () => _quickAdd(context),
+      onDoubleTap: selectionMode ? null : () => _quickAdd(context),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
@@ -1414,6 +1303,651 @@ class _OptionTile extends StatelessWidget {
             Text(label, style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w600)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────
+// Card Detail Overlay — Full screen card view
+// ──────────────────────────────────────────────────
+class _CardDetailOverlay extends StatefulWidget {
+  final List<CardBlueprint> cards;
+  final int initialIndex;
+  final Map<String, Product> productMap;
+  final _GameMeta meta;
+  final String game;
+  final FirestoreService fs;
+
+  const _CardDetailOverlay({
+    required this.cards,
+    required this.initialIndex,
+    required this.productMap,
+    required this.meta,
+    required this.game,
+    required this.fs,
+  });
+
+  @override
+  State<_CardDetailOverlay> createState() => _CardDetailOverlayState();
+}
+
+class _CardDetailOverlayState extends State<_CardDetailOverlay> {
+  late int _currentIndex;
+  late PageController _pageController;
+  
+  // Local product map that updates in demo mode
+  late Map<String, Product> _liveProductMap;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: _currentIndex);
+    _liveProductMap = Map.from(widget.productMap);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _goToCard(int index) {
+    if (index < 0 || index >= widget.cards.length) return;
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  CardBlueprint get _currentCard => widget.cards[_currentIndex];
+
+  Future<void> _addCard(Product? currentProduct) async {
+    final card = _currentCard;
+    
+    if (FirestoreService.demoMode) {
+      if (currentProduct != null) {
+        // Update existing
+        final updated = currentProduct.copyWith(quantity: currentProduct.quantity + 1);
+        final idx = DemoDataService.products.indexWhere((p) => p.id == currentProduct.id);
+        if (idx >= 0) DemoDataService.products[idx] = updated;
+        _liveProductMap[card.id] = updated;
+      } else {
+        // Add new
+        final priceVal = card.marketPrice != null ? card.marketPrice!.cents / 100 : 0.0;
+        final newProduct = Product(
+          id: 'demo-${card.id}',
+          name: card.name,
+          brand: widget.game.toUpperCase(),
+          quantity: 1,
+          price: priceVal,
+          status: ProductStatus.inInventory,
+          kind: ProductKind.singleCard,
+          cardBlueprintId: card.id,
+          cardImageUrl: card.imageUrl,
+          cardExpansion: card.expansionName,
+          cardRarity: card.rarity,
+          marketPrice: card.marketPrice != null ? card.marketPrice!.cents / 100 : null,
+        );
+        DemoDataService.products.add(newProduct);
+        _liveProductMap[card.id] = newProduct;
+      }
+      setState(() {});
+      return;
+    }
+
+    if (currentProduct != null) {
+      await widget.fs.updateProduct(currentProduct.id!, {'quantity': currentProduct.quantity + 1});
+    } else {
+      await widget.fs.addProduct(Product(
+        name: card.name,
+        brand: widget.game.toUpperCase(),
+        quantity: 1,
+        price: card.marketPrice != null ? card.marketPrice!.cents / 100 : 0,
+        status: ProductStatus.inInventory,
+        kind: ProductKind.singleCard,
+        cardBlueprintId: card.id,
+        cardImageUrl: card.imageUrl,
+        cardExpansion: card.expansionName,
+        cardRarity: card.rarity,
+        marketPrice: card.marketPrice != null ? card.marketPrice!.cents / 100 : null,
+      ));
+    }
+  }
+
+  Future<void> _removeCard(Product? currentProduct) async {
+    if (currentProduct == null) return;
+    final card = _currentCard;
+
+    if (FirestoreService.demoMode) {
+      final idx = DemoDataService.products.indexWhere((p) => p.id == currentProduct.id);
+      if (idx >= 0) {
+        if (currentProduct.quantity <= 1) {
+          DemoDataService.products.removeAt(idx);
+          _liveProductMap.remove(card.id);
+        } else {
+          final updated = currentProduct.copyWith(quantity: currentProduct.quantity - 1);
+          DemoDataService.products[idx] = updated;
+          _liveProductMap[card.id] = updated;
+        }
+      }
+      setState(() {});
+      return;
+    }
+
+    final newQty = currentProduct.quantity - 1;
+    if (newQty <= 0) {
+      if (currentProduct.id != null) await widget.fs.deleteProduct(currentProduct.id!);
+    } else {
+      final newInv = currentProduct.inventoryQty > newQty ? newQty : currentProduct.inventoryQty;
+      await widget.fs.updateProduct(currentProduct.id!, {
+        'quantity': newQty,
+        'inventoryQty': newInv,
+      });
+    }
+  }
+
+  void _showMoveToInventory(Product currentProduct) {
+    final maxMove = (currentProduct.quantity - currentProduct.inventoryQty).clamp(0.0, currentProduct.quantity);
+    if (maxMove <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Tutte le copie sono già in inventario'),
+          backgroundColor: AppColors.accentOrange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      return;
+    }
+    
+    int moveCount = 1;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Sposta in inventario', 
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('Max: ${maxMove.toInt()} copie disponibili', 
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: () { if (moveCount > 1) setSheetState(() => moveCount--); },
+                    child: Container(
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.remove, color: AppColors.textSecondary, size: 24),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text('$moveCount', 
+                        style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+                  ),
+                  GestureDetector(
+                    onTap: () { if (moveCount < maxMove.toInt()) setSheetState(() => moveCount++); },
+                    child: Container(
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                        color: widget.meta.color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.add, color: widget.meta.color, size: 24),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final newInv = (currentProduct.inventoryQty + moveCount).clamp(0.0, currentProduct.quantity);
+                  if (FirestoreService.demoMode) {
+                    final idx = DemoDataService.products.indexWhere((p) => p.id == currentProduct.id);
+                    if (idx >= 0) {
+                      final updated = currentProduct.copyWith(inventoryQty: newInv);
+                      DemoDataService.products[idx] = updated;
+                      _liveProductMap[_currentCard.id] = updated;
+                    }
+                    setState(() {});
+                  } else {
+                    await widget.fs.updateProduct(currentProduct.id!, {'inventoryQty': newInv});
+                  }
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.blueButtonGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(
+                    child: Text('Conferma', 
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Use StreamBuilder for Firestore, local state for demo
+    if (FirestoreService.demoMode) {
+      return _buildOverlay(_liveProductMap);
+    }
+    
+    return StreamBuilder<List<Product>>(
+      stream: widget.fs.getProducts(),
+      builder: (ctx, snap) {
+        final products = snap.data ?? [];
+        final productMap = <String, Product>{};
+        for (final p in products) {
+          if (p.cardBlueprintId != null) {
+            productMap[p.cardBlueprintId!] = p;
+          }
+        }
+        return _buildOverlay(productMap);
+      },
+    );
+  }
+
+  Widget _buildOverlay(Map<String, Product> productMap) {
+    final currentProduct = productMap[_currentCard.id];
+    final hasProduct = currentProduct != null;
+    final qty = hasProduct ? currentProduct.quantity : 0.0;
+    final invQty = hasProduct ? currentProduct.inventoryQty : 0.0;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.zero,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Blurred background
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(color: Colors.black.withValues(alpha: 0.7)),
+          ),
+          
+          // Card PageView
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.cards.length,
+            onPageChanged: (i) => setState(() => _currentIndex = i),
+            itemBuilder: (ctx, i) {
+              final card = widget.cards[i];
+              return _CardDetailPage(
+                card: card,
+                meta: widget.meta,
+              );
+            },
+          ),
+          
+          // Close button (top-left)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            left: 16,
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 24),
+              ),
+            ),
+          ),
+          
+          // Card counter (top-right)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 20,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                '${_currentIndex + 1} / ${widget.cards.length}',
+                style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ),
+          
+          // Left arrow
+          if (_currentIndex > 0)
+            Positioned(
+              left: 8,
+              top: 0, bottom: 0,
+              child: Center(
+                child: GestureDetector(
+                  onTap: () => _goToCard(_currentIndex - 1),
+                  child: Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                    ),
+                    child: const Icon(Icons.chevron_left, color: Colors.white, size: 28),
+                  ),
+                ),
+              ),
+            ),
+          
+          // Right arrow
+          if (_currentIndex < widget.cards.length - 1)
+            Positioned(
+              right: 8,
+              top: 0, bottom: 0,
+              child: Center(
+                child: GestureDetector(
+                  onTap: () => _goToCard(_currentIndex + 1),
+                  child: Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                    ),
+                    child: const Icon(Icons.chevron_right, color: Colors.white, size: 28),
+                  ),
+                ),
+              ),
+            ),
+          
+          // Bottom action bar
+          Positioned(
+            left: 0, right: 0,
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: widget.meta.color.withValues(alpha: 0.3)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Quantity controls
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Remove button
+                      GestureDetector(
+                        onTap: hasProduct ? () => _removeCard(currentProduct) : null,
+                        child: Container(
+                          width: 52, height: 52,
+                          decoration: BoxDecoration(
+                            color: hasProduct 
+                                ? AppColors.accentRed.withValues(alpha: 0.15)
+                                : Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: hasProduct 
+                                  ? AppColors.accentRed.withValues(alpha: 0.3)
+                                  : Colors.white.withValues(alpha: 0.1),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.remove,
+                            color: hasProduct ? AppColors.accentRed : AppColors.textMuted,
+                            size: 26,
+                          ),
+                        ),
+                      ),
+                      
+                      // Quantity display
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: Column(
+                          children: [
+                            Text(
+                              '${qty.toInt()}',
+                              style: TextStyle(
+                                color: hasProduct ? widget.meta.color : AppColors.textMuted,
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (hasProduct && invQty > 0)
+                              Text(
+                                '📦 ${invQty.toInt()} in inventario',
+                                style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                              ),
+                          ],
+                        ),
+                      ),
+                      
+                      // Add button
+                      GestureDetector(
+                        onTap: () => _addCard(currentProduct),
+                        child: Container(
+                          width: 52, height: 52,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                widget.meta.color.withValues(alpha: 0.2),
+                                widget.meta.color.withValues(alpha: 0.1),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: widget.meta.color.withValues(alpha: 0.4)),
+                          ),
+                          child: Icon(Icons.add, color: widget.meta.color, size: 26),
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  // Move to inventory button (only if owned)
+                  if (hasProduct && qty > 0) ...[
+                    const SizedBox(height: 14),
+                    GestureDetector(
+                      onTap: () => _showMoveToInventory(currentProduct),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentBlue.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.accentBlue.withValues(alpha: 0.25)),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.inventory_2_outlined, color: AppColors.accentBlue, size: 18),
+                            SizedBox(width: 8),
+                            Text('Sposta in inventario',
+                                style: TextStyle(color: AppColors.accentBlue, fontSize: 14, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────
+// Single card detail page (inside PageView)
+// ──────────────────────────────────────────────────
+class _CardDetailPage extends StatelessWidget {
+  final CardBlueprint card;
+  final _GameMeta meta;
+
+  const _CardDetailPage({
+    required this.card,
+    required this.meta,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final priceStr = card.marketPrice != null
+        ? '€${(card.marketPrice!.cents / 100).toStringAsFixed(2)}'
+        : null;
+
+    return SafeArea(
+      child: Column(
+        children: [
+          const SizedBox(height: 60), // Space for close button
+          
+          // Card image (large)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 48),
+              child: Hero(
+                tag: 'card-${card.id}',
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: meta.color.withValues(alpha: 0.3),
+                        blurRadius: 30,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: card.imageUrl != null && card.imageUrl!.isNotEmpty
+                      ? Image.network(
+                          card.imageUrl!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => _placeholder(),
+                        )
+                      : _placeholder(),
+                ),
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Card info
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              children: [
+                Text(
+                  card.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (card.collectorNumber != null) ...[
+                      Text(
+                        '#${card.collectorNumber}',
+                        style: TextStyle(color: meta.color, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    if (card.rarity != null) ...[
+                      Container(
+                        width: 10, height: 10,
+                        decoration: BoxDecoration(
+                          color: card.rarityColor,
+                          shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(color: card.rarityColor.withValues(alpha: 0.5), blurRadius: 4)],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        card.rarity!,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    if (priceStr != null)
+                      Text(
+                        priceStr,
+                        style: const TextStyle(color: AppColors.accentGreen, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                  ],
+                ),
+                if (card.expansionName != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    card.expansionName!,
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 140), // Space for bottom action bar
+        ],
+      ),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      color: AppColors.surface,
+      child: Center(
+        child: Icon(Icons.image_not_supported, color: AppColors.textMuted, size: 48),
       ),
     );
   }
