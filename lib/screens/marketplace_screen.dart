@@ -1389,8 +1389,7 @@ class _ListingsTabState extends State<_ListingsTab> {
                   ),
                   const SizedBox(height: 16),
                   // Delete listing
-                  if (listing.status != 'ended')
-                    GestureDetector(
+                  GestureDetector(
                       onTap: () {
                         Navigator.pop(ctx);
                         _confirmDeleteListing(listing);

@@ -720,39 +720,44 @@ export async function deleteListing(uid: string, listingId: string): Promise<voi
 
   const listing = listingDoc.data()!;
 
-  // Withdraw offer if published
-  if (listing.offerId) {
-    try {
-      await ebayApiFetch(
-        accessToken,
-        `/sell/inventory/v1/offer/${listing.offerId}/withdraw`,
-        { method: "POST" }
-      );
-    } catch (err: any) {
-      console.warn("Could not withdraw offer:", err.message);
+  const isEnded = listing.status === "ended";
+
+  // Only call eBay API if listing is still active/draft
+  if (!isEnded) {
+    // Withdraw offer if published
+    if (listing.offerId) {
+      try {
+        await ebayApiFetch(
+          accessToken,
+          `/sell/inventory/v1/offer/${listing.offerId}/withdraw`,
+          { method: "POST" }
+        );
+      } catch (err: any) {
+        console.warn("Could not withdraw offer:", err.message);
+      }
+    }
+
+    // Delete inventory item
+    if (listing.sku) {
+      try {
+        await ebayApiFetch(
+          accessToken,
+          `/sell/inventory/v1/inventory_item/${listing.sku}`,
+          { method: "DELETE" }
+        );
+      } catch (err: any) {
+        console.warn("Could not delete inventory item:", err.message);
+      }
     }
   }
 
-  // Delete inventory item
-  if (listing.sku) {
-    try {
-      await ebayApiFetch(
-        accessToken,
-        `/sell/inventory/v1/inventory_item/${listing.sku}`,
-        { method: "DELETE" }
-      );
-    } catch (err: any) {
-      console.warn("Could not delete inventory item:", err.message);
-    }
-  }
-
-  // Update Firestore
+  // Delete from Firestore (not just update status)
   await db
     .collection("users")
     .doc(uid)
     .collection("ebayListings")
     .doc(listingId)
-    .update({ status: "ended", updatedAt: FieldValue.serverTimestamp() });
+    .delete();
 }
 
 // ── Inventory adjustment on sale ──
