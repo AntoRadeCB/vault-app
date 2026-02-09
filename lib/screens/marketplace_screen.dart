@@ -1324,6 +1324,10 @@ class _EbayTabState extends State<_EbayTab> {
             ),
           ),
         ),
+        // Policy setup banner
+        SliverToBoxAdapter(
+          child: _PolicySetupBanner(ebayService: widget.ebayService),
+        ),
         // Active Listings section
         SliverToBoxAdapter(
           child: Padding(
@@ -1655,3 +1659,104 @@ class _EbayTabState extends State<_EbayTab> {
   }
 }
 
+
+/// Shows a setup banner if eBay business policies are not configured.
+class _PolicySetupBanner extends StatefulWidget {
+  final EbayService ebayService;
+  const _PolicySetupBanner({required this.ebayService});
+
+  @override
+  State<_PolicySetupBanner> createState() => _PolicySetupBannerState();
+}
+
+class _PolicySetupBannerState extends State<_PolicySetupBanner> {
+  bool _loading = true;
+  bool _creating = false;
+  bool _hasPolicies = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    try {
+      final policies = await widget.ebayService.getPolicies();
+      final has = (policies['fulfillment'] as List?)?.isNotEmpty == true &&
+          (policies['return'] as List?)?.isNotEmpty == true &&
+          (policies['payment'] as List?)?.isNotEmpty == true;
+      if (mounted) setState(() { _hasPolicies = has; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _create() async {
+    setState(() => _creating = true);
+    try {
+      await widget.ebayService.createDefaultPolicies();
+      if (mounted) {
+        setState(() => _hasPolicies = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Policy create! Le prossime inserzioni saranno pubblicate.', style: TextStyle(fontWeight: FontWeight.w600)),
+            backgroundColor: AppColors.accentGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore: \$e'), backgroundColor: AppColors.accentRed),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading || _hasPolicies) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.accentOrange.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.accentOrange.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.warning_amber, color: AppColors.accentOrange, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Configura le policy per pubblicare inserzioni attive',
+                style: TextStyle(color: AppColors.accentOrange, fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _creating ? null : _create,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.accentBlue,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: _creating
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Configura', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
