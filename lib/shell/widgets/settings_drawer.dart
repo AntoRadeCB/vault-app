@@ -1,7 +1,9 @@
 import 'dart:ui';
+import 'dart:js_interop';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:web/web.dart' as web;
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_widgets.dart';
 import '../../services/auth_service.dart';
@@ -133,13 +135,19 @@ class _SettingsDrawerOverlayState extends State<_SettingsDrawerOverlay> {
   // ─── eBay actions ───────────────────────────────
   Future<void> _connectEbay() async {
     try {
+      // Open blank window immediately (user gesture context) to avoid popup blocker
+      final popup = web.window.open('about:blank', '_blank');
+
       final url = await _ebayService.getAuthUrl();
-      final uri = Uri.parse(url);
-      final launched = await launchUrl(uri, mode: LaunchMode.platformDefault);
-      if (!launched) {
-        // Fallback: try with external application mode
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+      // Navigate the already-open window to the auth URL
+      if (popup != null) {
+        popup.location.href = url;
+      } else {
+        // Popup blocked — fallback
+        await launchUrl(Uri.parse(url), mode: LaunchMode.platformDefault);
       }
+
       if (!mounted) return;
       final code = await _showCodeDialog();
       if (code != null && code.isNotEmpty) {
