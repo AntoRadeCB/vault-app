@@ -135,7 +135,9 @@ class _SettingsDrawerOverlayState extends State<_SettingsDrawerOverlay> {
     try {
       final url = await _ebayService.getAuthUrl();
       final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
+      final launched = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (!launched) {
+        // Fallback: try with external application mode
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       }
       if (!mounted) return;
