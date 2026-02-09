@@ -307,12 +307,21 @@ export async function getConnectionStatus(uid: string): Promise<{
 }
 
 // ── Condition mapping ──
-function mapCondition(condition: string): string {
-  // Map our internal conditions to eBay Inventory API conditionEnum values
+// Category 183454 (single trading cards) only accepts specific conditionIds.
+// We map to eBay conditionEnum values; for TCG categories, "UNGRADED" is the safe default.
+function mapCondition(condition: string, categoryId?: string): string {
+  // TCG single cards categories use different condition values
+  const tcgCategories = ["183454", "183456", "183457"];
+  if (categoryId && tcgCategories.includes(categoryId)) {
+    // For TCG cards: valid conditions are typically 4000 (Ungraded), 3000 (Graded)
+    // The Inventory API uses enum strings, not IDs
+    return "LIKE_NEW"; // Maps to conditionId 2750, accepted for some card categories
+  }
+  
   const map: Record<string, string> = {
     "NEW": "NEW",
     "LIKE_NEW": "LIKE_NEW",
-    "USED_EXCELLENT": "LIKE_NEW",      // eBay doesn't have "USED_EXCELLENT"
+    "USED_EXCELLENT": "LIKE_NEW",
     "USED_VERY_GOOD": "VERY_GOOD",
     "USED_GOOD": "GOOD",
     "USED_ACCEPTABLE": "ACCEPTABLE",
@@ -338,6 +347,7 @@ export async function createListing(
     shippingProfileId?: string;
     returnProfileId?: string;
     paymentProfileId?: string;
+    aspects?: Record<string, string[]>;
   }
 ): Promise<{ success: boolean; listingId?: string; ebayItemId?: string }> {
   const accessToken = await getValidAccessToken(uid);
@@ -346,6 +356,8 @@ export async function createListing(
   const sku = `vault-${productData.productId}-${Date.now()}`;
 
   // 1. Create inventory item
+  const isTcgCategory = ["183454", "183456", "183457"].includes(productData.categoryId);
+  
   await ebayApiFetch(accessToken, `/sell/inventory/v1/inventory_item/${sku}`, {
     method: "PUT",
     body: {
@@ -353,8 +365,19 @@ export async function createListing(
         title: productData.title,
         description: productData.description,
         imageUrls: productData.imageUrls,
+        // Item specifics required by eBay for TCG categories
+        ...(isTcgCategory ? {
+          aspects: {
+            "Gioco": ["Pokémon"],
+            "Lingua": ["Italiano"],
+            "Rarità": ["Non specificato"],
+            ...(productData.aspects || {}),
+          },
+        } : {}),
       },
-      condition: mapCondition(productData.condition),
+      // TCG cards (183454): valid conditionIds are 2750(Graded/LIKE_NEW), 3000(Used), 4000(Ungraded)
+      // For TCG: LIKE_NEW maps to 2750 ("Valutata/Graded") which is accepted
+      condition: isTcgCategory ? "LIKE_NEW" : mapCondition(productData.condition, productData.categoryId),
       conditionDescription: productData.conditionDescription,
       availability: {
         shipToLocationAvailability: {
