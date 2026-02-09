@@ -26,6 +26,9 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
   String _condition = 'UNGRADED';
   String _cardCondition = 'Near Mint or Better';
   bool _submitting = false;
+  int _availableQty = 0;
+  int _alreadyListed = 0;
+  bool _loadingQty = true;
 
   // Per TCG (183454): eBay usa Condition Descriptors
   // Condition = "Ungraded" (4000), poi Card Condition come descriptor
@@ -78,6 +81,35 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
     _quantityController = TextEditingController(text: '1');
     _categoryController = TextEditingController(text: '183454');
     _cardCondition = 'Near Mint or Better';
+    _loadAvailableQty();
+  }
+
+  Future<void> _loadAvailableQty() async {
+    try {
+      final listings = await widget.ebayService.getListings();
+      int listed = 0;
+      for (final l in listings) {
+        if (l.productId == widget.product.id && l.status != 'ended') {
+          listed += l.quantity;
+        }
+      }
+      final invQty = widget.product.inventoryQty > 0 
+          ? widget.product.inventoryQty.toInt() 
+          : widget.product.quantity.toInt();
+      if (mounted) {
+        setState(() {
+          _alreadyListed = listed;
+          _availableQty = (invQty - listed).clamp(0, 9999);
+          _loadingQty = false;
+          // Set default quantity to available
+          if (_availableQty > 0) {
+            _quantityController.text = _availableQty > 1 ? '1' : '1';
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingQty = false);
+    }
   }
 
   @override
@@ -91,6 +123,18 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
   }
 
   Future<void> _submit() async {
+    // Validate quantity
+    final requestedQty = int.tryParse(_quantityController.text) ?? 1;
+    if (requestedQty > _availableQty && !_loadingQty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Puoi listare al massimo $_availableQty ${_availableQty == 1 ? "copia" : "copie"}'),
+          backgroundColor: AppColors.accentOrange,
+        ),
+      );
+      return;
+    }
+    
     setState(() => _submitting = true);
     try {
       final imageUrls = <String>[];
@@ -192,8 +236,24 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
                   Expanded(child: _field('Prezzo (€)', _priceController,
                       keyboardType: TextInputType.number)),
                   const SizedBox(width: 12),
-                  Expanded(child: _field('Quantità', _quantityController,
-                      keyboardType: TextInputType.number)),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _field('Quantità', _quantityController,
+                          keyboardType: TextInputType.number),
+                      const SizedBox(height: 4),
+                      if (!_loadingQty)
+                        Text(
+                          _alreadyListed > 0
+                            ? 'Disponibili: $_availableQty (${_alreadyListed} già listat${_alreadyListed == 1 ? "o" : "i"})'
+                            : 'Disponibili: $_availableQty',
+                          style: TextStyle(
+                            color: _availableQty <= 0 ? AppColors.accentRed : AppColors.textMuted,
+                            fontSize: 10,
+                          ),
+                        ),
+                    ],
+                  )),
                 ],
               ),
               const SizedBox(height: 12),

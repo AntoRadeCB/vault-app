@@ -381,6 +381,92 @@ export async function createListing(
   const accessToken = await getValidAccessToken(uid);
   if (!accessToken) throw new Error("eBay not connected");
 
+  // Check available quantity: inventoryQty - already listed
+  const productDoc = await db
+    .collection("users").doc(uid)
+    .collection("products").doc(productData.productId).get();
+  
+  if (productDoc.exists) {
+    const pData = productDoc.data()!;
+    const totalQty = (pData.quantity as number) || 0;
+    const invQty = (pData.inventoryQty as number) || 0;
+    const availablePool = Math.max(invQty, 0);
+
+    // Get already listed quantity for this product
+    const existingListings = await db
+      .collection("users").doc(uid)
+      .collection("ebayListings")
+      .where("productId", "==", productData.productId)
+      .get();
+    
+    let alreadyListed = 0;
+    let existingActiveListing: any = null;
+    
+    for (const doc of existingListings.docs) {
+      const lData = doc.data();
+      if (lData.status !== "ended") {
+        alreadyListed += (lData.quantity as number) || 0;
+        if ((lData.status === "active" || lData.status === "draft") && lData.offerId) {
+          existingActiveListing = { id: doc.id, ...lData };
+        }
+      }
+    }
+
+    const requestedQty = productData.quantity || 1;
+    const maxAvailable = availablePool - alreadyListed;
+
+    if (requestedQty > maxAvailable) {
+      throw new Error(
+        `Quantità non disponibile: hai ${availablePool} da vendere, ${alreadyListed} già listat${alreadyListed === 1 ? "o" : "i"}. Puoi listare al massimo ${Math.max(0, maxAvailable)}.`
+      );
+    }
+
+    // If there's already an active listing for this product, update quantity instead of creating new
+    if (existingActiveListing) {
+      const newQty = (existingActiveListing.quantity || 0) + requestedQty;
+      
+      // Update offer quantity on eBay
+      if (existingActiveListing.offerId) {
+        await ebayApiFetch(
+          accessToken,
+          `/sell/inventory/v1/offer/${existingActiveListing.offerId}`,
+          {
+            method: "PUT",
+            body: {
+              marketplaceId: "EBAY_IT",
+              sku: existingActiveListing.sku,
+              format: "FIXED_PRICE",
+              categoryId: existingActiveListing.categoryId,
+              availableQuantity: newQty,
+              pricingSummary: {
+                price: {
+                  value: (productData.price || existingActiveListing.price).toFixed(2),
+                  currency: existingActiveListing.currency || "EUR",
+                },
+              },
+            },
+          }
+        );
+      }
+
+      // Update Firestore listing
+      await db
+        .collection("users").doc(uid)
+        .collection("ebayListings").doc(existingActiveListing.id)
+        .update({
+          quantity: newQty,
+          price: productData.price || existingActiveListing.price,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+      return {
+        success: true,
+        listingId: existingActiveListing.id,
+        ebayItemId: existingActiveListing.ebayItemId,
+      };
+    }
+  }
+
   const sku = `vault-${productData.productId}-${Date.now()}`;
 
   // 1. Create inventory item
