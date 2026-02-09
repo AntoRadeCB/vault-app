@@ -1726,7 +1726,7 @@ class _PolicySetupBannerState extends State<_PolicySetupBanner> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Errore: \$e'), backgroundColor: AppColors.accentRed),
+          SnackBar(content: Text('Errore: $e'), backgroundColor: AppColors.accentRed),
         );
       }
     } finally {

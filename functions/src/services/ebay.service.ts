@@ -978,58 +978,72 @@ export async function createDefaultPolicies(uid: string, config?: PolicyConfig):
   const accessToken = await getValidAccessToken(uid);
   if (!accessToken) throw new Error("eBay not connected");
 
-  // 1. Fulfillment policy
-  const fc = config?.fulfillment;
-  const fulfillment = await ebayApiFetch(accessToken, "/sell/account/v1/fulfillment_policy", {
-    method: "POST",
-    body: {
-      name: fc?.name || "Vault - Spedizione Standard",
-      marketplaceId: "EBAY_IT",
-      handlingTime: { value: fc?.handlingDays || 2, unit: "DAY" },
-      shippingOptions: [{
-        optionType: "DOMESTIC",
-        costType: fc?.freeShipping ? "FLAT_RATE" : "FLAT_RATE",
-        shippingServices: [{
-          shippingServiceCode: fc?.shippingService || "IT_Posta1",
-          shippingCost: {
-            value: fc?.freeShipping ? "0.00" : (fc?.shippingCost || 2.50).toFixed(2),
-            currency: "EUR",
-          },
-          sortOrder: 1,
-          freeShipping: fc?.freeShipping || false,
-        }],
+  // Helper: create or reuse existing policy
+  async function createOrReuse(
+    type: "fulfillment_policy" | "return_policy" | "payment_policy",
+    idField: string,
+    body: any
+  ): Promise<string> {
+    try {
+      const result = await ebayApiFetch(accessToken!, `/sell/account/v1/${type}`, {
+        method: "POST",
+        body,
+      });
+      return result?.[idField];
+    } catch (err: any) {
+      // If duplicate, extract existing ID from error
+      const msg = err.message || "";
+      const idMatch = msg.match(/Profile Id["\s:]*["]*(\d+)/i) || msg.match(/"value":"(\d+)"/);
+      if (idMatch) return idMatch[1];
+      
+      // Try to get existing policies
+      const listResult = await ebayApiFetch(accessToken!, `/sell/account/v1/${type}?marketplace_id=EBAY_IT`);
+      const listKey = type === "fulfillment_policy" ? "fulfillmentPolicies" 
+        : type === "return_policy" ? "returnPolicies" : "paymentPolicies";
+      const existing = listResult?.[listKey];
+      if (existing?.length > 0) return existing[0][idField];
+      
+      throw err;
+    }
+  }
+
+  const fulfillmentId = await createOrReuse("fulfillment_policy", "fulfillmentPolicyId", {
+    name: config?.fulfillment?.name || "Vault - Spedizione Standard",
+    marketplaceId: "EBAY_IT",
+    handlingTime: { value: config?.fulfillment?.handlingDays || 2, unit: "DAY" },
+    shippingOptions: [{
+      optionType: "DOMESTIC",
+      costType: "FLAT_RATE",
+      shippingServices: [{
+        shippingServiceCode: config?.fulfillment?.shippingService || "IT_Posta1",
+        shippingCost: {
+          value: config?.fulfillment?.freeShipping ? "0.00" : (config?.fulfillment?.shippingCost || 2.50).toFixed(2),
+          currency: "EUR",
+        },
+        sortOrder: 1,
+        freeShipping: config?.fulfillment?.freeShipping || false,
       }],
-    },
+    }],
   });
 
-  // 2. Return policy
-  const rc = config?.return;
-  const returnPolicy = await ebayApiFetch(accessToken, "/sell/account/v1/return_policy", {
-    method: "POST",
-    body: {
-      name: rc?.name || "Vault - Reso 30 giorni",
-      marketplaceId: "EBAY_IT",
-      returnsAccepted: rc?.returnsAccepted !== false,
-      returnPeriod: { value: 30, unit: "DAY" },
-      returnShippingCostPayer: rc?.shippingCostPaidBy || "BUYER",
-    },
+  const returnId = await createOrReuse("return_policy", "returnPolicyId", {
+    name: config?.return?.name || "Vault - Reso 30 giorni",
+    marketplaceId: "EBAY_IT",
+    returnsAccepted: config?.return?.returnsAccepted !== false,
+    returnPeriod: { value: 30, unit: "DAY" },
+    returnShippingCostPayer: config?.return?.shippingCostPaidBy || "BUYER",
   });
 
-  // 3. Payment policy
-  const pc = config?.payment;
-  const paymentPolicy = await ebayApiFetch(accessToken, "/sell/account/v1/payment_policy", {
-    method: "POST",
-    body: {
-      name: pc?.name || "Vault - Pagamenti gestiti eBay",
-      marketplaceId: "EBAY_IT",
-      paymentMethods: [{ paymentMethodType: "WALLET" }],
-    },
+  const paymentId = await createOrReuse("payment_policy", "paymentPolicyId", {
+    name: config?.payment?.name || "Vault - Pagamenti gestiti eBay",
+    marketplaceId: "EBAY_IT",
+    paymentMethods: [{ paymentMethodType: "WALLET" }],
   });
 
   const policyIds = {
-    fulfillmentPolicyId: fulfillment?.fulfillmentPolicyId,
-    returnPolicyId: returnPolicy?.returnPolicyId,
-    paymentPolicyId: paymentPolicy?.paymentPolicyId,
+    fulfillmentPolicyId: fulfillmentId,
+    returnPolicyId: returnId,
+    paymentPolicyId: paymentId,
   };
 
   // Save policy IDs to user profile for reuse
