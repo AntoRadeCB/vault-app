@@ -176,6 +176,28 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
   }
 }
 
+// ── Policies ──
+
+export async function getPolicies(req: Request, res: Response): Promise<void> {
+  try {
+    const policies = await ebayService.getPolicies(req.uid!);
+    res.json(policies);
+  } catch (error: any) {
+    console.error("ebay/policies GET error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+export async function createPolicies(req: Request, res: Response): Promise<void> {
+  try {
+    const result = await ebayService.createDefaultPolicies(req.uid!, req.body);
+    res.json(result);
+  } catch (error: any) {
+    console.error("ebay/policies POST error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+}
+
 // ── Price Check (Browse API — no user auth needed) ──
 
 export async function priceCheck(req: Request, res: Response): Promise<void> {

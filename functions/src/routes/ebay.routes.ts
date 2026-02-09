@@ -15,6 +15,10 @@ router.get("/listings", ebayController.getListings);
 router.put("/listings/:id", ebayController.updateListing);
 router.delete("/listings/:id", ebayController.deleteListing);
 
+// Policies
+router.get("/policies", ebayController.getPolicies);
+router.post("/policies", ebayController.createPolicies);
+
 // Price check (Browse API — no user auth needed)
 router.get("/price-check", ebayController.priceCheck);
 

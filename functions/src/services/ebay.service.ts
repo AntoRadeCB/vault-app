@@ -366,11 +366,15 @@ export async function createListing(
           currency: productData.currency || "EUR",
         },
       },
-      listingPolicies: {
-        fulfillmentPolicyId: productData.shippingProfileId || undefined,
-        returnPolicyId: productData.returnProfileId || undefined,
-        paymentPolicyId: productData.paymentProfileId || undefined,
-      },
+      listingPolicies: await (async () => {
+        // Use provided IDs, or fall back to saved policies
+        const saved = await getSavedPolicies(uid);
+        return {
+          fulfillmentPolicyId: productData.shippingProfileId || saved?.fulfillmentPolicyId || undefined,
+          returnPolicyId: productData.returnProfileId || saved?.returnPolicyId || undefined,
+          paymentPolicyId: productData.paymentProfileId || saved?.paymentPolicyId || undefined,
+        };
+      })(),
     },
   });
 
@@ -907,4 +911,144 @@ export async function searchSoldItems(
     currency: "EUR",
     items,
   };
+}
+
+// ═══════════════════════════════════════════════════
+// Business Policies (Fulfillment, Return, Payment)
+// ═══════════════════════════════════════════════════
+
+interface PolicyConfig {
+  fulfillment?: {
+    name: string;
+    handlingDays: number;
+    shippingService: string;
+    shippingCost: number;
+    freeShipping: boolean;
+  };
+  return?: {
+    name: string;
+    returnsAccepted: boolean;
+    returnPeriod: string; // DAYS_30, DAYS_60
+    shippingCostPaidBy: string; // BUYER, SELLER
+  };
+  payment?: {
+    name: string;
+  };
+}
+
+/**
+ * Get existing business policies for a user.
+ */
+export async function getPolicies(uid: string): Promise<{
+  fulfillment: any[];
+  return: any[];
+  payment: any[];
+}> {
+  const accessToken = await getValidAccessToken(uid);
+  if (!accessToken) throw new Error("eBay not connected");
+
+  const result: any = { fulfillment: [], return: [], payment: [] };
+
+  try {
+    const fp = await ebayApiFetch(accessToken, "/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_IT");
+    result.fulfillment = fp?.fulfillmentPolicies || [];
+  } catch (_) {}
+
+  try {
+    const rp = await ebayApiFetch(accessToken, "/sell/account/v1/return_policy?marketplace_id=EBAY_IT");
+    result.return = rp?.returnPolicies || [];
+  } catch (_) {}
+
+  try {
+    const pp = await ebayApiFetch(accessToken, "/sell/account/v1/payment_policy?marketplace_id=EBAY_IT");
+    result.payment = pp?.paymentPolicies || [];
+  } catch (_) {}
+
+  return result;
+}
+
+/**
+ * Create default business policies for a user (auto-setup).
+ */
+export async function createDefaultPolicies(uid: string, config?: PolicyConfig): Promise<{
+  fulfillmentPolicyId: string;
+  returnPolicyId: string;
+  paymentPolicyId: string;
+}> {
+  const accessToken = await getValidAccessToken(uid);
+  if (!accessToken) throw new Error("eBay not connected");
+
+  // 1. Fulfillment policy
+  const fc = config?.fulfillment;
+  const fulfillment = await ebayApiFetch(accessToken, "/sell/account/v1/fulfillment_policy", {
+    method: "POST",
+    body: {
+      name: fc?.name || "Vault - Spedizione Standard",
+      marketplaceId: "EBAY_IT",
+      handlingTime: { value: fc?.handlingDays || 2, unit: "DAY" },
+      shippingOptions: [{
+        optionType: "DOMESTIC",
+        costType: fc?.freeShipping ? "FLAT_RATE" : "FLAT_RATE",
+        shippingServices: [{
+          shippingServiceCode: fc?.shippingService || "IT_Posta1",
+          shippingCost: {
+            value: fc?.freeShipping ? "0.00" : (fc?.shippingCost || 2.50).toFixed(2),
+            currency: "EUR",
+          },
+          sortOrder: 1,
+          freeShipping: fc?.freeShipping || false,
+        }],
+      }],
+    },
+  });
+
+  // 2. Return policy
+  const rc = config?.return;
+  const returnPolicy = await ebayApiFetch(accessToken, "/sell/account/v1/return_policy", {
+    method: "POST",
+    body: {
+      name: rc?.name || "Vault - Reso 30 giorni",
+      marketplaceId: "EBAY_IT",
+      returnsAccepted: rc?.returnsAccepted !== false,
+      returnPeriod: { value: 30, unit: "DAY" },
+      returnShippingCostPayer: rc?.shippingCostPaidBy || "BUYER",
+    },
+  });
+
+  // 3. Payment policy
+  const pc = config?.payment;
+  const paymentPolicy = await ebayApiFetch(accessToken, "/sell/account/v1/payment_policy", {
+    method: "POST",
+    body: {
+      name: pc?.name || "Vault - Pagamenti gestiti eBay",
+      marketplaceId: "EBAY_IT",
+      paymentMethods: [{ paymentMethodType: "WALLET" }],
+    },
+  });
+
+  const policyIds = {
+    fulfillmentPolicyId: fulfillment?.fulfillmentPolicyId,
+    returnPolicyId: returnPolicy?.returnPolicyId,
+    paymentPolicyId: paymentPolicy?.paymentPolicyId,
+  };
+
+  // Save policy IDs to user profile for reuse
+  await db.collection("users").doc(uid).collection("integrations").doc("ebay").update({
+    policies: policyIds,
+  });
+
+  return policyIds;
+}
+
+/**
+ * Get saved policy IDs for a user (from Firestore).
+ */
+export async function getSavedPolicies(uid: string): Promise<{
+  fulfillmentPolicyId?: string;
+  returnPolicyId?: string;
+  paymentPolicyId?: string;
+} | null> {
+  const doc = await integrationRef(uid).get();
+  if (!doc.exists) return null;
+  return doc.data()?.policies || null;
 }

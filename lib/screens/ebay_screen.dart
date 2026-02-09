@@ -612,79 +612,135 @@ class _OrdersTabState extends State<_OrdersTab> {
 
 // ── Settings Tab ──
 
-class _SettingsTab extends StatelessWidget {
+class _SettingsTab extends StatefulWidget {
+  @override
+  State<_SettingsTab> createState() => _SettingsTabState();
+}
+
+class _SettingsTabState extends State<_SettingsTab> {
+  final EbayService _ebayService = EbayService();
+  bool _loading = true;
+  bool _creating = false;
+  Map<String, dynamic>? _policies;
+  String? _error;
+
+  bool get _hasPolicies =>
+      (_policies?['fulfillment'] as List?)?.isNotEmpty == true &&
+      (_policies?['return'] as List?)?.isNotEmpty == true &&
+      (_policies?['payment'] as List?)?.isNotEmpty == true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPolicies();
+  }
+
+  Future<void> _loadPolicies() async {
+    try {
+      final policies = await _ebayService.getPolicies();
+      if (mounted) setState(() { _policies = policies; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  Future<void> _createPolicies() async {
+    setState(() => _creating = true);
+    try {
+      await _ebayService.createDefaultPolicies();
+      await _loadPolicies();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Policy create con successo!', style: TextStyle(fontWeight: FontWeight.w600)),
+            backgroundColor: AppColors.accentGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore: $e'), backgroundColor: AppColors.accentRed),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.accentBlue));
+    }
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        StaggeredFadeSlide(
-          index: 0,
-          child: GlassCard(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Spedizione predefinita',
-                      style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 12),
-                  _settingRow('Servizio', 'Posta Ordinaria'),
-                  _settingRow('Costo', '€2.50'),
-                  _settingRow('Giorni di gestione', '1-2'),
-                ],
+        // Setup banner if no policies
+        if (!_hasPolicies) ...[
+          StaggeredFadeSlide(
+            index: 0,
+            child: GlassCard(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentOrange.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.warning_amber, color: AppColors.accentOrange, size: 28),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Configura le policy di vendita',
+                        style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Per pubblicare inserzioni su eBay servono policy di spedizione, reso e pagamento. Creale con un tap.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _creating ? null : _createPolicies,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accentBlue,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _creating
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('Crea policy predefinite', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        StaggeredFadeSlide(
-          index: 1,
-          child: GlassCard(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Politica di reso',
-                      style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 12),
-                  _settingRow('Accetta resi', 'Sì'),
-                  _settingRow('Entro', '30 giorni'),
-                  _settingRow('Spedizione reso', 'A carico acquirente'),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        StaggeredFadeSlide(
-          index: 2,
-          child: GlassCard(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Pagamento',
-                      style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 12),
-                  _settingRow('Metodo', 'Pagamenti gestiti eBay'),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
+          const SizedBox(height: 12),
+        ],
+
+        // Show existing policies
+        if (_hasPolicies) ...[
+          _policyCard('Spedizione', Icons.local_shipping, AppColors.accentBlue, _policies!['fulfillment'] as List),
+          const SizedBox(height: 12),
+          _policyCard('Reso', Icons.assignment_return, AppColors.accentOrange, _policies!['return'] as List),
+          const SizedBox(height: 12),
+          _policyCard('Pagamento', Icons.payment, AppColors.accentGreen, _policies!['payment'] as List),
+          const SizedBox(height: 24),
+        ],
+
+        if (_error != null)
+          Text(_error!, style: const TextStyle(color: AppColors.accentRed, fontSize: 12), textAlign: TextAlign.center),
+
         const Text(
           'Le impostazioni avanzate possono essere modificate direttamente su eBay Seller Hub.',
           style: TextStyle(color: AppColors.textMuted, fontSize: 12),
@@ -694,19 +750,42 @@ class _SettingsTab extends StatelessWidget {
     );
   }
 
-  Widget _settingRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 14)),
-          Text(value,
-              style: const TextStyle(
-                  color: AppColors.textPrimary, fontSize: 14)),
-        ],
+  Widget _policyCard(String title, IconData icon, Color color, List policies) {
+    return StaggeredFadeSlide(
+      index: 0,
+      child: GlassCard(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: color, size: 20),
+                  const SizedBox(width: 8),
+                  Text(title, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentGreen.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text('${policies.length}', style: const TextStyle(color: AppColors.accentGreen, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...policies.map((p) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  p['name'] ?? p['fulfillmentPolicyId'] ?? 'Policy',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                ),
+              )),
+            ],
+          ),
+        ),
       ),
     );
   }

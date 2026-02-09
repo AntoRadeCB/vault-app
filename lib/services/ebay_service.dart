@@ -168,6 +168,16 @@ class EbayService {
     return jsonDecode(res.body);
   }
 
+  // ── Policies ──
+
+  Future<Map<String, dynamic>> getPolicies() async {
+    return _get('/policies');
+  }
+
+  Future<Map<String, dynamic>> createDefaultPolicies([Map<String, dynamic>? config]) async {
+    return _post('/policies', config ?? {});
+  }
+
   // ── Helpers ──
 
   /// Check if a product is listed on eBay
