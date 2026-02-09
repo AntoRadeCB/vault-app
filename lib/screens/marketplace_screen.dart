@@ -77,6 +77,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                     // ── Stats header ──
                     _StatsHeader(
                       inventoryCount: inventoryProducts.length,
+                      listedCount: listings.where((l) => l.status != 'ended').length,
                       inventoryValue: inventoryProducts.fold(0.0, (s, p) => s + p.effectiveSellPrice * (p.kind == ProductKind.singleCard ? (p.inventoryQty > 0 ? p.inventoryQty : p.quantity) : p.quantity)),
                       activeListings: listings.where((l) => l.status == 'active').length,
                       totalListings: listings.length,
@@ -150,6 +151,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                             catalogService: _catalogService,
                             ebayService: _ebayService,
                             onEditProduct: widget.onEditProduct,
+                            listings: listings,
                           ),
                           _ListingsTab(
                             listings: listings,
@@ -199,6 +201,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
 
 class _StatsHeader extends StatelessWidget {
   final int inventoryCount;
+  final int listedCount;
   final double inventoryValue;
   final int activeListings;
   final int totalListings;
@@ -207,6 +210,7 @@ class _StatsHeader extends StatelessWidget {
 
   const _StatsHeader({
     required this.inventoryCount,
+    required this.listedCount,
     required this.inventoryValue,
     required this.activeListings,
     required this.totalListings,
@@ -238,14 +242,14 @@ class _StatsHeader extends StatelessWidget {
                 _MiniStat(
                   icon: Icons.inventory_2_outlined,
                   value: inventoryCount.toString(),
-                  label: 'in vendita',
+                  label: 'da vendere',
                   color: AppColors.accentBlue,
                 ),
                 const SizedBox(width: 8),
                 _MiniStat(
                   icon: Icons.storefront,
-                  value: activeListings.toString(),
-                  label: 'su eBay',
+                  value: '$listedCount',
+                  label: 'listati',
                   color: AppColors.accentGreen,
                 ),
                 const SizedBox(width: 8),
@@ -365,6 +369,7 @@ class _InventoryTab extends StatefulWidget {
   final CardCatalogService catalogService;
   final EbayService ebayService;
   final void Function(Product product)? onEditProduct;
+  final List<EbayListing> listings;
 
   const _InventoryTab({
     required this.products,
@@ -372,6 +377,7 @@ class _InventoryTab extends StatefulWidget {
     required this.catalogService,
     required this.ebayService,
     this.onEditProduct,
+    required this.listings,
   });
 
   @override
@@ -385,6 +391,16 @@ class _InventoryTabState extends State<_InventoryTab> {
   bool _selectMode = false;
   final Set<String> _collapsedGroups = {};
   Map<String, double> _livePrices = {};
+
+  /// Map productId → total listed quantity across all active/draft listings
+  Map<String, int> get _listedQtyMap {
+    final map = <String, int>{};
+    for (final l in widget.listings) {
+      if (l.status == 'ended') continue;
+      map[l.productId] = (map[l.productId] ?? 0) + l.quantity;
+    }
+    return map;
+  }
 
   @override
   void initState() {
@@ -855,6 +871,7 @@ class _InventoryTabState extends State<_InventoryTab> {
     final displayPrice = product.sellPrice ?? livePrice ?? product.marketPrice ?? product.price;
     final isCard = product.kind == ProductKind.singleCard;
     final hasImage = product.displayImageUrl.isNotEmpty;
+    final listedQty = product.id != null ? (_listedQtyMap[product.id!] ?? 0) : 0;
 
     Color accentColor;
     if (isCard) {
@@ -930,6 +947,19 @@ class _InventoryTabState extends State<_InventoryTab> {
                   Row(
                     children: [
                       Text('×${product.formattedQuantity}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                      if (listedQty > 0) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(color: AppColors.accentGreen.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(3),
+                            border: Border.all(color: AppColors.accentGreen.withValues(alpha: 0.3))),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.storefront, color: AppColors.accentGreen, size: 8),
+                            const SizedBox(width: 2),
+                            Text('$listedQty', style: const TextStyle(color: AppColors.accentGreen, fontSize: 8, fontWeight: FontWeight.w700)),
+                          ]),
+                        ),
+                      ],
                       if (product.cardRarity != null) ...[
                         const SizedBox(width: 6),
                         Container(

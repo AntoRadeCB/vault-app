@@ -1200,7 +1200,7 @@ class _CardSlot extends StatelessWidget {
     final newQty = product!.quantity - 1;
     
     // Check if reducing would conflict with active eBay listings
-    if (product!.id != null && newQty < product!.inventoryQty) {
+    if (product!.id != null) {
       if (!context.mounted) return;
       final canProceed = await InventoryGuard.canReduceQuantity(
         context: context,
@@ -1629,7 +1629,7 @@ class _CardDetailOverlayState extends State<_CardDetailOverlay> {
     final newQty = currentProduct.quantity - 1;
     
     // Check if reducing would conflict with active eBay listings
-    if (currentProduct.id != null && newQty < currentProduct.inventoryQty) {
+    if (currentProduct.id != null) {
       if (!context.mounted) return;
       final canProceed = await InventoryGuard.canReduceQuantity(
         context: context,

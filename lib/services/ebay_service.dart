@@ -180,7 +180,7 @@ class EbayService {
 
   // ── Helpers ──
 
-  /// Check if a product is listed on eBay
+  /// Check if a product has any non-ended eBay listing (active or draft)
   Future<EbayListing?> getListingForProduct(String productId) async {
     if (_uid == null) return null;
     final snap = await _db
@@ -188,10 +188,13 @@ class EbayService {
         .doc(_uid)
         .collection('ebayListings')
         .where('productId', isEqualTo: productId)
-        .where('status', isEqualTo: 'active')
-        .limit(1)
         .get();
     if (snap.docs.isEmpty) return null;
-    return EbayListing.fromFirestore(snap.docs.first);
+    // Find any listing that's not ended
+    for (final doc in snap.docs) {
+      final listing = EbayListing.fromFirestore(doc);
+      if (listing.status != 'ended') return listing;
+    }
+    return null;
   }
 }
