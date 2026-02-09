@@ -10,6 +10,7 @@ import '../l10n/app_localizations.dart';
 import 'dart:math' as math;
 import '../services/ebay_service.dart';
 import '../widgets/ebay_listing_dialog.dart';
+import '../services/inventory_guard.dart';
 
 class InventoryScreen extends StatefulWidget {
   final void Function(Product product)? onEditProduct;
@@ -113,20 +114,30 @@ class _InventoryScreenState extends State<InventoryScreen>
                 style: const TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
               if (product.id != null) {
-                _firestoreService.deleteProduct(product.id!);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(l.productDeleted(product.name)),
-                    backgroundColor: AppColors.accentRed,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    margin: const EdgeInsets.all(16),
-                  ),
+                // Check for active eBay listings
+                final canProceed = await InventoryGuard.canDelete(
+                  context: context,
+                  productId: product.id!,
+                  inventoryQty: product.inventoryQty,
                 );
+                if (!canProceed) return;
+                
+                _firestoreService.deleteProduct(product.id!);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(l.productDeleted(product.name)),
+                      backgroundColor: AppColors.accentRed,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      margin: const EdgeInsets.all(16),
+                    ),
+                  );
+                }
               }
             },
             child: Text(l.delete,

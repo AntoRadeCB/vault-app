@@ -8,6 +8,7 @@ import '../widgets/ocr_scanner_dialog.dart';
 import '../services/firestore_service.dart';
 import '../services/card_catalog_service.dart';
 import '../services/demo_data_service.dart';
+import '../services/inventory_guard.dart';
 
 // ──────────────────────────────────────────────────
 // Game metadata
@@ -1197,6 +1198,20 @@ class _CardSlot extends StatelessWidget {
     }
     
     final newQty = product!.quantity - 1;
+    
+    // Check if reducing would conflict with active eBay listings
+    if (product!.id != null && newQty < product!.inventoryQty) {
+      if (!context.mounted) return;
+      final canProceed = await InventoryGuard.canReduceQuantity(
+        context: context,
+        productId: product!.id!,
+        currentQty: product!.quantity,
+        newQty: newQty,
+        inventoryQty: product!.inventoryQty,
+      );
+      if (!canProceed) return;
+    }
+    
     if (newQty <= 0) {
       if (product!.id != null) await fs.deleteProduct(product!.id!);
     } else {
@@ -1612,6 +1627,20 @@ class _CardDetailOverlayState extends State<_CardDetailOverlay> {
     }
 
     final newQty = currentProduct.quantity - 1;
+    
+    // Check if reducing would conflict with active eBay listings
+    if (currentProduct.id != null && newQty < currentProduct.inventoryQty) {
+      if (!context.mounted) return;
+      final canProceed = await InventoryGuard.canReduceQuantity(
+        context: context,
+        productId: currentProduct.id!,
+        currentQty: currentProduct.quantity,
+        newQty: newQty,
+        inventoryQty: currentProduct.inventoryQty,
+      );
+      if (!canProceed) return;
+    }
+    
     if (newQty <= 0) {
       if (currentProduct.id != null) await widget.fs.deleteProduct(currentProduct.id!);
     } else {

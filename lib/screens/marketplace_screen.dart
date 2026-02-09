@@ -12,6 +12,7 @@ import '../widgets/ebay_listing_dialog.dart';
 import '../widgets/ebay_order_detail.dart';
 import '../providers/profile_provider.dart';
 import '../models/user_profile.dart';
+import '../services/inventory_guard.dart';
 
 // ═══════════════════════════════════════════════════
 //  Marketplace Screen — Redesigned for scale
@@ -558,17 +559,26 @@ class _InventoryTabState extends State<_InventoryTab> {
             ListTile(
               leading: const Icon(Icons.remove_circle_outline, color: AppColors.accentRed),
               title: const Text('Rimuovi da vendita', style: TextStyle(color: AppColors.accentRed)),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(ctx);
                 if (product.id != null) {
+                  final canProceed = await InventoryGuard.canDelete(
+                    context: context,
+                    productId: product.id!,
+                    inventoryQty: product.inventoryQty,
+                  );
+                  if (!canProceed) return;
+                  
                   widget.firestoreService.updateProduct(product.id!, {'inventoryQty': 0, 'sellPrice': null});
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('${product.name} rimosso'),
-                    backgroundColor: AppColors.accentRed,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    margin: const EdgeInsets.all(16),
-                  ));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('${product.name} rimosso'),
+                      backgroundColor: AppColors.accentRed,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      margin: const EdgeInsets.all(16),
+                    ));
+                  }
                 }
               },
             ),
