@@ -1303,7 +1303,7 @@ class _EbayTabState extends State<_EbayTab> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text('Connesso come $_ebayUserId',
+                Text(_ebayUserId != null ? 'Connesso come $_ebayUserId' : 'Connesso',
                     style: const TextStyle(
                         color: AppColors.accentGreen, fontSize: 13)),
                 const Spacer(),
