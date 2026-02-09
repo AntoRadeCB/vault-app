@@ -202,6 +202,77 @@ class _SettingsDrawerOverlayState extends State<_SettingsDrawerOverlay> {
     }
   }
 
+  void _showNewProfileSheet() {
+    final presets = UserProfile.presets;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 20),
+            const Text('Nuovo Profilo', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text('Scegli il tipo di gioco', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const SizedBox(height: 16),
+            ...presets.map((preset) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: GestureDetector(
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    final doc = await _firestoreService.addProfile(preset);
+                    _firestoreService.setActiveProfile(doc.id);
+                    setState(() => _showProfiles = false);
+                    widget.onProfileSwitched?.call();
+                    if (mounted) _showSnackbar('Profilo "${preset.name}" creato!');
+                  } catch (e) {
+                    if (mounted) _showSnackbar('Errore: $e');
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: preset.color.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: preset.color.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(preset.icon, color: preset.color, size: 22),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(preset.name, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 2),
+                            Text(UserProfile.categoryHint(preset.type), style: const TextStyle(color: AppColors.textMuted, fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_ios, color: preset.color.withValues(alpha: 0.5), size: 14),
+                    ],
+                  ),
+                ),
+              ),
+            )),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showLogoutDialog() {
     showDialog(
       context: context,
@@ -374,35 +445,59 @@ class _SettingsDrawerOverlayState extends State<_SettingsDrawerOverlay> {
                     firstChild: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                       child: Column(
-                        children: profiles.map((p) {
-                          final isActive = p.id == activeProfile?.id;
-                          return Padding(
+                        children: [
+                          ...profiles.map((p) {
+                            final isActive = p.id == activeProfile?.id;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: GestureDetector(
+                                onTap: () {
+                                  provider?.switchProfile(p.id);
+                                  setState(() => _showProfiles = false);
+                                  widget.onProfileSwitched?.call();
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isActive ? p.color.withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.03),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: isActive ? p.color.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.04)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(p.icon, color: p.color, size: 18),
+                                      const SizedBox(width: 10),
+                                      Expanded(child: Text(p.name, style: TextStyle(color: isActive ? Colors.white : AppColors.textSecondary, fontSize: 13, fontWeight: isActive ? FontWeight.w600 : FontWeight.w400))),
+                                      if (isActive) Icon(Icons.check_circle, color: p.color, size: 16),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                          // ── Add new profile button ──
+                          Padding(
                             padding: const EdgeInsets.only(bottom: 6),
                             child: GestureDetector(
-                              onTap: () {
-                                provider?.switchProfile(p.id);
-                                setState(() => _showProfiles = false);
-                                widget.onProfileSwitched?.call();
-                              },
+                              onTap: () => _showNewProfileSheet(),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: isActive ? p.color.withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.03),
+                                  color: Colors.white.withValues(alpha: 0.03),
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: isActive ? p.color.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.04)),
+                                  border: Border.all(color: AppColors.accentBlue.withValues(alpha: 0.2), style: BorderStyle.solid),
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(p.icon, color: p.color, size: 18),
+                                    Icon(Icons.add_circle_outline, color: AppColors.accentBlue, size: 18),
                                     const SizedBox(width: 10),
-                                    Expanded(child: Text(p.name, style: TextStyle(color: isActive ? Colors.white : AppColors.textSecondary, fontSize: 13, fontWeight: isActive ? FontWeight.w600 : FontWeight.w400))),
-                                    if (isActive) Icon(Icons.check_circle, color: p.color, size: 16),
+                                    Text('Nuovo profilo', style: TextStyle(color: AppColors.accentBlue, fontSize: 13, fontWeight: FontWeight.w500)),
                                   ],
                                 ),
                               ),
                             ),
-                          );
-                        }).toList(),
+                          ),
+                        ],
                       ),
                     ),
                     secondChild: const SizedBox.shrink(),
@@ -545,7 +640,14 @@ class _SettingsDrawerOverlayState extends State<_SettingsDrawerOverlay> {
                         const SizedBox(height: 8),
                         _settingTile(Icons.code, 'Versione', 'Vault v1.0.0'),
                         _settingTile(Icons.bug_report_outlined, 'Segnala bug', 'Invia feedback', onTap: () {
-                          _showEditDialog(title: 'Segnala un problema', currentValue: '', onSave: (_) => _showSnackbar('Grazie per il feedback!'));
+                          _showEditDialog(title: 'Segnala un problema', currentValue: '', onSave: (text) async {
+                            try {
+                              await _firestoreService.submitFeedback(text);
+                              if (mounted) _showSnackbar('Grazie per il feedback!');
+                            } catch (e) {
+                              if (mounted) _showSnackbar('Errore: $e');
+                            }
+                          });
                         }),
                         const SizedBox(height: 16),
 

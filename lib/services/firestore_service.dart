@@ -469,6 +469,17 @@ class FirestoreService {
     return _profilesCollection().doc(id).delete();
   }
 
+  /// Submit user feedback/bug report to Firestore.
+  Future<void> submitFeedback(String message, {String type = 'bug'}) {
+    return _db.collection('feedback').add({
+      'userId': _uid,
+      'type': type,
+      'message': message,
+      'createdAt': FieldValue.serverTimestamp(),
+      'platform': 'web',
+    });
+  }
+
   /// Get the active profile id from the user document.
   Stream<String?> getActiveProfileId() {
     if (demoMode) return Stream.value('generic');
