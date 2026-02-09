@@ -4,6 +4,7 @@ import 'l10n/app_localizations.dart';
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'shell/auth_gate.dart';
+import 'screens/ebay_callback_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +25,19 @@ class VaultApp extends StatelessWidget {
       theme: AppTheme.darkTheme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      onGenerateRoute: (settings) {
+        final uri = Uri.parse(settings.name ?? '');
+        // Handle eBay OAuth callback
+        if (uri.path == '/ebay-callback') {
+          final code = uri.queryParameters['code'];
+          final error = uri.queryParameters['error'];
+          return MaterialPageRoute(
+            builder: (_) => EbayCallbackScreen(code: code, error: error),
+          );
+        }
+        // Default route
+        return MaterialPageRoute(builder: (_) => const AuthGate());
+      },
       home: const AuthGate(),
     );
   }
