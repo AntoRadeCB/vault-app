@@ -184,6 +184,8 @@ async function ebayApiFetch(
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
     Accept: "application/json",
+    "Accept-Language": "it-IT",
+    "Content-Language": "it-IT",
     ...options.headers,
   };
 
