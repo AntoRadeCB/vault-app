@@ -23,17 +23,41 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
   late TextEditingController _priceController;
   late TextEditingController _quantityController;
   late TextEditingController _categoryController;
-  String _condition = 'USED_EXCELLENT';
+  String _condition = 'UNGRADED';
+  String _cardCondition = 'Near Mint or Better';
   bool _submitting = false;
 
-  static const _conditions = {
+  // Per TCG (183454): eBay usa Condition Descriptors
+  // Condition = "Ungraded" (4000), poi Card Condition come descriptor
+  static const _cardConditions = {
+    'Near Mint or Better': 'Near Mint o migliore',
+    'Lightly Played (Excellent)': 'Lightly Played (Eccellente)',
+    'Moderately Played (Very Good)': 'Moderately Played (Molto buono)',
+    'Heavily Played (Poor)': 'Heavily Played (Scarso)',
+  };
+
+  // Condizioni generiche per categorie non-TCG
+  static const _genericConditions = {
     'NEW': 'Nuovo',
+    'NEW_OTHER': 'Nuovo: altro',
     'LIKE_NEW': 'Come nuovo',
     'USED_EXCELLENT': 'Usato - Eccellente',
     'USED_VERY_GOOD': 'Usato - Molto buono',
     'USED_GOOD': 'Usato - Buono',
     'USED_ACCEPTABLE': 'Usato - Accettabile',
   };
+
+  bool get _isTcg {
+    final cat = _categoryController.text.trim();
+    return ['183454', '183456', '183457'].contains(cat);
+  }
+
+  Map<String, String> get _conditions => _isTcg
+      ? const {'UNGRADED': 'Carta non gradata'}
+      : _genericConditions;
+
+  // Per TCG, la condizione carta è sempre richiesta
+  bool get _needsCardCondition => _isTcg;
 
   @override
   void initState() {
@@ -52,8 +76,8 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
       text: p.effectiveSellPrice.toStringAsFixed(2),
     );
     _quantityController = TextEditingController(text: '1');
-    // TCG cards category on eBay Italy
     _categoryController = TextEditingController(text: '183454');
+    _cardCondition = 'Near Mint or Better';
   }
 
   @override
@@ -74,7 +98,7 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
         imageUrls.add(widget.product.displayImageUrl);
       }
 
-      await widget.ebayService.createListing({
+      final data = <String, dynamic>{
         'productId': widget.product.id ?? '',
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
@@ -83,7 +107,14 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
         'condition': _condition,
         'categoryId': _categoryController.text.trim(),
         'imageUrls': imageUrls,
-      });
+      };
+
+      // Passa la condizione carta per TCG (sempre richiesta)
+      if (_needsCardCondition) {
+        data['cardCondition'] = _cardCondition;
+      }
+
+      await widget.ebayService.createListing(data);
 
       if (mounted) {
         Navigator.pop(context, true);
@@ -143,7 +174,6 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
                 ],
               ),
               const SizedBox(height: 20),
-              // Preview
               if (widget.product.displayImageUrl.isNotEmpty)
                 Center(
                   child: ClipRRect(
@@ -171,7 +201,7 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: _condition,
+                value: _conditions.containsKey(_condition) ? _condition : _conditions.keys.first,
                 dropdownColor: AppColors.surface,
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
@@ -190,8 +220,40 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
                     .toList(),
                 onChanged: (v) => setState(() => _condition = v!),
               ),
+              // Condizione carta (solo per TCG + Usato)
+              if (_needsCardCondition) ...[
+                const SizedBox(height: 12),
+                const Text('Condizione della carta',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: _cardCondition,
+                  dropdownColor: AppColors.surface,
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: AppColors.cardDark,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  items: _cardConditions.entries
+                      .map((e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value)))
+                      .toList(),
+                  onChanged: (v) => setState(() => _cardCondition = v ?? _cardCondition),
+                ),
+              ],
               const SizedBox(height: 12),
-              _field('Categoria eBay ID', _categoryController),
+              _field('Categoria eBay ID', _categoryController, onChanged: (_) => setState(() {
+                // Reset condition se non più valida per la nuova categoria
+                if (!_conditions.containsKey(_condition)) {
+                  _condition = _conditions.keys.first;
+                }
+              })),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -231,7 +293,7 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
   }
 
   Widget _field(String label, TextEditingController controller,
-      {int maxLines = 1, TextInputType? keyboardType}) {
+      {int maxLines = 1, TextInputType? keyboardType, ValueChanged<String>? onChanged}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -242,6 +304,7 @@ class _EbayListingDialogState extends State<EbayListingDialog> {
           controller: controller,
           maxLines: maxLines,
           keyboardType: keyboardType,
+          onChanged: onChanged,
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
           decoration: InputDecoration(
             filled: true,

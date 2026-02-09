@@ -1,6 +1,5 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { defineSecret } from "firebase-functions/params";
 import express from "express";
 
 import { db } from "./config/firebase.config";
@@ -31,10 +30,6 @@ import { FieldValue } from "firebase-admin/firestore";
 import { mapMilestoneToAppStatus } from "./services/tracking.service";
 
 // ── Secrets ───────────────────────────────────────
-const SHIP24_API_KEY = defineSecret("SHIP24_API_KEY");
-const SHIP24_WEBHOOK_SECRET = defineSecret("SHIP24_WEBHOOK_SECRET");
-const CARDTRADER_API_TOKEN = defineSecret("CARDTRADER_API_TOKEN");
-const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
 
 // ── Express App ───────────────────────────────────
 const app = express();
@@ -102,7 +97,7 @@ app.use((_req, res) => {
 export const api = onRequest(
   {
     region: "europe-west1",
-    secrets: [SHIP24_API_KEY, EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_REDIRECT_URI],
+    
   },
   app
 );
@@ -111,7 +106,7 @@ export const api = onRequest(
 export const ebayWebhook = onRequest(
   {
     region: "europe-west1",
-    secrets: [EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_REDIRECT_URI],
+    
   },
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
@@ -134,7 +129,7 @@ export const ebayWebhook = onRequest(
 export const trackingWebhook = onRequest(
   {
     region: "europe-west1",
-    secrets: [SHIP24_WEBHOOK_SECRET],
+    
   },
   async (req, res) => {
     // CORS
@@ -154,7 +149,7 @@ export const trackingWebhook = onRequest(
 
     try {
       // Verify webhook secret — reject requests with invalid secrets
-      const webhookSecret = SHIP24_WEBHOOK_SECRET.value();
+      const webhookSecret = process.env.SHIP24_WEBHOOK_SECRET || "";
       const headerSecret =
         (req.headers["x-ship24-webhook-secret"] as string) ||
         (req.headers["x-webhook-secret"] as string) ||
@@ -372,13 +367,13 @@ export const imageProxy = onRequest(
 //  syncRiftboundCatalog — Import all Riftbound cards
 // ═══════════════════════════════════════════════════════
 export const syncRiftboundCatalog = onRequest(
-  { region: "europe-west1", secrets: [CARDTRADER_API_TOKEN], timeoutSeconds: 300, memory: "512MiB" },
+  { region: "europe-west1",  timeoutSeconds: 300, memory: "512MiB" },
   async (req, res) => {
     setCors(res);
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
 
     try {
-      const token = CARDTRADER_API_TOKEN.value();
+      const token = process.env.CARDTRADER_API_TOKEN || "";
 
       // 1. Get all Riftbound expansions
       const allExpansions: any[] = await ctFetch("/expansions", token);
@@ -502,13 +497,13 @@ export const updateRiftboundPrices = onSchedule(
   {
     schedule: "every 1 hours",
     region: "europe-west1",
-    secrets: [CARDTRADER_API_TOKEN],
+    
     timeoutSeconds: 300,
     memory: "512MiB",
   },
   async () => {
     try {
-      const token = CARDTRADER_API_TOKEN.value();
+      const token = process.env.CARDTRADER_API_TOKEN || "";
       const allExpansions: any[] = await ctFetch("/expansions", token);
       const riftExpansions = allExpansions.filter((e: any) => e.game_id === RIFTBOUND_GAME_ID);
 
@@ -576,13 +571,13 @@ export const updateRiftboundPrices = onSchedule(
 //  updateRiftboundPricesHttp — Manual trigger for prices
 // ═══════════════════════════════════════════════════════
 export const updateRiftboundPricesHttp = onRequest(
-  { region: "europe-west1", secrets: [CARDTRADER_API_TOKEN], timeoutSeconds: 300, memory: "512MiB" },
+  { region: "europe-west1",  timeoutSeconds: 300, memory: "512MiB" },
   async (req, res) => {
     setCors(res);
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
 
     try {
-      const token = CARDTRADER_API_TOKEN.value();
+      const token = process.env.CARDTRADER_API_TOKEN || "";
       const allExpansions: any[] = await ctFetch("/expansions", token);
       const riftExpansions = allExpansions.filter((e: any) => e.game_id === RIFTBOUND_GAME_ID);
 
@@ -653,7 +648,7 @@ export const updateRiftboundPricesHttp = onRequest(
 import OpenAI from "openai";
 
 export const scanCard = onRequest(
-  { region: "europe-west1", secrets: [OPENAI_API_KEY], timeoutSeconds: 30, memory: "256MiB" },
+  { region: "europe-west1",  timeoutSeconds: 30, memory: "256MiB" },
   async (req, res) => {
     setCors(res);
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
@@ -670,7 +665,7 @@ export const scanCard = onRequest(
       const hasContext = !!(expansion || cards);
       console.log(`scanCard v6: image=${imageSize} chars, expansion=${expansion || 'none'}, cards=${cards?.length || 0}`);
 
-      const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 
       const imageUrl = image.startsWith("data:")
         ? image

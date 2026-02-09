@@ -309,24 +309,46 @@ export async function getConnectionStatus(uid: string): Promise<{
 // ── Condition mapping ──
 // Category 183454 (single trading cards) only accepts specific conditionIds.
 // We map to eBay conditionEnum values; for TCG categories, "UNGRADED" is the safe default.
+// TCG cards (183454, 183456, 183457): eBay uses Condition Descriptors system
+// conditionId 4000 = USED_VERY_GOOD = "Ungraded" for TCG
+// conditionId 2750 = LIKE_NEW = "Graded" for TCG (requires grader descriptor)
+// Condition Descriptor 40001 = "Card Condition" (Near Mint, Lightly Played, etc.)
+function mapTcgCondition(condition: string): string {
+  // For ungraded cards, always use USED_VERY_GOOD (4000)
+  // For NEW cards in original packaging, also use USED_VERY_GOOD since
+  // eBay TCG categories require condition descriptors
+  return "USED_VERY_GOOD";
+}
+
+// Map card condition text to eBay condition descriptor numeric value IDs
+// Descriptor 40001 = Card Condition for category 183454 (CCG Individual Cards)
+const CARD_CONDITION_DESCRIPTOR_MAP: Record<string, string> = {
+  "Near Mint o migliore": "400010",       // Near Mint or Better
+  "Near Mint or Better": "400010",
+  "Lightly Played (Excellent)": "400011", // Excellent
+  "Excellent": "400011",
+  "Moderately Played (Very Good)": "400012", // Very Good
+  "Very Good": "400012",
+  "Heavily Played (Poor)": "400013",      // Poor
+  "Poor": "400013",
+};
+
+function mapCardConditionDescriptor(cardCondition?: string): string {
+  if (!cardCondition) return "400010"; // default: Near Mint or Better
+  return CARD_CONDITION_DESCRIPTOR_MAP[cardCondition] || "400010";
+}
+
 function mapCondition(condition: string, categoryId?: string): string {
-  // TCG single cards categories use different condition values
-  const tcgCategories = ["183454", "183456", "183457"];
-  if (categoryId && tcgCategories.includes(categoryId)) {
-    // For TCG cards: valid conditions are typically 4000 (Ungraded), 3000 (Graded)
-    // The Inventory API uses enum strings, not IDs
-    return "LIKE_NEW"; // Maps to conditionId 2750, accepted for some card categories
-  }
-  
   const map: Record<string, string> = {
     "NEW": "NEW",
+    "NEW_OTHER": "NEW_OTHER",
     "LIKE_NEW": "LIKE_NEW",
-    "USED_EXCELLENT": "LIKE_NEW",
-    "USED_VERY_GOOD": "VERY_GOOD",
-    "USED_GOOD": "GOOD",
-    "USED_ACCEPTABLE": "ACCEPTABLE",
+    "USED_EXCELLENT": "USED_EXCELLENT",
+    "USED_VERY_GOOD": "USED_VERY_GOOD",
+    "USED_GOOD": "USED_GOOD",
+    "USED_ACCEPTABLE": "USED_ACCEPTABLE",
   };
-  return map[condition] || "LIKE_NEW";
+  return map[condition] || "NEW";
 }
 
 // ── Inventory / Listings ──
@@ -342,6 +364,7 @@ export async function createListing(
     quantity?: number;
     condition: string;
     conditionDescription?: string;
+    cardCondition?: string;
     categoryId: string;
     imageUrls: string[];
     shippingProfileId?: string;
@@ -350,6 +373,11 @@ export async function createListing(
     aspects?: Record<string, string[]>;
   }
 ): Promise<{ success: boolean; listingId?: string; ebayItemId?: string }> {
+  // Validate minimum price (eBay requires >= 1.00)
+  if (!productData.price || productData.price < 1) {
+    throw new Error("Il prezzo deve essere almeno €1,00");
+  }
+
   const accessToken = await getValidAccessToken(uid);
   if (!accessToken) throw new Error("eBay not connected");
 
@@ -371,13 +399,27 @@ export async function createListing(
             "Gioco": ["Pokémon"],
             "Lingua": ["Italiano"],
             "Rarità": ["Non specificato"],
+            // "Condizione della carta" required when condition is USED (3000)
+            ...(productData.condition === "USED" && productData.cardCondition
+              ? { "Condizione della carta": [productData.cardCondition] }
+              : {}),
             ...(productData.aspects || {}),
           },
         } : {}),
       },
-      // TCG cards (183454): valid conditionIds are 2750(Graded/LIKE_NEW), 3000(Used), 4000(Ungraded)
-      // For TCG: LIKE_NEW maps to 2750 ("Valutata/Graded") which is accepted
-      condition: isTcgCategory ? "LIKE_NEW" : mapCondition(productData.condition, productData.categoryId),
+      // TCG (183454): uses Condition Descriptors — conditionId 4000 (ungraded)
+      condition: isTcgCategory
+        ? mapTcgCondition(productData.condition)
+        : mapCondition(productData.condition, productData.categoryId),
+      // Condition Descriptors for TCG cards (required for conditionId 4000)
+      ...(isTcgCategory ? {
+        conditionDescriptors: [
+          {
+            name: "40001", // Card Condition descriptor
+            values: [mapCardConditionDescriptor(productData.cardCondition)],
+          },
+        ],
+      } : {}),
       conditionDescription: productData.conditionDescription,
       availability: {
         shipToLocationAvailability: {
@@ -610,6 +652,74 @@ export async function deleteListing(uid: string, listingId: string): Promise<voi
     .update({ status: "ended", updatedAt: FieldValue.serverTimestamp() });
 }
 
+// ── Inventory adjustment on sale ──
+
+async function _adjustInventoryForSales(
+  uid: string,
+  soldItems: { sku: string; quantity: number }[]
+) {
+  // SKU format: vault-{productId}-{timestamp}
+  for (const item of soldItems) {
+    const parts = item.sku.split("-");
+    if (parts.length < 3 || parts[0] !== "vault") continue;
+
+    // Extract productId (everything between first "vault-" and last "-timestamp")
+    const productId = parts.slice(1, -1).join("-");
+    if (!productId) continue;
+
+    const productRef = db
+      .collection("users")
+      .doc(uid)
+      .collection("products")
+      .doc(productId);
+
+    const productDoc = await productRef.get();
+    if (!productDoc.exists) continue;
+
+    const data = productDoc.data()!;
+    const currentInventoryQty = (data.inventoryQty as number) || 0;
+    const currentQty = (data.quantity as number) || 0;
+    const isSingleCard = data.kind === "singleCard";
+
+    if (isSingleCard) {
+      // Decrement inventoryQty first, then quantity
+      const newInvQty = Math.max(0, currentInventoryQty - item.quantity);
+      const invDecrement = currentInventoryQty - newInvQty;
+      const remainingDecrement = item.quantity - invDecrement;
+      const newQty = Math.max(0, currentQty - remainingDecrement);
+
+      await productRef.update({
+        inventoryQty: newInvQty,
+        quantity: newQty,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      // Sealed products: decrement quantity directly
+      const newQty = Math.max(0, currentQty - item.quantity);
+      await productRef.update({
+        quantity: newQty,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    // Also update the listing status if quantity hits 0
+    const listingSnap = await db
+      .collection("users")
+      .doc(uid)
+      .collection("ebayListings")
+      .where("sku", "==", item.sku)
+      .limit(1)
+      .get();
+
+    if (!listingSnap.empty) {
+      await listingSnap.docs[0].ref.update({
+        status: "ended",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+  }
+}
+
 // ── Orders ──
 
 export async function getOrders(uid: string, limit = 50): Promise<any[]> {
@@ -623,14 +733,21 @@ export async function getOrders(uid: string, limit = 50): Promise<any[]> {
 
   const orders = result?.orders || [];
 
-  // Sync to Firestore
+  // Sync to Firestore + auto-decrement inventory for new orders
   const batch = db.batch();
+  const newOrderSkus: { sku: string; quantity: number }[] = [];
+
   for (const order of orders) {
     const orderRef = db
       .collection("users")
       .doc(uid)
       .collection("ebayOrders")
       .doc(order.orderId);
+
+    // Check if order already exists (to avoid double-decrementing)
+    const existingOrder = await orderRef.get();
+    const isNewOrder = !existingOrder.exists;
+    const wasNotStarted = existingOrder.data()?.inventoryAdjusted !== true;
 
     batch.set(
       orderRef,
@@ -654,11 +771,26 @@ export async function getOrders(uid: string, limit = 50): Promise<any[]> {
           ?.shipTo || null,
         creationDate: order.creationDate,
         updatedAt: FieldValue.serverTimestamp(),
+        inventoryAdjusted: true,
       },
       { merge: true }
     );
+
+    // Collect SKUs from new orders to decrement inventory
+    if ((isNewOrder || !wasNotStarted) && order.lineItems) {
+      for (const li of order.lineItems) {
+        if (li.sku) {
+          newOrderSkus.push({ sku: li.sku, quantity: li.quantity || 1 });
+        }
+      }
+    }
   }
   await batch.commit();
+
+  // Decrement inventory for sold items
+  if (newOrderSkus.length > 0) {
+    await _adjustInventoryForSales(uid, newOrderSkus);
+  }
 
   return orders;
 }
@@ -703,7 +835,7 @@ export async function shipOrder(
     }
   );
 
-  // Update Firestore
+  // Update Firestore order
   await db
     .collection("users")
     .doc(uid)
@@ -714,6 +846,96 @@ export async function shipOrder(
       tracking: { trackingNumber, carrier },
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+  // Auto-create shipment in shipments collection for tracking
+  const itemTitle = (order.lineItems || [])
+    .map((li: any) => li.title)
+    .join(", ") || "Ordine eBay";
+  const buyerName = order.buyer?.username || "acquirente";
+
+  // Detect carrier name from code
+  const carrierNames: Record<string, string> = {
+    "Poste_Italiane": "Poste Italiane",
+    "BRT": "BRT",
+    "DHL": "DHL",
+    "UPS": "UPS",
+    "FedEx": "FedEx",
+    "GLS": "GLS",
+    "SDA": "SDA",
+    "TNT": "TNT",
+    "Mondial_Relay": "Mondial Relay",
+    "Amazon_Logistics": "Amazon Logistics",
+  };
+  const carrierSlug = carrier.toLowerCase().replace(/[\s_-]+/g, "_");
+  const carrierDisplayName = carrierNames[carrier] || carrier;
+
+  await db
+    .collection("users")
+    .doc(uid)
+    .collection("shipments")
+    .add({
+      trackingCode: trackingNumber,
+      carrier: carrierSlug,
+      carrierName: carrierDisplayName,
+      type: "sale",
+      productName: `${itemTitle} → ${buyerName}`,
+      status: "inTransit",
+      createdAt: FieldValue.serverTimestamp(),
+      lastUpdate: FieldValue.serverTimestamp(),
+      ebayOrderId: orderId,
+    });
+
+  // Auto-create Sale records for dashboard revenue tracking
+  for (const li of (order.lineItems || [])) {
+    const salePrice = parseFloat(li.lineItemCost?.value || li.total?.value || "0");
+    let purchasePrice = 0;
+
+    // Look up original product purchase price via SKU
+    if (li.sku) {
+      const parts = (li.sku as string).split("-");
+      if (parts.length >= 3 && parts[0] === "vault") {
+        const productId = parts.slice(1, -1).join("-");
+        const productDoc = await db
+          .collection("users").doc(uid)
+          .collection("products").doc(productId).get();
+        if (productDoc.exists) {
+          purchasePrice = (productDoc.data()?.price as number) || 0;
+        }
+      }
+    }
+
+    // Try to get real eBay fees from order, fallback to 13% estimate
+    // eBay provides totalFeeBasisAmount or totalMarketplaceFee on order level
+    const orderTotal = parseFloat(order.pricingSummary?.total?.value || "0");
+    const totalFees = parseFloat(order.totalFeeBasisAmount?.value || "0")
+      || parseFloat(order.totalMarketplaceFee?.value || "0");
+    
+    let itemFees: number;
+    if (totalFees > 0 && orderTotal > 0) {
+      // Distribute fees proportionally across line items
+      itemFees = Math.round((salePrice / orderTotal) * totalFees * 100) / 100;
+    } else {
+      // Fallback: estimate ~13% (10.3% final value + ~3% payment processing)
+      itemFees = Math.round(salePrice * 0.13 * 100) / 100;
+    }
+
+    await db
+      .collection("users")
+      .doc(uid)
+      .collection("sales")
+      .add({
+        productName: li.title || itemTitle,
+        salePrice,
+        purchasePrice,
+        fees: itemFees,
+        feesEstimated: totalFees <= 0, // flag if fees are estimated vs real
+        date: FieldValue.serverTimestamp(),
+        source: "ebay",
+        ebayOrderId: orderId,
+        sku: li.sku || null,
+        quantity: li.quantity || 1,
+      });
+  }
 
   return result;
 }
@@ -760,6 +982,51 @@ export async function refundOrder(
       refund: { amount: refundAmount, reason },
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+  // Reverse Sale records for this order
+  const salesSnap = await db
+    .collection("users").doc(uid)
+    .collection("sales")
+    .where("ebayOrderId", "==", orderId)
+    .get();
+
+  for (const saleDoc of salesSnap.docs) {
+    await saleDoc.ref.delete();
+  }
+
+  // Restore inventory quantities
+  for (const li of (order.lineItems || [])) {
+    if (!li.sku) continue;
+    const parts = (li.sku as string).split("-");
+    if (parts.length < 3 || parts[0] !== "vault") continue;
+    const productId = parts.slice(1, -1).join("-");
+
+    const productRef = db.collection("users").doc(uid).collection("products").doc(productId);
+    const productDoc = await productRef.get();
+    if (!productDoc.exists) continue;
+
+    const data = productDoc.data()!;
+    const qty = li.quantity || 1;
+
+    if (data.kind === "singleCard") {
+      await productRef.update({
+        inventoryQty: ((data.inventoryQty as number) || 0) + qty,
+        quantity: ((data.quantity as number) || 0) + qty,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      await productRef.update({
+        quantity: ((data.quantity as number) || 0) + qty,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  // Mark order as inventory-reversed so webhook doesn't re-adjust
+  await db
+    .collection("users").doc(uid)
+    .collection("ebayOrders").doc(orderId)
+    .update({ inventoryAdjusted: false });
 
   return result;
 }
@@ -838,15 +1105,87 @@ export async function handleWebhookNotification(payload: any): Promise<void> {
           { merge: true }
         );
 
-      // Create notification
-      await userDocRef.collection("notifications").add({
-        type: "ebay_order",
-        title: "Nuovo ordine eBay",
-        message: `Ordine da ${order.buyer?.username || "acquirente"} — €${order.pricingSummary?.total?.value || "0"}`,
-        ebayOrderId: data.orderId,
-        read: false,
-        createdAt: FieldValue.serverTimestamp(),
-      });
+      const orderStatus = order.orderFulfillmentStatus || "";
+      const cancelStatus = order.cancelStatus?.cancelState || "";
+      const isCancelled = cancelStatus === "CANCELED" || orderStatus === "CANCELLED";
+
+      const orderDoc = await db
+        .collection("users").doc(uid)
+        .collection("ebayOrders").doc(data.orderId).get();
+
+      if (isCancelled && orderDoc.data()?.inventoryAdjusted) {
+        // ORDER CANCELLED — restore inventory + delete sales
+        const itemsToRestore = (order.lineItems || [])
+          .filter((li: any) => li.sku)
+          .map((li: any) => ({ sku: li.sku, quantity: li.quantity || 1 }));
+
+        for (const item of itemsToRestore) {
+          const parts = (item.sku as string).split("-");
+          if (parts.length < 3 || parts[0] !== "vault") continue;
+          const productId = parts.slice(1, -1).join("-");
+          const productRef = db.collection("users").doc(uid).collection("products").doc(productId);
+          const productSnap = await productRef.get();
+          if (!productSnap.exists) continue;
+          const pData = productSnap.data()!;
+          if (pData.kind === "singleCard") {
+            await productRef.update({
+              inventoryQty: ((pData.inventoryQty as number) || 0) + item.quantity,
+              quantity: ((pData.quantity as number) || 0) + item.quantity,
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          } else {
+            await productRef.update({
+              quantity: ((pData.quantity as number) || 0) + item.quantity,
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          }
+        }
+
+        // Delete any sales for this order
+        const salesToDelete = await db
+          .collection("users").doc(uid).collection("sales")
+          .where("ebayOrderId", "==", data.orderId).get();
+        for (const s of salesToDelete.docs) await s.ref.delete();
+
+        await db.collection("users").doc(uid)
+          .collection("ebayOrders").doc(data.orderId)
+          .update({ inventoryAdjusted: false, status: "CANCELLED" });
+
+        // Notify cancellation
+        await userDocRef.collection("notifications").add({
+          type: "ebay_order_cancelled",
+          title: "Ordine annullato",
+          message: `Ordine ${data.orderId} annullato — inventario ripristinato`,
+          ebayOrderId: data.orderId,
+          read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+      } else if (!isCancelled && !orderDoc.data()?.inventoryAdjusted) {
+        // NEW ORDER — decrement inventory
+        const soldItems = (order.lineItems || [])
+          .filter((li: any) => li.sku)
+          .map((li: any) => ({ sku: li.sku, quantity: li.quantity || 1 }));
+        
+        if (soldItems.length > 0) {
+          await _adjustInventoryForSales(uid, soldItems);
+        }
+
+        await db
+          .collection("users").doc(uid)
+          .collection("ebayOrders").doc(data.orderId)
+          .update({ inventoryAdjusted: true });
+
+        // Notify new order
+        await userDocRef.collection("notifications").add({
+          type: "ebay_order",
+          title: "Nuovo ordine eBay",
+          message: `Ordine da ${order.buyer?.username || "acquirente"} — €${order.pricingSummary?.total?.value || "0"}`,
+          ebayOrderId: data.orderId,
+          read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
 
       break; // Found the right user
     } catch (err) {
