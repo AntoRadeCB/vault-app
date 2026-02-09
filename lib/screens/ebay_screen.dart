@@ -624,10 +624,17 @@ class _SettingsTabState extends State<_SettingsTab> {
   Map<String, dynamic>? _policies;
   String? _error;
 
-  bool get _hasPolicies =>
-      (_policies?['fulfillment'] as List?)?.isNotEmpty == true &&
-      (_policies?['return'] as List?)?.isNotEmpty == true &&
-      (_policies?['payment'] as List?)?.isNotEmpty == true;
+  bool get _hasPolicies {
+    // Check eBay API results
+    final hasFulfillment = (_policies?['fulfillment'] as List?)?.isNotEmpty == true;
+    final hasReturn = (_policies?['return'] as List?)?.isNotEmpty == true;
+    if (hasFulfillment && hasReturn) return true;
+    // Fallback: check saved policy IDs from Firestore
+    final saved = _policies?['saved'] as Map<String, dynamic>?;
+    return saved != null && 
+        saved['fulfillmentPolicyId'] != null && 
+        saved['returnPolicyId'] != null;
+  }
 
   @override
   void initState() {

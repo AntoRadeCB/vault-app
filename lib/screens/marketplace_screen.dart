@@ -1699,9 +1699,16 @@ class _PolicySetupBannerState extends State<_PolicySetupBanner> {
   Future<void> _check() async {
     try {
       final policies = await widget.ebayService.getPolicies();
-      final has = (policies['fulfillment'] as List?)?.isNotEmpty == true &&
-          (policies['return'] as List?)?.isNotEmpty == true &&
-          (policies['payment'] as List?)?.isNotEmpty == true;
+      // Check eBay API lists (fulfillment + return sufficient, payment optional on sandbox)
+      var has = (policies['fulfillment'] as List?)?.isNotEmpty == true &&
+          (policies['return'] as List?)?.isNotEmpty == true;
+      // Fallback: check saved policy IDs from Firestore
+      if (!has) {
+        final saved = policies['saved'] as Map<String, dynamic>?;
+        has = saved != null &&
+            saved['fulfillmentPolicyId'] != null &&
+            saved['returnPolicyId'] != null;
+      }
       if (mounted) setState(() { _hasPolicies = has; _loading = false; });
     } catch (_) {
       if (mounted) setState(() => _loading = false);

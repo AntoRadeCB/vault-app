@@ -5,6 +5,17 @@ export const EBAY_CLIENT_ID = defineSecret("EBAY_CLIENT_ID");
 export const EBAY_CLIENT_SECRET = defineSecret("EBAY_CLIENT_SECRET");
 export const EBAY_REDIRECT_URI = defineSecret("EBAY_REDIRECT_URI");
 
+// ── Helper functions to read secret values at runtime ──
+export function getEbayClientId(): string {
+  return EBAY_CLIENT_ID.value();
+}
+export function getEbayClientSecret(): string {
+  return EBAY_CLIENT_SECRET.value();
+}
+export function getEbayRedirectUri(): string {
+  return EBAY_REDIRECT_URI.value();
+}
+
 // ── Sandbox toggle ──
 // Set to "false" in production environment config
 const EBAY_SANDBOX = process.env.EBAY_SANDBOX !== "false";

@@ -1,9 +1,9 @@
 import { db } from "../config/firebase.config";
 import {
   getEbayConfig,
-  EBAY_CLIENT_ID,
-  EBAY_CLIENT_SECRET,
-  EBAY_REDIRECT_URI,
+  getEbayClientId,
+  getEbayClientSecret,
+  getEbayRedirectUri,
 } from "../config/ebay.config";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -82,9 +82,9 @@ async function exchangeCodeForTokens(code: string): Promise<{
   expires_in: number;
 }> {
   const config = getEbayConfig();
-  const clientId = EBAY_CLIENT_ID.value();
-  const clientSecret = EBAY_CLIENT_SECRET.value();
-  const redirectUri = EBAY_REDIRECT_URI.value();
+  const clientId = getEbayClientId();
+  const clientSecret = getEbayClientSecret();
+  const redirectUri = getEbayRedirectUri();
 
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
 
@@ -114,8 +114,8 @@ async function refreshAccessToken(refreshToken: string): Promise<{
   expires_in: number;
 }> {
   const config = getEbayConfig();
-  const clientId = EBAY_CLIENT_ID.value();
-  const clientSecret = EBAY_CLIENT_SECRET.value();
+  const clientId = getEbayClientId();
+  const clientSecret = getEbayClientSecret();
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
 
   const res = await fetch(config.tokenUrl, {
@@ -217,8 +217,8 @@ async function ebayApiFetch(
 
 export function generateAuthUrl(): string {
   const config = getEbayConfig();
-  const clientId = EBAY_CLIENT_ID.value();
-  const redirectUri = EBAY_REDIRECT_URI.value();
+  const clientId = getEbayClientId();
+  const redirectUri = getEbayRedirectUri();
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -274,8 +274,8 @@ export async function disconnect(uid: string): Promise<void> {
   if (tokens) {
     try {
       const config = getEbayConfig();
-      const clientId = EBAY_CLIENT_ID.value();
-      const clientSecret = EBAY_CLIENT_SECRET.value();
+      const clientId = getEbayClientId();
+      const clientSecret = getEbayClientSecret();
       const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
 
       await fetch(`${config.tokenUrl.replace("/token", "/revoke")}`, {
@@ -304,6 +304,20 @@ export async function getConnectionStatus(uid: string): Promise<{
   if (!doc.exists) return { connected: false };
   const data = doc.data()!;
   return { connected: !!data.connected, ebayUserId: data.ebayUserId };
+}
+
+// ── Condition mapping ──
+function mapCondition(condition: string): string {
+  // Map our internal conditions to eBay Inventory API conditionEnum values
+  const map: Record<string, string> = {
+    "NEW": "NEW",
+    "LIKE_NEW": "LIKE_NEW",
+    "USED_EXCELLENT": "LIKE_NEW",      // eBay doesn't have "USED_EXCELLENT"
+    "USED_VERY_GOOD": "VERY_GOOD",
+    "USED_GOOD": "GOOD",
+    "USED_ACCEPTABLE": "ACCEPTABLE",
+  };
+  return map[condition] || "LIKE_NEW";
 }
 
 // ── Inventory / Listings ──
@@ -340,7 +354,7 @@ export async function createListing(
         description: productData.description,
         imageUrls: productData.imageUrls,
       },
-      condition: productData.condition,
+      condition: mapCondition(productData.condition),
       conditionDescription: productData.conditionDescription,
       availability: {
         shipToLocationAvailability: {
@@ -351,12 +365,36 @@ export async function createListing(
   });
 
   // 2. Create offer
+  // Ensure merchant location exists
+  const locationKey = "vault-default-location";
+  try {
+    await ebayApiFetch(accessToken, `/sell/inventory/v1/location/${locationKey}`, {
+      method: "POST",
+      body: {
+        location: {
+          address: {
+            city: "Roma",
+            stateOrProvince: "RM",
+            postalCode: "00100",
+            country: "IT",
+          },
+        },
+        locationTypes: ["WAREHOUSE"],
+        name: "Vault Default Location",
+        merchantLocationStatus: "ENABLED",
+      },
+    });
+  } catch (_) {
+    // Location may already exist — that's fine
+  }
+
   const offerData = await ebayApiFetch(accessToken, "/sell/inventory/v1/offer", {
     method: "POST",
     body: {
       sku,
       marketplaceId: "EBAY_IT",
       format: "FIXED_PRICE",
+      merchantLocationKey: locationKey,
       listingDescription: productData.description,
       availableQuantity: productData.quantity || 1,
       categoryId: productData.categoryId,
@@ -369,11 +407,13 @@ export async function createListing(
       listingPolicies: await (async () => {
         // Use provided IDs, or fall back to saved policies
         const saved = await getSavedPolicies(uid);
-        return {
+        const policies: any = {
           fulfillmentPolicyId: productData.shippingProfileId || saved?.fulfillmentPolicyId || undefined,
           returnPolicyId: productData.returnProfileId || saved?.returnPolicyId || undefined,
-          paymentPolicyId: productData.paymentProfileId || saved?.paymentPolicyId || undefined,
         };
+        const paymentId = productData.paymentProfileId || saved?.paymentPolicyId;
+        if (paymentId) policies.paymentPolicyId = paymentId;
+        return policies;
       })(),
     },
   });
@@ -383,15 +423,19 @@ export async function createListing(
 
   // 3. Publish offer
   let ebayItemId: string | undefined;
+  let publishError: string | undefined;
   try {
+    console.log("[createListing] Publishing offer:", offerId);
     const publishResult = await ebayApiFetch(
       accessToken,
       `/sell/inventory/v1/offer/${offerId}/publish`,
       { method: "POST" }
     );
     ebayItemId = publishResult?.listingId;
+    console.log("[createListing] Published! itemId:", ebayItemId);
   } catch (err: any) {
-    console.error("Failed to publish offer:", err.message);
+    publishError = err.message;
+    console.error("[createListing] Failed to publish offer:", err.message);
     // Still save the listing in draft state
   }
 
@@ -806,7 +850,7 @@ export async function getAppToken(): Promise<string> {
 
   const config = getEbayConfig();
   const credentials = Buffer.from(
-    `${EBAY_CLIENT_ID.value()}:${EBAY_CLIENT_SECRET.value()}`
+    `${getEbayClientId()}:${getEbayClientSecret()}`
   ).toString("base64");
 
   const res = await fetch(config.tokenUrl, {
@@ -914,7 +958,7 @@ export async function searchSoldItems(
 }
 
 // ═══════════════════════════════════════════════════
-// Business Policies (Fulfillment, Return, Payment)
+// Business Policies (Fulfillment, Return, Payment) — v2 with auto opt-in
 // ═══════════════════════════════════════════════════
 
 interface PolicyConfig {
@@ -943,28 +987,64 @@ export async function getPolicies(uid: string): Promise<{
   fulfillment: any[];
   return: any[];
   payment: any[];
+  saved: any;
 }> {
   const accessToken = await getValidAccessToken(uid);
   if (!accessToken) throw new Error("eBay not connected");
 
-  const result: any = { fulfillment: [], return: [], payment: [] };
+  const result: any = { fulfillment: [], return: [], payment: [], saved: null };
+
+  // Check saved policy IDs from Firestore first
+  const saved = await getSavedPolicies(uid);
+  result.saved = saved;
+  console.log("[getPolicies] saved from Firestore:", JSON.stringify(saved));
 
   try {
     const fp = await ebayApiFetch(accessToken, "/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_IT");
     result.fulfillment = fp?.fulfillmentPolicies || [];
-  } catch (_) {}
+    console.log("[getPolicies] fulfillment count:", result.fulfillment.length);
+  } catch (e: any) {
+    console.warn("[getPolicies] fulfillment error:", e.message);
+  }
 
   try {
     const rp = await ebayApiFetch(accessToken, "/sell/account/v1/return_policy?marketplace_id=EBAY_IT");
     result.return = rp?.returnPolicies || [];
-  } catch (_) {}
+    console.log("[getPolicies] return count:", result.return.length);
+  } catch (e: any) {
+    console.warn("[getPolicies] return error:", e.message);
+  }
 
   try {
     const pp = await ebayApiFetch(accessToken, "/sell/account/v1/payment_policy?marketplace_id=EBAY_IT");
     result.payment = pp?.paymentPolicies || [];
-  } catch (_) {}
+    console.log("[getPolicies] payment count:", result.payment.length);
+  } catch (e: any) {
+    console.warn("[getPolicies] payment error:", e.message);
+  }
 
+  console.log("[getPolicies] final result keys:", Object.keys(result), "hasSaved:", !!saved);
   return result;
+}
+
+/**
+ * Opt-in to eBay Business Policies (required before creating policies).
+ */
+export async function optInToBusinessPolicies(uid: string): Promise<void> {
+  const accessToken = await getValidAccessToken(uid);
+  if (!accessToken) throw new Error("eBay not connected");
+
+  try {
+    await ebayApiFetch(accessToken, "/sell/account/v1/program/opt_in", {
+      method: "POST",
+      body: { programType: "SELLING_POLICY_MANAGEMENT" },
+    });
+  } catch (err: any) {
+    // 409 = already opted in — that's fine
+    if (!err.message?.includes("409")) {
+      console.warn("Opt-in warning:", err.message);
+    }
+  }
 }
 
 /**
@@ -977,6 +1057,9 @@ export async function createDefaultPolicies(uid: string, config?: PolicyConfig):
 }> {
   const accessToken = await getValidAccessToken(uid);
   if (!accessToken) throw new Error("eBay not connected");
+
+  // Auto opt-in to Business Policies
+  await optInToBusinessPolicies(uid);
 
   // Helper: create or reuse existing policy
   async function createOrReuse(
@@ -1034,17 +1117,23 @@ export async function createDefaultPolicies(uid: string, config?: PolicyConfig):
     returnShippingCostPayer: config?.return?.shippingCostPaidBy || "BUYER",
   });
 
-  const paymentId = await createOrReuse("payment_policy", "paymentPolicyId", {
-    name: config?.payment?.name || "Vault - Pagamenti gestiti eBay",
-    marketplaceId: "EBAY_IT",
-    paymentMethods: [{ paymentMethodType: "WALLET" }],
-  });
+  let paymentId: string | undefined;
+  try {
+    paymentId = await createOrReuse("payment_policy", "paymentPolicyId", {
+      name: config?.payment?.name || "Vault - Pagamenti gestiti eBay",
+      marketplaceId: "EBAY_IT",
+      immediatePay: false,
+    });
+  } catch (err: any) {
+    console.warn("Payment policy creation failed (sandbox limitation):", err.message);
+    // Payment policy is optional on eBay managed payments
+  }
 
-  const policyIds = {
+  const policyIds: any = {
     fulfillmentPolicyId: fulfillmentId,
     returnPolicyId: returnId,
-    paymentPolicyId: paymentId,
   };
+  if (paymentId) policyIds.paymentPolicyId = paymentId;
 
   // Save policy IDs to user profile for reuse
   await db.collection("users").doc(uid).collection("integrations").doc("ebay").update({
