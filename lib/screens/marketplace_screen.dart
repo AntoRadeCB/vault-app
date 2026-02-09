@@ -1375,41 +1375,57 @@ class _EbayTabState extends State<_EbayTab> {
                     final listing = listings[i];
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: GlassCard(
-                        child: ListTile(
-                          leading: listing.imageUrls.isNotEmpty
-                              ? ClipRRect(
-                                  borderRadius:
-                                      BorderRadius.circular(8),
-                                  child: Image.network(
-                                      listing.imageUrls.first,
-                                      width: 48,
-                                      height: 48,
-                                      fit: BoxFit.cover),
-                                )
-                              : Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surfaceLight,
+                      child: GestureDetector(
+                        onTap: listing.ebayItemId != null
+                            ? () => launchUrl(Uri.parse(listing.ebayUrl), mode: LaunchMode.platformDefault)
+                            : null,
+                        child: GlassCard(
+                          child: ListTile(
+                            leading: listing.imageUrls.isNotEmpty
+                                ? ClipRRect(
                                     borderRadius:
                                         BorderRadius.circular(8),
+                                    child: Image.network(
+                                        listing.imageUrls.first,
+                                        width: 48,
+                                        height: 48,
+                                        fit: BoxFit.cover),
+                                  )
+                                : Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceLight,
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.image,
+                                        color: AppColors.textMuted),
                                   ),
-                                  child: const Icon(Icons.image,
-                                      color: AppColors.textMuted),
-                                ),
-                          title: Text(listing.title,
-                              style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 14),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
-                          subtitle: Text(
-                              '${listing.formattedPrice} · ${listing.statusLabel}',
-                              style: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 12)),
-                          trailing: _statusDot(listing.status),
+                            title: Text(listing.title,
+                                style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 14),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                            subtitle: Text(
+                                '${listing.formattedPrice} · ${listing.statusLabel}',
+                                style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (listing.ebayItemId != null)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 8),
+                                    child: Icon(Icons.open_in_new,
+                                        color: AppColors.accentBlue, size: 16),
+                                  ),
+                                _statusDot(listing.status),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     );
