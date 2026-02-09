@@ -1165,6 +1165,7 @@ class _ListingsTabState extends State<_ListingsTab> {
         onTap: listing.ebayItemId != null
             ? () => launchUrl(Uri.parse(listing.ebayUrl), mode: LaunchMode.platformDefault)
             : null,
+        onLongPress: () => _showEditListingSheet(listing),
         child: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -1217,6 +1218,226 @@ class _ListingsTabState extends State<_ListingsTab> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showEditListingSheet(EbayListing listing) {
+    final titleCtrl = TextEditingController(text: listing.title);
+    final descCtrl = TextEditingController(text: listing.description);
+    final priceCtrl = TextEditingController(text: listing.price.toStringAsFixed(2));
+    final qtyCtrl = TextEditingController(text: listing.quantity.toString());
+    bool saving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.75,
+            maxChildSize: 0.95,
+            minChildSize: 0.4,
+            builder: (_, scrollCtrl) => Container(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.all(24),
+                children: [
+                  // Handle
+                  Center(child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(2)))),
+                  // Header
+                  Row(
+                    children: [
+                      const Icon(Icons.edit_outlined, color: AppColors.accentBlue, size: 22),
+                      const SizedBox(width: 8),
+                      const Text('Modifica inserzione', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: (listing.status == 'active' ? AppColors.accentGreen : AppColors.accentOrange).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(listing.statusLabel,
+                          style: TextStyle(color: listing.status == 'active' ? AppColors.accentGreen : AppColors.accentOrange, fontSize: 11, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  // Title
+                  _editField('Titolo', titleCtrl, maxLines: 2),
+                  const SizedBox(height: 14),
+                  // Price + Quantity row
+                  Row(
+                    children: [
+                      Expanded(child: _editField('Prezzo (€)', priceCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true))),
+                      const SizedBox(width: 12),
+                      SizedBox(width: 90, child: _editField('Quantità', qtyCtrl, keyboardType: TextInputType.number)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  // Description
+                  _editField('Descrizione', descCtrl, maxLines: 5),
+                  const SizedBox(height: 24),
+                  // Actions
+                  Row(
+                    children: [
+                      Expanded(child: GestureDetector(
+                        onTap: () => Navigator.pop(ctx),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(12)),
+                          child: const Center(child: Text('Annulla', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600, fontSize: 15))),
+                        ),
+                      )),
+                      const SizedBox(width: 12),
+                      Expanded(child: GestureDetector(
+                        onTap: saving ? null : () async {
+                          setSheetState(() => saving = true);
+                          try {
+                            final updates = <String, dynamic>{};
+                            if (titleCtrl.text.trim() != listing.title) updates['title'] = titleCtrl.text.trim();
+                            if (descCtrl.text.trim() != listing.description) updates['description'] = descCtrl.text.trim();
+                            final newPrice = double.tryParse(priceCtrl.text.trim());
+                            if (newPrice != null && newPrice != listing.price) updates['price'] = newPrice;
+                            final newQty = int.tryParse(qtyCtrl.text.trim());
+                            if (newQty != null && newQty != listing.quantity) updates['quantity'] = newQty;
+
+                            if (updates.isNotEmpty && listing.id != null) {
+                              await widget.ebayService.updateListing(listing.id!, updates);
+                            }
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text(updates.isEmpty ? 'Nessuna modifica' : 'Inserzione aggiornata'),
+                                backgroundColor: updates.isEmpty ? AppColors.textMuted : AppColors.accentGreen,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                margin: const EdgeInsets.all(16),
+                              ));
+                            }
+                          } catch (e) {
+                            setSheetState(() => saving = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Errore: $e'), backgroundColor: AppColors.accentRed,
+                                behavior: SnackBarBehavior.floating, margin: const EdgeInsets.all(16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ));
+                            }
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(child: saving
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('Salva', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15))),
+                        ),
+                      )),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Delete listing
+                  if (listing.status != 'ended')
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _confirmDeleteListing(listing);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentRed.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.accentRed.withValues(alpha: 0.2)),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.delete_outline, color: AppColors.accentRed, size: 18),
+                            SizedBox(width: 6),
+                            Text('Elimina inserzione', style: TextStyle(color: AppColors.accentRed, fontSize: 14, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _editField(String label, TextEditingController controller, {int maxLines = 1, TextInputType? keyboardType}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          keyboardType: keyboardType,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: AppColors.cardDark,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.accentBlue, width: 1.5)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _confirmDeleteListing(EbayListing listing) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Elimina inserzione', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text('Vuoi eliminare "${listing.title}" da eBay?', style: const TextStyle(color: AppColors.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annulla', style: TextStyle(color: AppColors.textMuted))),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                if (listing.id != null) await widget.ebayService.deleteListing(listing.id!);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: const Text('Inserzione eliminata'),
+                    backgroundColor: AppColors.accentRed,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    margin: const EdgeInsets.all(16),
+                  ));
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Errore: $e'), backgroundColor: AppColors.accentRed));
+                }
+              }
+            },
+            child: const Text('Elimina', style: TextStyle(color: AppColors.accentRed, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }

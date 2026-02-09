@@ -551,7 +551,7 @@ export async function getListings(uid: string): Promise<any[]> {
 export async function updateListing(
   uid: string,
   listingId: string,
-  updates: { price?: number; quantity?: number; description?: string }
+  updates: { title?: string; price?: number; quantity?: number; description?: string }
 ): Promise<void> {
   const accessToken = await getValidAccessToken(uid);
   if (!accessToken) throw new Error("eBay not connected");
@@ -567,6 +567,20 @@ export async function updateListing(
 
   const listing = listingDoc.data()!;
 
+  // Update inventory item (title, description on product level)
+  if (listing.sku && (updates.title || updates.description)) {
+    const inventoryUpdate: any = { product: {} };
+    if (updates.title) inventoryUpdate.product.title = updates.title;
+    if (updates.description) inventoryUpdate.product.description = updates.description;
+
+    await ebayApiFetch(
+      accessToken,
+      `/sell/inventory/v1/inventory_item/${listing.sku}`,
+      { method: "PUT", body: inventoryUpdate }
+    );
+  }
+
+  // Update offer (price, quantity, description on offer level)
   if (listing.offerId) {
     const offerUpdate: any = {};
     if (updates.price !== undefined) {
@@ -581,15 +595,18 @@ export async function updateListing(
       offerUpdate.listingDescription = updates.description;
     }
 
-    await ebayApiFetch(
-      accessToken,
-      `/sell/inventory/v1/offer/${listing.offerId}`,
-      { method: "PUT", body: { ...offerUpdate, marketplaceId: "EBAY_IT", sku: listing.sku, format: "FIXED_PRICE", categoryId: listing.categoryId } }
-    );
+    if (Object.keys(offerUpdate).length > 0) {
+      await ebayApiFetch(
+        accessToken,
+        `/sell/inventory/v1/offer/${listing.offerId}`,
+        { method: "PUT", body: { ...offerUpdate, marketplaceId: "EBAY_IT", sku: listing.sku, format: "FIXED_PRICE", categoryId: listing.categoryId } }
+      );
+    }
   }
 
   // Update Firestore
   const firestoreUpdates: any = { updatedAt: FieldValue.serverTimestamp() };
+  if (updates.title !== undefined) firestoreUpdates.title = updates.title;
   if (updates.price !== undefined) firestoreUpdates.price = updates.price;
   if (updates.quantity !== undefined) firestoreUpdates.quantity = updates.quantity;
   if (updates.description !== undefined) firestoreUpdates.description = updates.description;
